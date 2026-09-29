@@ -1,0 +1,207 @@
+services:
+  # ============================================================================
+  # 1. BASE DE DATOS TRANSACCIONAL & ESPACIAL (PostgreSQL 15 + PostGIS 3.3)
+  # Puerto externo asignado: 5433 (Evita 5432 y 54322)
+  # ============================================================================
+  db-postgis:
+    image: postgis/postgis:15-3.3
+    container_name: delivery-db-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-delivery_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-delivery_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-delivery_db}
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-5433}:5432"
+    volumes:
+      - delivery_postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - delivery_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-delivery_admin} -d ${POSTGRES_DB:-delivery_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 2. CACHE, ESTADO EN MEMORIA & CARRITOS (Redis 7 Alpine)
+  # Puerto externo asignado: 6380 (Evita 6379)
+  # ============================================================================
+  redis-cache:
+    image: redis:7-alpine
+    container_name: delivery-redis-cache
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_EXTERNAL_PORT:-6380}:6379"
+    volumes:
+      - delivery_redis_data:/data
+    networks:
+      - delivery_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 3. MOTOR DE RUTAS & TIEMPO REAL (OSRM Local Backend)
+  # Puerto externo asignado: 5001 (Evita 5000)
+  # ============================================================================
+  osrm-backend:
+    image: osrm/osrm-backend:latest
+    container_name: delivery-osrm-backend
+    restart: unless-stopped
+    command: >
+      sh -c "if [ -f /data/ecuador-latest.osrm ]; then
+               echo 'Iniciando OSRM engine con /data/ecuador-latest.osrm...';
+               osrm-routed --algorithm mld /data/ecuador-latest.osrm;
+             else
+               echo 'OSRM: El archivo ecuador-latest.osrm no se ha compilado aun.';
+               echo 'Por favor ejecuta los comandos de extraccion indicados en infrastructure/osrm/README.md';
+               sleep infinity;
+             fi"
+    ports:
+      - "${OSRM_EXTERNAL_PORT:-5001}:5000"
+    volumes:
+      - ./infrastructure/osrm:/data
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 4. API GATEWAY & REVERSE PROXY (Nginx)
+  # Puertos externos asignados: 8080 (HTTP) y 8443 (HTTPS) (Evitan 80 y 443)
+  # ============================================================================
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: delivery-api-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_HTTP_PORT:-8080}:80"
+      - "${GATEWAY_HTTPS_PORT:-8443}:443"
+    depends_on:
+      - backend-core
+      - tracking-service
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 5. BACKEND CORE (Monolito Modular API - Node.js/TypeScript)
+  # Puerto externo asignado: 3001 (Evita 3000)
+  # ============================================================================
+  backend-core:
+    build:
+      context: ./backend-core
+      dockerfile: Dockerfile
+    container_name: delivery-backend-core
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_CORE_EXTERNAL_PORT:-3001}:3000"
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+    volumes:
+      - ./backend-core:/app
+      - /app/node_modules
+    depends_on:
+      db-postgis:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 6. SERVICIO DE TRACKING EN VIVO (WebSockets + Redis Pub/Sub)
+  # Puerto externo asignado: 4001 (Evita 4000)
+  # ============================================================================
+  tracking-service:
+    build:
+      context: ./tracking-service
+      dockerfile: Dockerfile
+    container_name: delivery-tracking-service
+    restart: unless-stopped
+    ports:
+      - "${TRACKING_SERVICE_EXTERNAL_PORT:-4001}:4000"
+    env_file:
+      - .env
+    environment:
+      - PORT=4000
+    volumes:
+      - ./tracking-service:/app
+      - /app/node_modules
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 7. FRONTEND: LANDING PAGE PÚBLICA (SEO & Captación)
+  # Puerto externo asignado: 3002
+  # ============================================================================
+  frontend-landing:
+    build:
+      context: ./frontend/landing-page
+      dockerfile: Dockerfile
+    container_name: delivery-frontend-landing
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_LANDING_PORT:-3002}:3000"
+    volumes:
+      - ./frontend/landing-page:/app
+      - /app/node_modules
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 8. FRONTEND: PANEL DEL COMERCIO (PWA Kanban & Menú)
+  # Puerto externo asignado: 3003
+  # ============================================================================
+  frontend-comercio:
+    build:
+      context: ./frontend/panel-comercio
+      dockerfile: Dockerfile
+    container_name: delivery-frontend-comercio
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_COMERCIO_PORT:-3003}:3000"
+    volumes:
+      - ./frontend/panel-comercio:/app
+      - /app/node_modules
+    networks:
+      - delivery_network
+
+  # ============================================================================
+  # 9. FRONTEND: BACKOFFICE CENTRAL (Admin & Live Tracker)
+  # Puerto externo asignado: 3004
+  # ============================================================================
+  frontend-backoffice:
+    build:
+      context: ./frontend/backoffice
+      dockerfile: Dockerfile
+    container_name: delivery-frontend-backoffice
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_BACKOFFICE_PORT:-3004}:3000"
+    volumes:
+      - ./frontend/backoffice:/app
+      - /app/node_modules
+    networks:
+      - delivery_network
+
+networks:
+  delivery_network:
+    name: delivery_network
+    driver: bridge
+
+volumes:
+  delivery_postgres_data:
+    name: delivery_postgres_data
+  delivery_redis_data:
+    name: delivery_redis_data
+
