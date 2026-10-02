@@ -18,7 +18,12 @@ import {
   Sparkles,
   Phone,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  User,
+  UserCheck,
+  LogOut,
+  X,
+  Loader2
 } from 'lucide-react';
 
 interface Comercio {
@@ -74,7 +79,17 @@ export default function App() {
   const [carrito, setCarrito] = useState<CartItem[]>([]);
   const [drawerCarritoAbierto, setDrawerCarritoAbierto] = useState(false);
 
-  // Checkout
+  // Checkout & Autenticación de Cliente
+  const [customerUser, setCustomerUser] = useState<{ id: string; name: string; email: string; phone?: string } | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authPhone, setAuthPhone] = useState('+5939');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
   const [direccionEntrega, setDireccionEntrega] = useState(ADDRESS_PRESETS[0].direccion);
   const [coordsEntrega, setCoordsEntrega] = useState({ lat: ADDRESS_PRESETS[0].lat, lon: ADDRESS_PRESETS[0].lon });
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia'>('efectivo');
@@ -82,6 +97,98 @@ export default function App() {
   const [clienteTelefono, setClienteTelefono] = useState('+593995544332');
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
+
+  // Restaurar sesión de cliente guardada
+  useEffect(() => {
+    const savedUser = localStorage.getItem('delivery_customer_user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        setCustomerUser(u);
+        setClienteNombre(u.name || 'Cliente Baba');
+        if (u.phone) setClienteTelefono(u.phone);
+      } catch {
+        localStorage.removeItem('delivery_customer_user');
+      }
+    }
+  }, []);
+
+  const handleLogoutCustomer = () => {
+    localStorage.removeItem('delivery_customer_user');
+    localStorage.removeItem('delivery_customer_token');
+    setCustomerUser(null);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      if (authMode === 'login') {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authEmail.trim(), password: authPassword.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Credenciales inválidas.');
+        }
+
+        const userObj = {
+          id: data.data.user.id,
+          name: data.data.user.name,
+          email: data.data.user.email,
+          phone: data.data.user.phone || '+593995544332',
+        };
+        setCustomerUser(userObj);
+        localStorage.setItem('delivery_customer_user', JSON.stringify(userObj));
+        if (data.data.tokens?.accessToken) {
+          localStorage.setItem('delivery_customer_token', data.data.tokens.accessToken);
+        }
+        setClienteNombre(userObj.name);
+        if (userObj.phone) setClienteTelefono(userObj.phone);
+        setShowAuthModal(false);
+      } else {
+        if (!authName.trim()) throw new Error('El nombre completo es requerido.');
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: authName.trim(),
+            email: authEmail.trim().toLowerCase(),
+            password: authPassword.trim(),
+            phone: authPhone.trim(),
+            role: 'cliente',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Error al crear la cuenta.');
+        }
+
+        const userObj = {
+          id: data.data.user.id,
+          name: data.data.user.name,
+          email: data.data.user.email,
+          phone: data.data.user.phone || authPhone.trim(),
+        };
+        setCustomerUser(userObj);
+        localStorage.setItem('delivery_customer_user', JSON.stringify(userObj));
+        if (data.data.tokens?.accessToken) {
+          localStorage.setItem('delivery_customer_token', data.data.tokens.accessToken);
+        }
+        setClienteNombre(userObj.name);
+        setClienteTelefono(userObj.phone);
+        setShowAuthModal(false);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Error de conexión.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   // Pedido Confirmado & Tracking
   const [pedidoConfirmado, setPedidoConfirmado] = useState<any>(null);
@@ -219,12 +326,17 @@ export default function App() {
     e.preventDefault();
     if (carrito.length === 0) return;
 
+    if (!customerUser) {
+      setShowAuthModal(true);
+      return;
+    }
+
     try {
       setSubmittingOrder(true);
       setOrderError('');
 
       const payload = {
-        clienteId: '44444444-4444-4444-4444-444444444444', // Edward Otsutsuki (Cliente Baba)
+        clienteId: customerUser.id,
         comercioId: comercioActivo?.id || '55555555-5555-5555-5555-555555555555',
         items: carrito.map(item => ({
           id: item.producto.id,
@@ -382,46 +494,66 @@ export default function App() {
             {totalItemsCount > 0 && <span>· ${subtotal.toFixed(2)}</span>}
           </button>
 
-          <a
-            href="http://localhost:3003"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#475569',
-              textDecoration: 'none',
-              fontSize: '13px',
-              fontWeight: '700',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            <Store size={15} color="#e11d48" /> Cocina Kanban (3003) <ExternalLink size={12} />
-          </a>
-
-          <a
-            href="http://localhost:3004"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#fff',
-              background: '#0f172a',
-              textDecoration: 'none',
-              fontSize: '13px',
-              fontWeight: '700',
-              padding: '8px 14px',
-              borderRadius: '8px',
-            }}
-          >
-            <ShieldCheck size={15} color="#38bdf8" /> Backoffice Admin (3004) <ExternalLink size={12} />
-          </a>
+          {customerUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#f1f5f9',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: '#0f172a',
+              }}>
+                <UserCheck size={16} color="#10b981" />
+                <span>{customerUser.name}</span>
+              </div>
+              <button
+                onClick={handleLogoutCustomer}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  border: 'none',
+                  background: '#fee2e2',
+                  color: '#e11d48',
+                  padding: '7px 12px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                }}
+              >
+                <LogOut size={13} /> Salir
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setAuthMode('login');
+                setAuthError('');
+                setShowAuthModal(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                color: '#fff',
+                background: '#0f172a',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: '700',
+                padding: '9px 16px',
+                borderRadius: '10px',
+                cursor: 'pointer',
+              }}
+            >
+              <User size={15} color="#38bdf8" /> Iniciar Sesión / Registro
+            </button>
+          )}
         </div>
       </header>
 
@@ -784,6 +916,70 @@ export default function App() {
             El restaurante {comercioActivo?.nombre_comercial} recibirá tu comanda en su pantalla Kanban de inmediato.
           </p>
 
+          {/* Banner de Identificación de Cliente */}
+          {!customerUser ? (
+            <div style={{
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}>
+              <div>
+                <div style={{ fontWeight: '800', fontSize: '15px', color: '#1e3a8a' }}>
+                  Identifícate para procesar tu orden
+                </div>
+                <div style={{ fontSize: '13px', color: '#3b82f6', marginTop: '2px' }}>
+                  Inicia sesión o regístrate en 30 segundos. Tu carrito de compras está completamente seguro.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                  setShowAuthModal(true);
+                }}
+                style={{
+                  background: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Iniciar Sesión / Registro
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '16px',
+              padding: '14px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <UserCheck size={20} color="#16a34a" />
+              <div>
+                <span style={{ fontSize: '13px', color: '#166534' }}>
+                  Pedido a nombre de: <strong style={{ color: '#14532d' }}>{customerUser.name}</strong> ({customerUser.email}) · Tel: {customerUser.phone || clienteTelefono}
+                </span>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleConfirmarPedido} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px' }}>
             
             {/* Columna Izquierda: Datos del Cliente y Dirección */}
@@ -953,7 +1149,11 @@ export default function App() {
                   boxShadow: '0 4px 14px rgba(225, 29, 72, 0.3)'
                 }}
               >
-                {submittingOrder ? 'Enviando a cocina...' : 'Confirmar Pedido Real 🚀'}
+                {submittingOrder
+                  ? 'Enviando a cocina...'
+                  : !customerUser
+                  ? 'Identificarse para Confirmar Pedido 🔑'
+                  : 'Confirmar Pedido Real 🚀'}
               </button>
             </div>
           </form>
@@ -1053,25 +1253,24 @@ export default function App() {
                 Volver al Inicio
               </button>
 
-              <a
-                href="http://localhost:3003"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                onClick={() => {
+                  setPedidoConfirmado(null);
+                  setVista('home');
+                }}
                 style={{
                   background: '#ffe4e6',
                   color: '#e11d48',
-                  textDecoration: 'none',
+                  border: 'none',
                   padding: '12px 24px',
                   borderRadius: '10px',
                   fontWeight: '700',
                   fontSize: '14px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  cursor: 'pointer',
                 }}
               >
-                Ver en Cocina Kanban (3003) <ExternalLink size={14} />
-              </a>
+                Hacer otro pedido en Los Ríos
+              </button>
             </div>
           </div>
         </main>
@@ -1164,6 +1363,235 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Autenticación / Registro de Cliente */}
+      {showAuthModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          zIndex: 9999,
+          backdropFilter: 'blur(6px)',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            width: '100%',
+            maxWidth: '460px',
+            padding: '28px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            boxSizing: 'border-box',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', margin: 0 }}>
+                  {authMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
+                </h3>
+                <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
+                  {authMode === 'login'
+                    ? 'Accede a tu cuenta para confirmar tu pedido en Baba'
+                    : 'Regístrate para recibir tus pedidos rápidamente'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAuthModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Pestañas Login vs Registro */}
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', marginBottom: '16px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  background: authMode === 'login' ? '#fff' : 'transparent',
+                  color: authMode === 'login' ? '#0f172a' : '#64748b',
+                  boxShadow: authMode === 'login' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Ya tengo cuenta
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  background: authMode === 'register' ? '#fff' : 'transparent',
+                  color: authMode === 'register' ? '#0f172a' : '#64748b',
+                  boxShadow: authMode === 'register' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Crear cuenta nueva
+              </button>
+            </div>
+
+            {authError && (
+              <div style={{
+                background: '#fee2e2',
+                color: '#dc2626',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <AlertCircle size={16} />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {authMode === 'register' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                      Nombre Completo *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      placeholder="Ej: Rosa Alvarado"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                      Teléfono / WhatsApp *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={authPhone}
+                      onChange={(e) => setAuthPhone(e.target.value)}
+                      placeholder="+5939..."
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                  Correo Electrónico *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="ejemplo@correo.com"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                  Contraseña *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                style={{
+                  marginTop: '10px',
+                  background: '#e11d48',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '12px',
+                  borderRadius: '12px',
+                  fontWeight: '800',
+                  fontSize: '14px',
+                  cursor: authLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(225, 29, 72, 0.3)',
+                }}
+              >
+                {authLoading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : authMode === 'login' ? (
+                  'Ingresar y Continuar con el Pedido'
+                ) : (
+                  'Registrarme y Continuar con el Pedido'
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

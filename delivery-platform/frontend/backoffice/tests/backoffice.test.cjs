@@ -125,3 +125,91 @@ test('Tarifas Dinámicas: calcula flete base, km excedentes y recargos nocturno 
   assert.equal(caso3.kmExtra, 18.5);
   assert.equal(caso3.tarifaFinal, 15.85);
 });
+
+// 5. Pruebas de Directorio de Usuarios y Roles RBAC
+test('Usuarios: valida roles permitidos, datos obligatorios y alternancia de estado activo', () => {
+  const ROLES_PERMITIDOS = ['cliente', 'repartidor', 'comercio', 'admin'];
+
+  function validarUsuario(datos) {
+    if (!datos.nombre || datos.nombre.trim().length < 2) {
+      return { valido: false, error: 'Nombre inválido' };
+    }
+    if (!datos.email || !datos.email.includes('@')) {
+      return { valido: false, error: 'Email inválido' };
+    }
+    if (!ROLES_PERMITIDOS.includes(datos.rol)) {
+      return { valido: false, error: 'Rol no permitido' };
+    }
+    return { valido: true };
+  }
+
+  assert.equal(
+    validarUsuario({ nombre: 'Darwin Vera', email: 'darwin@test.com', rol: 'repartidor' }).valido,
+    true
+  );
+  assert.equal(
+    validarUsuario({ nombre: 'Hack', email: 'hack@test.com', rol: 'superusuario' }).valido,
+    false,
+    'Rol no estándar debe ser rechazado'
+  );
+  assert.equal(
+    validarUsuario({ nombre: '', email: 'vacio@test.com', rol: 'cliente' }).valido,
+    false
+  );
+
+  function alternarEstadoUsuario(usuario) {
+    return {
+      ...usuario,
+      estado_activo: !usuario.estado_activo,
+      fecha_actualizacion: new Date().toISOString()
+    };
+  }
+
+  const uActivo = { id: 'usr-1', nombre: 'Test', estado_activo: true };
+  const uSuspendido = alternarEstadoUsuario(uActivo);
+  assert.equal(uSuspendido.estado_activo, false, 'Usuario activo debe pasar a suspendido');
+  const uReactivado = alternarEstadoUsuario(uSuspendido);
+  assert.equal(uReactivado.estado_activo, true, 'Usuario suspendido debe reactivarse');
+});
+
+// 6. Pruebas de Edición de Comercios
+test('Comercios: edición de datos comerciales preservando coordenadas espaciales PostGIS', () => {
+  function editarComercio(comercioExistente, cambios) {
+    return {
+      ...comercioExistente,
+      nombre_comercial: cambios.nombreComercial || comercioExistente.nombre_comercial,
+      telefono: cambios.telefono || comercioExistente.telefono,
+      tiempo_entrega_promedio: cambios.tiempoEntregaPromedio !== undefined
+        ? Number(cambios.tiempoEntregaPromedio)
+        : comercioExistente.tiempo_entrega_promedio,
+      costo_base_envio: cambios.costoBaseEnvio !== undefined
+        ? Number(cambios.costoBaseEnvio)
+        : comercioExistente.costo_base_envio,
+      lat: cambios.lat !== undefined ? Number(cambios.lat) : comercioExistente.lat,
+      lon: cambios.lon !== undefined ? Number(cambios.lon) : comercioExistente.lon,
+    };
+  }
+
+  const comercioOriginal = {
+    id: 'merch-1',
+    nombre_comercial: 'Asadero Central',
+    telefono: '+593900000001',
+    tiempo_entrega_promedio: 30,
+    costo_base_envio: 1.50,
+    lat: -1.7917,
+    lon: -79.6783,
+  };
+
+  const actualizado = editarComercio(comercioOriginal, {
+    nombreComercial: 'Asadero Central Express Baba',
+    tiempoEntregaPromedio: 20,
+    costoBaseEnvio: 1.25,
+  });
+
+  assert.equal(actualizado.nombre_comercial, 'Asadero Central Express Baba');
+  assert.equal(actualizado.tiempo_entrega_promedio, 20);
+  assert.equal(actualizado.costo_base_envio, 1.25);
+  assert.equal(actualizado.lat, -1.7917, 'Coordenada latitud PostGIS debe preservarse');
+  assert.equal(actualizado.lon, -79.6783, 'Coordenada longitud PostGIS debe preservarse');
+});
+

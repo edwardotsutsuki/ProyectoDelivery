@@ -12,7 +12,8 @@ import {
   AlertCircle,
   X,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Edit3
 } from 'lucide-react';
 
 interface Comercio {
@@ -41,6 +42,7 @@ export default function ComerciosPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState<'all' | 'baba' | 'babahoyo'>('all');
   const [showModal, setShowModal] = useState(false);
+  const [editingComercioId, setEditingComercioId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -108,7 +110,32 @@ export default function ComerciosPage({
     if (!formAddress) setFormAddress('Av. 9 de Octubre y Malecón, Babahoyo');
   };
 
-  const handleCreateComercio = async (e: React.FormEvent) => {
+  const handleOpenCreate = () => {
+    setEditingComercioId(null);
+    resetForm();
+    setErrorMsg('');
+    setSuccessMsg('');
+    setShowModal(true);
+  };
+
+  const handleEditClick = (c: Comercio) => {
+    setEditingComercioId(c.id);
+    setFormName(c.nombre_comercial);
+    setFormDesc(c.descripcion || '');
+    setFormAddress(c.direccion);
+    setFormCategory(c.categoria || 'Restaurante');
+    setFormPhone(c.telefono || '+5939');
+    setFormLat(c.lat || -1.7917);
+    setFormLon(c.lon || -79.6783);
+    setFormCity(c.direccion.toLowerCase().includes('babahoyo') ? 'babahoyo' : 'baba');
+    setFormBaseFee(Number(c.costo_base_envio || 1.50));
+    setFormPrepTime(Number(c.tiempo_entrega_promedio || 30));
+    setErrorMsg('');
+    setSuccessMsg('');
+    setShowModal(true);
+  };
+
+  const handleSaveComercio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formAddress.trim()) {
       setErrorMsg('Nombre comercial y dirección son requeridos.');
@@ -120,8 +147,14 @@ export default function ComerciosPage({
     setSuccessMsg('');
 
     try {
-      const res = await fetch(`${apiBaseUrl}/catalog/comercios`, {
-        method: 'POST',
+      const isEditing = Boolean(editingComercioId);
+      const url = isEditing
+        ? `${apiBaseUrl}/catalog/comercio/${editingComercioId}`
+        : `${apiBaseUrl}/catalog/comercios`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombreComercial: formName.trim(),
@@ -133,7 +166,7 @@ export default function ComerciosPage({
           telefono: formPhone.trim(),
           costoBaseEnvio: Number(formBaseFee),
           tiempoEntregaPromedio: Number(formPrepTime),
-          isAbierto: true,
+          ...(isEditing ? {} : { isAbierto: true }),
         }),
       });
 
@@ -143,7 +176,11 @@ export default function ComerciosPage({
         throw new Error(data.message || 'Error al guardar comercio en base de datos.');
       }
 
-      setSuccessMsg(`¡Local "${data.data.nombre_comercial}" registrado con éxito!`);
+      setSuccessMsg(
+        isEditing
+          ? `¡Local "${data.data.nombre_comercial}" actualizado con éxito!`
+          : `¡Local "${data.data.nombre_comercial}" registrado con éxito!`
+      );
       setShowModal(false);
       resetForm();
       fetchComercios();
@@ -201,10 +238,7 @@ export default function ComerciosPage({
         </div>
 
         <button
-          onClick={() => {
-            setShowModal(true);
-            setErrorMsg('');
-          }}
+          onClick={handleOpenCreate}
           style={{
             background: 'linear-gradient(135deg, #e11d48, #be123c)',
             color: '#fff',
@@ -401,24 +435,45 @@ export default function ComerciosPage({
                   PostGIS: {Number(comercio.lat).toFixed(4)}, {Number(comercio.lon).toFixed(4)}
                 </div>
 
-                <button
-                  onClick={() => handleToggleEstado(comercio.id, comercio.is_abierto)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    background: comercio.is_abierto ? '#1e293b' : '#064e3b',
-                    color: comercio.is_abierto ? '#f87171' : '#6ee7b7',
-                    fontWeight: '700',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Power size={13} /> {comercio.is_abierto ? 'Cerrar Local' : 'Abrir Local'}
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleEditClick(comercio)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #38bdf844',
+                      background: '#0c2340',
+                      color: '#38bdf8',
+                      fontWeight: '700',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Edit3 size={13} /> Editar
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleEstado(comercio.id, comercio.is_abierto)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #334155',
+                      background: comercio.is_abierto ? '#1e293b' : '#064e3b',
+                      color: comercio.is_abierto ? '#f87171' : '#6ee7b7',
+                      fontWeight: '700',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Power size={13} /> {comercio.is_abierto ? 'Cerrar' : 'Abrir'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -454,7 +509,9 @@ export default function ComerciosPage({
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>Registrar Nuevo Local Comercial</h3>
+              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>
+                {editingComercioId ? 'Editar Local Comercial' : 'Registrar Nuevo Local Comercial'}
+              </h3>
               <button
                 onClick={() => setShowModal(false)}
                 style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
@@ -477,7 +534,7 @@ export default function ComerciosPage({
               </div>
             )}
 
-            <form onSubmit={handleCreateComercio} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleSaveComercio} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
                   Nombre Comercial del Local *
@@ -748,7 +805,13 @@ export default function ComerciosPage({
                     gap: '8px',
                   }}
                 >
-                  {saving ? <Loader2 size={18} className="animate-spin" /> : 'Guardar Local en PostGIS'}
+                  {saving ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : editingComercioId ? (
+                    'Guardar Cambios del Local'
+                  ) : (
+                    'Guardar Local en PostGIS'
+                  )}
                 </button>
               </div>
             </form>

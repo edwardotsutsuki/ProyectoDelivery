@@ -104,8 +104,8 @@
 - [x] **5.2 Onboarding y Administración de Locales (Comercios CRUD)**:
   - [x] Endpoints backend: `POST /api/v1/catalog/comercios` (creación con punto espacial PostGIS `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`), `PUT /:id` (edición) y `PATCH /:id/estado` (abierto/cerrado en Postgres + Redis).
   - [x] Pantalla de Gestión de Locales en Backoffice con tabla filtrable por ciudad (Baba vs Babahoyo).
-  - [x] Modal de registro/edición de comercio con presets de coordenadas en Baba Centro y Babahoyo.
-- [x] **5.3 Creador de Menús y Gestión de Productos**:
+  - [x] Modal de registro y edición completa de comercio (`handleEditClick`) con presets de coordenadas en Baba Centro y Babahoyo.
+- [x] **5.3 Creador de Menús y Gestión de Productos (Backoffice)**:
   - [x] Endpoints backend: `POST /api/v1/catalog/comercios/:id/productos`, `PUT /productos/:id`, `PATCH /productos/:id/toggle-disponibilidad` y `DELETE /productos/:id`.
   - [x] Pantalla en Backoffice con selector de local comercial y visor de catálogo por categorías.
   - [x] Modal de creación de platos/productos y switch de disponibilidad ultra rápida en cocina vía Redis + Postgres.
@@ -120,12 +120,20 @@
 - [x] **5.5 Torre de Control de Flota y Cuadre de Caja**:
   - [x] Endpoints backend: `GET /api/v1/ledger/repartidores-flota` y `POST /api/v1/ledger/liquidar-caja`.
   - [x] Pantalla `FlotaCajaPage` con monitoreo de repartidores, alerta de límite de deuda en efectivo ($25+) y modal de liquidación inmutable en el ledger.
+- [x] **5.6 Directorio Central de Usuarios y Permisos RBAC (Backoffice)**:
+  - [x] Endpoints backend montados en `/api/v1/users`: `GET /` (listado con filtro por rol), `POST /` (creación con hashing bcrypt y validación de correo único), `PUT /:id` (edición y cambio de contraseña), `PATCH /:id/estado` (activación/suspensión de cuentas).
+  - [x] Pantalla `UsuariosPage.tsx` integrada en barra lateral del Backoffice con tarjetas filtrables por rol (Clientes, Repartidores, Comercios, Administradores), búsqueda en vivo y modales interactivos.
+- [x] **5.7 Gestión de Menú para Comercios (Portal Aliados / Rappi Partners en http://localhost:3003)**:
+  - [x] Barra de navegación superior en `ProtectedPortal` con alternancia entre "Comandas en Cocina" y "Mi Carta & Productos".
+  - [x] Pantalla `MenuManagement.tsx` inspirada en Rappi Partners: los locales crean, editan precios, cambian descripciones, pausan por falta de ingredientes y eliminan platos de su catálogo directamente sin intervención del administrador.
 
 ---
 
 ### 🔄 Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada - [EN PROCESO]
 - [x] **Storefront Web Cliente (`frontend/landing-page` en http://localhost:3002)**:
   - [x] Portal web completo para realizar pedidos directamente desde el navegador (PC, Tablet o Celular) sin necesidad de descargar app móvil.
+  - [x] Eliminados enlaces internos de desarrollo hacia la cocina (3003) y administración (3004) de la vista de cara al cliente.
+  - [x] Identificación obligatoria de cliente antes de enviar el pedido: Modal de autenticación ("Ya tengo cuenta" vs "Crear cuenta nueva") que preserva el 100% de los productos del carrito.
   - [x] Explorador de restaurantes abiertos en Baba y Babahoyo con tiempos de entrega y fletes base.
   - [x] Visor de carta/menú con selector de cantidades (+/-) y bandeja de carrito flotante.
   - [x] Checkout web con selector de direcciones geodésicas en Baba (San Antonio, Parque Central, La Nobleza) y método de pago (Efectivo vs Transferencia).
@@ -135,7 +143,7 @@
   - [x] Radar de pedido en tiempo real mostrando etapas (Cocina ➔ En camino ➔ Entrega), distancia en metros y ETA dinámico con OSRM.
   - [x] Historial de pedidos anteriores y botón "Repetir este pedido (1 Clic)" con rellenado automático de comanda.
   - [x] Selector rápido de ubicaciones y presets geodésicos en Baba (San Antonio, Parque Central, La Nobleza, Babahoyo).
-  - [x] 13/13 pruebas unitarias aprobadas.
+  - [x] 11/11 pruebas unitarias aprobadas.
 - [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
   - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
   - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.

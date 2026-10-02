@@ -5,6 +5,7 @@ import ProductosPage from './pages/ProductosPage';
 import ZonasTarifasPage from './pages/ZonasTarifasPage';
 import FlotaCajaPage from './pages/FlotaCajaPage';
 import TrackingPage from './pages/TrackingPage';
+import UsuariosPage from './pages/UsuariosPage';
 import {
   LayoutDashboard,
   Navigation,
@@ -24,7 +25,8 @@ import {
   CheckCircle2,
   AlertCircle,
   LogOut,
-  UserCheck
+  UserCheck,
+  Users
 } from 'lucide-react';
 
 interface LedgerSummaryItem {
@@ -44,7 +46,7 @@ interface MovementItem {
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-type NavSection = 'dashboard' | 'comercios' | 'productos' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
+type NavSection = 'dashboard' | 'comercios' | 'productos' | 'usuarios' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
 
 export default function App() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -222,6 +224,26 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setSeccion('usuarios')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '14px',
+              background: seccion === 'usuarios' ? '#e11d48' : 'transparent',
+              color: seccion === 'usuarios' ? '#fff' : '#94a3b8',
+              textAlign: 'left',
+            }}
+          >
+            <Users size={18} /> Directorio de Usuarios
+          </button>
+
+          <button
             onClick={() => setSeccion('zonas')}
             style={{
               display: 'flex',
@@ -353,6 +375,7 @@ export default function App() {
               {seccion === 'dashboard' && 'Dashboard Ejecutivo de Operaciones'}
               {seccion === 'comercios' && 'Gestión Comercial de Locales'}
               {seccion === 'productos' && 'Administración de Menús y Catálogo'}
+              {seccion === 'usuarios' && 'Directorio Central de Usuarios y Permisos'}
               {seccion === 'zonas' && 'Geofencing de Zonas y Tarifación'}
               {seccion === 'tracker' && 'Radar y Seguimiento Geoespacial'}
               {seccion === 'finanzas' && 'Libro Mayor Contable (Ledger Inmutable)'}
@@ -473,6 +496,8 @@ export default function App() {
         {seccion === 'comercios' && <ComerciosPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'productos' && <ProductosPage apiBaseUrl={API_BASE} />}
+
+        {seccion === 'usuarios' && <UsuariosPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'zonas' && <ZonasTarifasPage />}
         {seccion === 'flota' && <FlotaCajaPage />}
