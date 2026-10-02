@@ -4,18 +4,30 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@delivery/tracking-web": "file:vendor/delivery-tracking-web-0.1.1.tgz",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.395.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.6.1",
+    "jsdom": "^26.1.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.5.2",
     "vite": "^5.3.1"
   }

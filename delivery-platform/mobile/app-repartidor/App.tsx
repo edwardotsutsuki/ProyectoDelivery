@@ -172,3 +172,4 @@ const styles = StyleSheet.create({
   creditText: { color: '#34d399', fontWeight: '800', fontSize: 16 },
   debitText: { color: '#f87171', fontWeight: '800', fontSize: 16 },
 });
+

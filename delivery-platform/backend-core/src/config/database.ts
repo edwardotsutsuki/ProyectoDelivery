@@ -10,6 +10,8 @@ export const pgPool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
+export const pool = pgPool;
+
 pgPool.on('error', (err) => {
   console.error('Error inesperado en cliente de PostgreSQL:', err);
 });

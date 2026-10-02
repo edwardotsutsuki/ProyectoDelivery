@@ -1,0 +1,18 @@
+@tailwind base;
+@layer base {
+  .login-screen *, .login-screen *::before, .login-screen *::after { box-sizing: border-box; }
+  .login-screen { line-height: 1.5; }
+  .login-screen button, .login-screen input { font: inherit; }
+  .login-screen button { cursor: pointer; }
+  .login-screen button:disabled { cursor: wait; }
+  .login-screen h1, .login-screen h2, .login-screen p { margin: 0; }
+  .kanban-screen *, .kanban-screen *::before, .kanban-screen *::after { box-sizing: border-box; }
+  .kanban-screen { line-height: 1.5; }
+  .kanban-screen h1, .kanban-screen h2, .kanban-screen h3, .kanban-screen h4, .kanban-screen p { margin: 0; }
+  .kanban-screen ul { list-style: none; padding-left: 0; }
+  .kanban-screen button { font: inherit; cursor: pointer; }
+  .kanban-screen button:focus-visible { outline: 2px solid #fb7185; outline-offset: 4px; }
+}
+@tailwind components;
+@tailwind utilities;
+

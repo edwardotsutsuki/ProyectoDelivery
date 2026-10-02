@@ -1,0 +1,10 @@
+{
+  "name": "@delivery/tracking-web",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Shared Leaflet tracking UI and geodesy helpers for DeliveryYa web apps",
+  "exports": { ".": "./src/index.ts", "./geo": "./src/tracking.ts" },
+  "files": ["src"],
+  "peerDependencies": { "react": "^18.2.0", "leaflet": "^1.9.4" }
+}

@@ -1,0 +1,24 @@
+.tracking-card { background: #fff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 22px; overflow: hidden; font-family: 'Plus Jakarta Sans', sans-serif; }
+.tracking-card * { box-sizing: border-box; }
+.tracking-header { padding: 24px; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.tracking-eyebrow { color: #be123c; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.tracking-header h2 { margin: 8px 0; font-size: 23px; }
+.tracking-header p { margin: 0; color: #64748b; font-size: 13px; }
+.tracking-eta { display: flex; flex-direction: column; gap: 4px; background: #fff1f2; color: #9f1239; border-radius: 14px; padding: 14px 20px; }
+.tracking-eta strong { font-size: 22px; }
+.tracking-eta span { font-size: 13px; }
+.tracking-info { background: #f8fafc; padding: 12px 24px; font-size: 12px; color: #475569; }
+.tracking-map { height: clamp(340px, 58vh, 620px); width: 100%; z-index: 0; }
+.tracking-pin-container { background: none; border: 0; }
+.tracking-pin { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 3px solid white; border-radius: 50%; color: #fff; font-size: 16px; font-weight: 800; box-shadow: 0 3px 12px #0f172a50; }
+.tracking-pin--restaurant { background: #e11d48; }
+.tracking-pin--destination { background: #059669; }
+.tracking-pin--bike { width: 44px; height: 44px; background: #1d4ed8; font-size: 23px; position: relative; }
+.tracking-bike-heading { position: absolute; inset: -13px; text-align: center; font-size: 14px; line-height: 12px; color: #1d4ed8; transform-origin: center; }
+.tracking-footer { padding: 16px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.tracking-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.tracking-dot.restaurant { background: #e11d48; } .tracking-dot.destination { background: #059669; } .tracking-dot.bike { background: #1d4ed8; }
+.tracking-footer button { margin-left: auto; padding: 9px 14px; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; cursor: pointer; color: #334155; font: inherit; }
+.tracking-footer button:focus-visible { outline: 2px solid #e11d48; outline-offset: 3px; }
+.tracking-status { margin: 0; padding: 0 24px 18px; font-size: 12px; color: #64748b; }
+.tracking-warning { margin: 0; padding: 12px 24px; background: #fffbeb; color: #92400e; font-size: 13px; }
