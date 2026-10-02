@@ -126,6 +126,35 @@
 - [x] **5.7 Gestión de Menú para Comercios (Portal Aliados / Rappi Partners en http://localhost:3003)**:
   - [x] Barra de navegación superior en `ProtectedPortal` con alternancia entre "Comandas en Cocina" y "Mi Carta & Productos".
   - [x] Pantalla `MenuManagement.tsx` inspirada en Rappi Partners: los locales crean, editan precios, cambian descripciones, pausan por falta de ingredientes y eliminan platos de su catálogo directamente sin intervención del administrador.
+- [x] **5.8 Módulo de Perfil de Cliente, Direcciones Guardadas y Billetera Virtual (Ledger)**:
+  - [x] **Tabla Relacional en PostgreSQL (`direcciones_usuario`)**:
+    - Campos: `id`, `usuario_id`, `alias` (Casa, Trabajo, Pareja), `direccion`, `canton` (Baba/Babahoyo), `referencia`, `lat`, `lon`, `es_principal`.
+    - Índices espaciales y de usuario vinculados por clave foránea `ON DELETE CASCADE`.
+  - [x] **Endpoints Backend (`backend-core/src/modules/users/user.controller.ts`)**:
+    - `GET /api/v1/users/:id/direcciones`: Listado ordenado por principal y fecha de creación.
+    - `POST /api/v1/users/:id/direcciones`: Creación de nueva ubicación con desmarcado automático de principal anterior.
+    - `DELETE /api/v1/users/:id/direcciones/:dirId`: Eliminación de direcciones antiguas.
+    - `PATCH /api/v1/users/:id/direcciones/:dirId/principal`: Cambio de domicilio favorito para entregas.
+    - `POST /api/v1/users/:id/recargar-billetera`: Recarga de saldo virtual con asiento contable en `transacciones_ledger`.
+  - [x] **Integración con Billetera Virtual y Checkout Contable**:
+    - Nuevo método de pago `saldo_virtual` en checkout (`order.controller.ts`), validando saldo disponible en `transacciones_ledger` e insertando asiento de débito (`tipoMovimiento: 'egreso'`).
+    - Consulta de saldo actual y extracto en vivo (`GET /api/v1/ledger/billetera/:id`).
+    - Historial de pedidos del cliente autenticado (`GET /api/v1/orders/cliente/:clienteId`).
+  - [x] **Panel de Control de Usuario en Storefront Web (`landing-page`)**:
+    - Botón de saldo `[💰 $XX.XX]` y acceso rápido a perfil en la barra de navegación superior.
+    - Modal con 4 pestañas interactivas:
+      1. **👤 Mis Datos**: Edición de nombre, teléfono WhatsApp y cambio de contraseña con persistencia en PostgreSQL (`PUT /users/:id`).
+      2. **📍 Mis Ubicaciones**: Administración de direcciones guardadas en Baba y Babahoyo con selector de cantón y referencias.
+      3. **💳 Mi Billetera**: Tarjeta visual de saldo, recarga instantánea ($5, $10, $20, $50) con DeUna/Banco Pichincha y extracto de transacciones del ledger.
+      4. **📦 Mis Pedidos**: Historial de comandas con estado en vivo y botón para ver el radar de seguimiento.
+- [x] **5.9 Aislamiento de Carrito Multitienda y Catálogo Completo Baba & Babahoyo**:
+  - [x] Corregido error de mezcla de tiendas en `catalog.controller.ts`: se eliminó el fallback indiscriminado de platos de Baba hacia otros comercios.
+  - [x] Sembrado catálogo completo y auténtico en base de datos para todos los comercios registrados:
+    - *Restaurante El Gran Chef Babahoyo*: Cazuela mixta de mariscos, encebollado mixto, corvina frita, bife de chorizo, arroz marinero, limonada imperial con menta.
+    - *Burger & Wings Baba*: Alitas BBQ, hamburguesas smash, salchipapas cheddar, gaseosas.
+    - *EDEM Pescados y Mariscos Baba*: Ceviche de camarón, sudado de pescado de río, arroz con camarón.
+  - [x] Regla de Aislamiento de Carrito en `landing-page`: Advertencia interactiva ("¿Empezar un nuevo pedido?") al intentar añadir platos de un restaurante diferente, protegiendo al usuario de pedidos inválidos.
+  - [x] Checkout potenciado con selector de ubicaciones guardadas y habilitación de pago con Saldo Virtual.
 
 ---
 

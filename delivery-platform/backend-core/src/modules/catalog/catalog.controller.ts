@@ -169,7 +169,9 @@ catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: R
     }
 
     if (!productos || productos.length === 0) {
-      productos = mockBabaProducts;
+      if (targetId === '55555555-5555-5555-5555-555555555555') {
+        productos = mockBabaProducts;
+      }
     }
 
     // Verificar interruptores rápidos de disponibilidad en Redis

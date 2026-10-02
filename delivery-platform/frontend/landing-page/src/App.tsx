@@ -23,7 +23,16 @@ import {
   UserCheck,
   LogOut,
   X,
-  Loader2
+  Loader2,
+  Wallet,
+  CreditCard,
+  History,
+  Settings,
+  Edit2,
+  Navigation,
+  AlertTriangle,
+  PlusCircle,
+  Check
 } from 'lucide-react';
 
 interface Comercio {
@@ -53,6 +62,30 @@ interface Producto {
 interface CartItem {
   producto: Producto;
   cantidad: number;
+}
+
+interface DireccionUsuario {
+  id: string;
+  usuario_id: string;
+  alias: string;
+  direccion: string;
+  canton: string;
+  referencia?: string;
+  lat: number | string;
+  lon: number | string;
+  es_principal: boolean;
+  fecha_creacion?: string;
+}
+
+interface LedgerMovimiento {
+  id: string;
+  pedido_id?: string | null;
+  tipo_movimiento: string;
+  monto: string | number;
+  saldo_resultante: string | number;
+  descripcion: string;
+  metadata?: any;
+  fecha_creacion: string;
 }
 
 const API_BASE = 'http://localhost:8080/api/v1';
@@ -90,13 +123,106 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Aislamiento de Carrito Multitienda
+  const [comercioCarrito, setComercioCarrito] = useState<Comercio | null>(null);
+  const [showSwitchStoreModal, setShowSwitchStoreModal] = useState(false);
+  const [pendingAddProduct, setPendingAddProduct] = useState<Producto | null>(null);
+
+  // Perfil, Ubicaciones & Billetera Virtual (Ledger)
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileTab, setProfileTab] = useState<'datos' | 'direcciones' | 'billetera' | 'pedidos'>('datos');
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletMovimientos, setWalletMovimientos] = useState<LedgerMovimiento[]>([]);
+  const [direcciones, setDirecciones] = useState<DireccionUsuario[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // Formulario Perfil
+  const [profileName, setProfileName] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Formulario Dirección
+  const [newAlias, setNewAlias] = useState('Casa');
+  const [newCanton, setNewCanton] = useState('Baba');
+  const [newDireccion, setNewDireccion] = useState('');
+  const [newReferencia, setNewReferencia] = useState('');
+  const [newEsPrincipal, setNewEsPrincipal] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+
+  // Recarga Billetera
+  const [rechargeAmount, setRechargeAmount] = useState<number>(10);
+  const [rechargeMetodo, setRechargeMetodo] = useState<'deuna' | 'transferencia'>('deuna');
+  const [rechargeReferencia, setRechargeReferencia] = useState('');
+  const [rechargeLoading, setRechargeLoading] = useState(false);
+  const [rechargeSuccess, setRechargeSuccess] = useState('');
+
   const [direccionEntrega, setDireccionEntrega] = useState(ADDRESS_PRESETS[0].direccion);
   const [coordsEntrega, setCoordsEntrega] = useState({ lat: ADDRESS_PRESETS[0].lat, lon: ADDRESS_PRESETS[0].lon });
-  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia'>('efectivo');
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'saldo_virtual'>('efectivo');
   const [clienteNombre, setClienteNombre] = useState('Edward Otsutsuki');
   const [clienteTelefono, setClienteTelefono] = useState('+593995544332');
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
+
+  // Consultar Billetera Virtual (Ledger)
+  const fetchWallet = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/ledger/billetera/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setWalletBalance(parseFloat(data.data.saldoActual || '0'));
+          setWalletMovimientos(data.data.movimientos || []);
+        }
+      }
+    } catch (err) {
+      console.warn('Error al consultar billetera:', err);
+    }
+  };
+
+  // Consultar Direcciones Guardadas
+  const fetchDirecciones = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}/direcciones`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          setDirecciones(data.data);
+          const principal = data.data.find((d: DireccionUsuario) => d.es_principal);
+          if (principal) {
+            setDireccionEntrega(principal.direccion);
+            setCoordsEntrega({ lat: Number(principal.lat), lon: Number(principal.lon) });
+            setCiudadFiltro(principal.canton as any);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error al cargar direcciones:', err);
+    }
+  };
+
+  // Consultar Historial de Pedidos del Cliente
+  const fetchCustomerOrders = async (userId: string) => {
+    try {
+      setLoadingOrders(true);
+      const res = await fetch(`${API_BASE}/orders/cliente/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setCustomerOrders(data.data);
+        }
+      }
+    } catch (err) {
+      console.warn('Error al cargar pedidos del cliente:', err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
 
   // Restaurar sesión de cliente guardada
   useEffect(() => {
@@ -113,10 +239,27 @@ export default function App() {
     }
   }, []);
 
+  // Cargar datos del cliente cuando inicia sesión
+  useEffect(() => {
+    if (customerUser?.id) {
+      setProfileName(customerUser.name || '');
+      setProfileEmail(customerUser.email || '');
+      setProfilePhone(customerUser.phone || '');
+      fetchWallet(customerUser.id);
+      fetchDirecciones(customerUser.id);
+      fetchCustomerOrders(customerUser.id);
+    }
+  }, [customerUser]);
+
   const handleLogoutCustomer = () => {
     localStorage.removeItem('delivery_customer_user');
     localStorage.removeItem('delivery_customer_token');
     setCustomerUser(null);
+    setDirecciones([]);
+    setWalletBalance(0);
+    setWalletMovimientos([]);
+    setCustomerOrders([]);
+    setShowProfileModal(false);
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -288,8 +431,17 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Gestión de Carrito
+  // Gestión de Carrito con Aislamiento Multitienda
   const agregarAlCarrito = (producto: Producto) => {
+    if (!comercioActivo) return;
+
+    if (carrito.length > 0 && comercioCarrito && comercioCarrito.id !== comercioActivo.id) {
+      setPendingAddProduct(producto);
+      setShowSwitchStoreModal(true);
+      return;
+    }
+
+    setComercioCarrito(comercioActivo);
     setCarrito(prev => {
       const existe = prev.find(item => item.producto.id === producto.id);
       if (existe) {
@@ -301,9 +453,18 @@ export default function App() {
     });
   };
 
+  const confirmarCambioDeRestaurante = () => {
+    if (pendingAddProduct && comercioActivo) {
+      setCarrito([{ producto: pendingAddProduct, cantidad: 1 }]);
+      setComercioCarrito(comercioActivo);
+      setPendingAddProduct(null);
+      setShowSwitchStoreModal(false);
+    }
+  };
+
   const modificarCantidad = (productoId: string, delta: number) => {
     setCarrito(prev => {
-      return prev
+      const next = prev
         .map(item => {
           if (item.producto.id === productoId) {
             const nuevaCantidad = item.cantidad + delta;
@@ -312,14 +473,154 @@ export default function App() {
           return item;
         })
         .filter(Boolean) as CartItem[];
+      
+      if (next.length === 0) {
+        setComercioCarrito(null);
+      }
+      return next;
     });
   };
 
+  const vaciarCarrito = () => {
+    setCarrito([]);
+    setComercioCarrito(null);
+  };
+
+  const storeActivoParaPedido = comercioCarrito || comercioActivo;
   const totalItemsCount = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(item.producto.precio * 100) * item.cantidad, 0);
   const subtotal = subtotalCents / 100;
-  const costoEnvio = comercioActivo?.canton === 'Babahoyo' ? 1.50 : 1.25;
+  const costoEnvio = storeActivoParaPedido?.canton === 'Babahoyo' ? 1.50 : 1.25;
   const total = subtotal + (carrito.length > 0 ? costoEnvio : 0);
+
+  // Gestión de Perfil de Usuario
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerUser) return;
+    setProfileLoading(true);
+    setProfileError('');
+    setProfileSuccess('');
+
+    try {
+      const body: any = {
+        nombre: profileName.trim(),
+        telefono: profilePhone.trim(),
+      };
+      if (profilePassword && profilePassword.trim().length > 0) {
+        body.password = profilePassword.trim();
+      }
+
+      const res = await fetch(`${API_BASE}/users/${customerUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'No se pudieron actualizar los datos');
+      }
+
+      const updatedUser = {
+        ...customerUser,
+        name: data.data.nombre,
+        phone: data.data.telefono,
+      };
+      setCustomerUser(updatedUser);
+      localStorage.setItem('delivery_customer_user', JSON.stringify(updatedUser));
+      setClienteNombre(updatedUser.name);
+      setClienteTelefono(updatedUser.phone || '');
+      setProfilePassword('');
+      setProfileSuccess('¡Tus datos han sido actualizados con éxito!');
+    } catch (err: any) {
+      setProfileError(err.message || 'Error al guardar los datos.');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  // Gestión de Direcciones Guardadas
+  const handleSaveDireccion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerUser || !newDireccion.trim()) return;
+    setSavingAddress(true);
+
+    try {
+      const coords = newCanton === 'Babahoyo' ? { lat: -1.8022, lon: -79.5344 } : { lat: -1.7917, lon: -79.6783 };
+      const res = await fetch(`${API_BASE}/users/${customerUser.id}/direcciones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: newAlias.trim(),
+          canton: newCanton,
+          direccion: newDireccion.trim(),
+          referencia: newReferencia.trim(),
+          lat: coords.lat,
+          lon: coords.lon,
+          es_principal: newEsPrincipal,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchDirecciones(customerUser.id);
+        setNewDireccion('');
+        setNewReferencia('');
+      }
+    } catch (err) {
+      console.warn('Error al guardar dirección:', err);
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const handleDeleteDireccion = async (dirId: string) => {
+    if (!customerUser) return;
+    try {
+      await fetch(`${API_BASE}/users/${customerUser.id}/direcciones/${dirId}`, { method: 'DELETE' });
+      await fetchDirecciones(customerUser.id);
+    } catch (err) {
+      console.warn('Error al eliminar dirección:', err);
+    }
+  };
+
+  const handleSetPrincipalDireccion = async (dirId: string) => {
+    if (!customerUser) return;
+    try {
+      await fetch(`${API_BASE}/users/${customerUser.id}/direcciones/${dirId}/principal`, { method: 'PATCH' });
+      await fetchDirecciones(customerUser.id);
+    } catch (err) {
+      console.warn('Error al marcar dirección principal:', err);
+    }
+  };
+
+  // Recarga de Billetera Virtual
+  const handleRechargeWallet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerUser || rechargeAmount <= 0) return;
+    setRechargeLoading(true);
+    setRechargeSuccess('');
+
+    try {
+      const res = await fetch(`${API_BASE}/users/${customerUser.id}/recargar-billetera`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monto: rechargeAmount,
+          metodo: rechargeMetodo,
+          referencia: rechargeReferencia || `TRANSF-${Date.now().toString().slice(-6)}`,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRechargeSuccess(`¡Recarga exitosa! Se han acreditado $${Number(rechargeAmount).toFixed(2)} a tu Billetera.`);
+        await fetchWallet(customerUser.id);
+        setRechargeReferencia('');
+      }
+    } catch (err) {
+      console.warn('Error al recargar billetera:', err);
+    } finally {
+      setRechargeLoading(false);
+    }
+  };
 
   // Enviar Pedido a Cocina en Vivo
   const handleConfirmarPedido = async (e: React.FormEvent) => {
@@ -335,9 +636,10 @@ export default function App() {
       setSubmittingOrder(true);
       setOrderError('');
 
+      const targetComercio = comercioCarrito || comercioActivo;
       const payload = {
         clienteId: customerUser.id,
-        comercioId: comercioActivo?.id || '55555555-5555-5555-5555-555555555555',
+        comercioId: targetComercio?.id || '55555555-5555-5555-5555-555555555555',
         items: carrito.map(item => ({
           id: item.producto.id,
           cantidad: item.cantidad,
@@ -366,6 +668,11 @@ export default function App() {
           repartidor: 'Carlos Repartidor - Moto Baba 01',
         });
         setCarrito([]);
+        setComercioCarrito(null);
+        if (customerUser?.id) {
+          fetchWallet(customerUser.id);
+          fetchCustomerOrders(customerUser.id);
+        }
         setVista('tracking');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
@@ -388,6 +695,7 @@ export default function App() {
         repartidor: 'Carlos Repartidor - Moto Baba 01',
       });
       setCarrito([]);
+      setComercioCarrito(null);
       setVista('tracking');
     } finally {
       setSubmittingOrder(false);
@@ -496,23 +804,62 @@ export default function App() {
 
           {customerUser ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: '#f1f5f9',
-                padding: '6px 14px',
-                borderRadius: '10px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                fontWeight: '700',
-                color: '#0f172a',
-              }}>
+              {/* Píldora de Billetera Virtual */}
+              <button
+                onClick={() => {
+                  setProfileTab('billetera');
+                  setShowProfileModal(true);
+                }}
+                title="Ver saldo y movimientos de Billetera"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  color: '#065f46',
+                  padding: '7px 12px',
+                  borderRadius: '10px',
+                  fontWeight: '800',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <Wallet size={15} color="#059669" />
+                <span>${walletBalance.toFixed(2)}</span>
+              </button>
+
+              {/* Píldora de Perfil de Usuario */}
+              <button
+                onClick={() => {
+                  setProfileTab('datos');
+                  setShowProfileModal(true);
+                }}
+                title="Gestionar mi perfil, direcciones y pedidos"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: '#f1f5f9',
+                  padding: '7px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                }}
+              >
                 <UserCheck size={16} color="#10b981" />
-                <span>{customerUser.name}</span>
-              </div>
+                <span>{customerUser.name.split(' ')[0]}</span>
+                <Settings size={13} color="#64748b" />
+              </button>
+
+              {/* Botón Salir */}
               <button
                 onClick={handleLogoutCustomer}
+                title="Cerrar sesión"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -520,14 +867,14 @@ export default function App() {
                   border: 'none',
                   background: '#fee2e2',
                   color: '#e11d48',
-                  padding: '7px 12px',
+                  padding: '7px 10px',
                   borderRadius: '10px',
                   cursor: 'pointer',
                   fontSize: '12px',
                   fontWeight: '700',
                 }}
               >
-                <LogOut size={13} /> Salir
+                <LogOut size={14} />
               </button>
             </div>
           ) : (
@@ -990,6 +1337,49 @@ export default function App() {
                   1. Punto de Entrega en Los Ríos
                 </h3>
 
+                {/* Ubicaciones Guardadas del Usuario */}
+                {direcciones.length > 0 && (
+                  <div style={{ marginBottom: '14px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '6px' }}>
+                      Tus Ubicaciones Guardadas:
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {direcciones.map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            setDireccionEntrega(d.direccion);
+                            setCoordsEntrega({ lat: Number(d.lat), lon: Number(d.lon) });
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            border: '1px solid',
+                            borderColor: direccionEntrega === d.direccion ? '#e11d48' : '#cbd5e1',
+                            background: direccionEntrega === d.direccion ? '#ffe4e6' : '#fff',
+                            color: direccionEntrega === d.direccion ? '#e11d48' : '#334155',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          <MapPin size={13} color={direccionEntrega === d.direccion ? '#e11d48' : '#64748b'} />
+                          <span>{d.alias} ({d.canton})</span>
+                          {d.es_principal && (
+                            <span style={{ fontSize: '10px', background: '#dcfce7', color: '#166534', padding: '1px 5px', borderRadius: '4px' }}>
+                              Principal
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
                   {ADDRESS_PRESETS.map((p, i) => (
                     <button
@@ -1089,6 +1479,49 @@ export default function App() {
                       </strong>
                       <span style={{ fontSize: '12px', color: '#64748b' }}>
                         Banco Pichincha, Guayaquil o DeUna sin recargo.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px',
+                    borderRadius: '12px',
+                    border: '1px solid',
+                    borderColor: metodoPago === 'saldo_virtual' ? '#10b981' : '#e2e8f0',
+                    background: metodoPago === 'saldo_virtual' ? '#ecfdf5' : '#fff',
+                    cursor: walletBalance >= total ? 'pointer' : 'not-allowed',
+                    opacity: walletBalance >= total ? 1 : 0.7,
+                  }}>
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      disabled={walletBalance < total}
+                      checked={metodoPago === 'saldo_virtual'}
+                      onChange={() => setMetodoPago('saldo_virtual')}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '14px', color: '#0f172a' }}>
+                          ⚡ Saldo Billetera Virtual (Ledger)
+                        </strong>
+                        <span style={{
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          background: walletBalance >= total ? '#d1fae5' : '#fee2e2',
+                          color: walletBalance >= total ? '#065f46' : '#991b1b',
+                        }}>
+                          Disp: ${walletBalance.toFixed(2)} USD
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                        {walletBalance >= total
+                          ? 'Pago instantáneo. Se debitará de tu saldo virtual al confirmar la orden.'
+                          : 'Saldo insuficiente para pagar esta comanda. Recarga en tu perfil o usa otro medio.'}
                       </span>
                     </div>
                   </label>
@@ -1592,6 +2025,660 @@ export default function App() {
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Advertencia de Cambio de Restaurante (Aislamiento de Carrito) */}
+      {showSwitchStoreModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            maxWidth: '460px',
+            width: '100%',
+            padding: '28px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: '#fff1f2',
+              color: '#e11d48',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto',
+            }}>
+              <AlertTriangle size={28} />
+            </div>
+
+            <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', margin: '0 0 10px 0' }}>
+              ¿Empezar un nuevo pedido?
+            </h3>
+            <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+              Ya tienes productos de <strong style={{ color: '#0f172a' }}>{comercioCarrito?.nombre_comercial}</strong> en tu carrito. Cada pedido debe ser del mismo local para garantizar los tiempos de cocina y entrega.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={confirmarCambioDeRestaurante}
+                style={{
+                  background: '#e11d48',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '12px 20px',
+                  borderRadius: '12px',
+                  fontWeight: '800',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(225, 29, 72, 0.3)'
+                }}
+              >
+                Vaciar carrito y ordenar en {comercioActivo?.nombre_comercial}
+              </button>
+
+              <button
+                onClick={() => {
+                  setPendingAddProduct(null);
+                  setShowSwitchStoreModal(false);
+                }}
+                style={{
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  padding: '12px 20px',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Mantener mi carrito actual
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Central de Perfil, Billetera y Direcciones */}
+      {showProfileModal && customerUser && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            maxWidth: '680px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }}>
+            {/* Header del Modal */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#f8fafc',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  background: '#e11d48',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '800',
+                  fontSize: '16px',
+                }}>
+                  {customerUser.name.charAt(0)}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>
+                    Mi Cuenta Delivery Baba
+                  </h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    {customerUser.email}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowProfileModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Pestañas de Navegación del Perfil */}
+            <div style={{
+              display: 'flex',
+              borderBottom: '1px solid #e2e8f0',
+              background: '#fff',
+              padding: '0 16px',
+              overflowX: 'auto',
+            }}>
+              {[
+                { id: 'datos', label: '👤 Mis Datos' },
+                { id: 'direcciones', label: '📍 Mis Ubicaciones' },
+                { id: 'billetera', label: '💳 Mi Billetera' },
+                { id: 'pedidos', label: '📦 Mis Pedidos' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setProfileTab(tab.id as any)}
+                  style={{
+                    padding: '14px 16px',
+                    border: 'none',
+                    borderBottom: profileTab === tab.id ? '2px solid #e11d48' : '2px solid transparent',
+                    background: 'transparent',
+                    color: profileTab === tab.id ? '#e11d48' : '#64748b',
+                    fontWeight: profileTab === tab.id ? '800' : '600',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Contenido según pestaña */}
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+              
+              {/* TAB 1: DATOS PERSONALES */}
+              {profileTab === 'datos' && (
+                <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {profileSuccess && (
+                    <div style={{ background: '#f0fdf4', color: '#166534', padding: '12px', borderRadius: '10px', fontSize: '13px', border: '1px solid #bbf7d0' }}>
+                      {profileSuccess}
+                    </div>
+                  )}
+                  {profileError && (
+                    <div style={{ background: '#fef2f2', color: '#991b1b', padding: '12px', borderRadius: '10px', fontSize: '13px', border: '1px solid #fecaca' }}>
+                      {profileError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                      Nombre Completo
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                      Teléfono / WhatsApp de Entrega
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                      placeholder="+5939..."
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                      Nueva Contraseña (Opcional)
+                    </label>
+                    <input
+                      type="password"
+                      value={profilePassword}
+                      onChange={(e) => setProfilePassword(e.target.value)}
+                      placeholder="Dejar en blanco para mantener la actual"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={profileLoading}
+                    style={{
+                      background: '#e11d48',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      fontWeight: '800',
+                      fontSize: '14px',
+                      cursor: profileLoading ? 'not-allowed' : 'pointer',
+                      marginTop: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    {profileLoading ? <Loader2 size={16} className="animate-spin" /> : 'Guardar Cambios'}
+                  </button>
+                </form>
+              )}
+
+              {/* TAB 2: MIS UBICACIONES GUARDADAS */}
+              {profileTab === 'direcciones' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>
+                      Ubicaciones Registradas
+                    </h4>
+                    
+                    {direcciones.length === 0 ? (
+                      <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
+                        No tienes direcciones registradas aún. Agrega una abajo para acelerar tus pedidos en Baba y Babahoyo.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {direcciones.map(d => (
+                          <div
+                            key={d.id}
+                            style={{
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '14px',
+                              padding: '14px 16px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              background: d.es_principal ? '#f0fdf4' : '#fff',
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <strong style={{ fontSize: '14px', color: '#0f172a' }}>{d.alias}</strong>
+                                <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                                  {d.canton}
+                                </span>
+                                {d.es_principal && (
+                                  <span style={{ fontSize: '11px', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                                    Principal
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '13px', color: '#334155' }}>{d.direccion}</div>
+                              {d.referencia && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Ref: {d.referencia}</div>}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              {!d.es_principal && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrincipalDireccion(d.id)}
+                                  title="Marcar como Principal"
+                                  style={{ background: '#f1f5f9', border: 'none', color: '#475569', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                                >
+                                  Principal
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDireccion(d.id)}
+                                title="Eliminar dirección"
+                                style={{ background: '#fee2e2', border: 'none', color: '#e11d48', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer' }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Formulario Agregar Ubicación */}
+                  <form onSubmit={handleSaveDireccion} style={{ background: '#f8fafc', padding: '18px', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <h5 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
+                      + Agregar Nueva Dirección de Entrega
+                    </h5>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                          Alias (Ej: Casa, Trabajo)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newAlias}
+                          onChange={(e) => setNewAlias(e.target.value)}
+                          placeholder="Casa Baba Centro"
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                          Cantón
+                        </label>
+                        <select
+                          value={newCanton}
+                          onChange={(e) => setNewCanton(e.target.value)}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', background: '#fff' }}
+                        >
+                          <option value="Baba">Baba (Sede Principal)</option>
+                          <option value="Babahoyo">Babahoyo (Expansión)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                        Dirección Exacta
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newDireccion}
+                        onChange={(e) => setNewDireccion(e.target.value)}
+                        placeholder="Calle principal, número y calle secundaria..."
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                        Referencia de Llegada
+                      </label>
+                      <input
+                        type="text"
+                        value={newReferencia}
+                        onChange={(e) => setNewReferencia(e.target.value)}
+                        placeholder="Frente a la tienda, portón azul, etc."
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={newEsPrincipal}
+                        onChange={(e) => setNewEsPrincipal(e.target.checked)}
+                      />
+                      <span>Establecer como dirección principal de entrega</span>
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={savingAddress}
+                      style={{
+                        background: '#0f172a',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '10px',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '13px',
+                        cursor: savingAddress ? 'not-allowed' : 'pointer',
+                        marginTop: '4px',
+                      }}
+                    >
+                      {savingAddress ? 'Guardando...' : 'Guardar Ubicación'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* TAB 3: BILLETERA VIRTUAL & MÉTODOS DE PAGO */}
+              {profileTab === 'billetera' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Tarjeta Visual de Saldo */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #059669, #047857)',
+                    borderRadius: '20px',
+                    padding: '24px',
+                    color: '#fff',
+                    boxShadow: '0 8px 20px rgba(5, 150, 105, 0.25)',
+                  }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.9 }}>
+                      Billetera Virtual Delivery Baba
+                    </span>
+                    <div style={{ fontSize: '36px', fontWeight: '900', margin: '8px 0 14px 0' }}>
+                      ${walletBalance.toFixed(2)} <span style={{ fontSize: '18px', fontWeight: '600' }}>USD</span>
+                    </div>
+                    <div style={{ fontSize: '12px', opacity: 0.85 }}>
+                      Saldo protegido e inmutable asentado en Ledger contable de doble entrada.
+                    </div>
+                  </div>
+
+                  {/* Formulario de Recarga */}
+                  <form onSubmit={handleRechargeWallet} style={{ background: '#f8fafc', padding: '18px', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <h5 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
+                      Recargar Saldo (Transferencia / DeUna / Efectivo)
+                    </h5>
+
+                    {rechargeSuccess && (
+                      <div style={{ background: '#f0fdf4', color: '#166534', padding: '10px', borderRadius: '8px', fontSize: '13px', border: '1px solid #bbf7d0' }}>
+                        {rechargeSuccess}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {[5, 10, 20, 50].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setRechargeAmount(amt)}
+                          style={{
+                            flex: 1,
+                            padding: '8px',
+                            borderRadius: '8px',
+                            border: '1px solid',
+                            borderColor: rechargeAmount === amt ? '#059669' : '#cbd5e1',
+                            background: rechargeAmount === amt ? '#ecfdf5' : '#fff',
+                            color: rechargeAmount === amt ? '#059669' : '#334155',
+                            fontWeight: '800',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ${amt}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: '#64748b', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      🏦 <strong>Banco Pichincha / DeUna:</strong> Cta. Ahorros #2200112233 · Titular: DeliveryBaba S.A.S. (Acreditación inmediata para pruebas del sistema).
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={rechargeLoading}
+                      style={{
+                        background: '#059669',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '12px',
+                        borderRadius: '10px',
+                        fontWeight: '800',
+                        fontSize: '14px',
+                        cursor: rechargeLoading ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {rechargeLoading ? 'Acreditando...' : `Acreditar $${rechargeAmount.toFixed(2)} a mi Billetera 🚀`}
+                    </button>
+                  </form>
+
+                  {/* Extracto de Movimientos del Ledger */}
+                  <div>
+                    <h5 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
+                      Extracto de Transacciones
+                    </h5>
+                    {walletMovimientos.length === 0 ? (
+                      <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
+                        No hay movimientos registrados en tu billetera.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {walletMovimientos.map((m) => {
+                          const isPos = parseFloat(m.monto as string) >= 0;
+                          return (
+                            <div
+                              key={m.id}
+                              style={{
+                                padding: '10px 14px',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                background: '#fff',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                fontSize: '13px',
+                              }}
+                            >
+                              <div>
+                                <strong style={{ color: '#0f172a' }}>{m.descripcion}</strong>
+                                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                  {new Date(m.fecha_creacion).toLocaleString('es-EC')} · Saldo: ${Number(m.saldo_resultante).toFixed(2)}
+                                </div>
+                              </div>
+                              <span style={{ fontWeight: '800', color: isPos ? '#059669' : '#e11d48' }}>
+                                {isPos ? '+' : ''}${Number(m.monto).toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: HISTORIAL DE PEDIDOS */}
+              {profileTab === 'pedidos' && (
+                <div>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>
+                    Tus Pedidos en Los Ríos
+                  </h4>
+
+                  {loadingOrders ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                      Cargando tus comandas...
+                    </div>
+                  ) : customerOrders.length === 0 ? (
+                    <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
+                      Aún no has realizado pedidos. ¡Explora los restaurantes de Baba y Babahoyo para ordenar!
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {customerOrders.map((ord) => (
+                        <div
+                          key={ord.id}
+                          style={{
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '16px',
+                            padding: '16px',
+                            background: '#fff',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div>
+                              <strong style={{ fontSize: '15px', color: '#0f172a' }}>
+                                {ord.nombre_comercial}
+                              </strong>
+                              <span style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>
+                                #{ord.id.slice(0, 8)} · {new Date(ord.fecha_creacion).toLocaleString('es-EC')}
+                              </span>
+                            </div>
+
+                            <span style={{
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: '800',
+                              background: ord.estado === 'entregado' ? '#dcfce7' : ord.estado === 'en_camino' ? '#dbeafe' : '#fef3c7',
+                              color: ord.estado === 'entregado' ? '#15803d' : ord.estado === 'en_camino' ? '#1d4ed8' : '#b45309',
+                            }}>
+                              {ord.estado.toUpperCase().replace('_', ' ')}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: '12px', color: '#475569', marginBottom: '10px' }}>
+                            📍 Entrega en: {ord.direccion_entrega}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                            <span style={{ fontSize: '13px', color: '#64748b' }}>
+                              Pago: <strong>{ord.metodo_pago.toUpperCase()}</strong> · Total: <strong style={{ color: '#e11d48' }}>${Number(ord.total).toFixed(2)}</strong>
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPedidoConfirmado(ord);
+                                setTrackingEta({
+                                  distanciaMetros: 505,
+                                  etaMinutos: 15,
+                                  estado: ord.estado,
+                                  repartidor: ord.repartidor_nombre || 'Carlos Repartidor - Moto Baba 01',
+                                });
+                                setShowProfileModal(false);
+                                setVista('tracking');
+                              }}
+                              style={{
+                                background: '#e11d48',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Ver Mapa & Seguimiento 🗺️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

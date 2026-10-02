@@ -255,6 +255,37 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       );
     }
 
+    // Si el pago es con saldo virtual de la billetera, verificar y asentar egreso en ledger
+    if (metodoPago === 'saldo_virtual') {
+      const balanceRes = await client.query(
+        'SELECT COALESCE(SUM(monto), 0.00) as saldo FROM transacciones_ledger WHERE usuario_id::text = $1',
+        [targetClientId]
+      );
+      const saldoActual = parseFloat(balanceRes.rows[0]?.saldo || '0.00');
+      if (saldoActual < total) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          error: `Saldo insuficiente en tu Billetera Virtual (Disponible: $${saldoActual.toFixed(2)}, Total del pedido: $${total.toFixed(2)}). Recarga saldo o elige Efectivo/Transferencia.`,
+        });
+      }
+
+      const nuevoSaldo = saldoActual - total;
+      await client.query(
+        `INSERT INTO transacciones_ledger (
+           usuario_id, pedido_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+         ) VALUES ($1, $2, 'egreso', $3, $4, $5, $6)`,
+        [
+          targetClientId,
+          pedidoCreado.id,
+          -total,
+          nuevoSaldo,
+          `Pago de Pedido #${pedidoCreado.id.slice(0, 8)} con Billetera Virtual`,
+          JSON.stringify({ canal: 'billetera_virtual', total }),
+        ]
+      );
+    }
+
     await client.query('COMMIT');
 
     // Limpiar carrito si existía
@@ -333,6 +364,42 @@ orderRouter.get('/comercio/:comercioId', async (req: Request, res: Response) => 
     }
 
     res.json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 3.1. Listar pedidos del cliente autenticado
+orderRouter.get('/cliente/:clienteId', async (req: Request, res: Response) => {
+  try {
+    const { clienteId } = req.params;
+    const targetClientId = resolveClientId(clienteId);
+
+    const query = `
+      SELECT 
+        p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.direccion_entrega, p.notas, p.fecha_creacion,
+        c.nombre_comercial, c.telefono as comercio_telefono,
+        r.nombre as repartidor_nombre, r.telefono as repartidor_telefono,
+        (
+          SELECT json_agg(json_build_object(
+            'producto', COALESCE(pr.nombre, 'Plato especial'),
+            'cantidad', pi.cantidad,
+            'precio_unitario', pi.precio_unitario
+          ))
+          FROM pedidos_items pi
+          LEFT JOIN productos pr ON pr.id = pi.producto_id
+          WHERE pi.pedido_id = p.id
+        ) as items
+      FROM pedidos p
+      JOIN comercios c ON c.id = p.comercio_id
+      LEFT JOIN usuarios r ON r.id = p.repartidor_id
+      WHERE p.cliente_id::text = $1 OR p.cliente_id::text = $2
+      ORDER BY p.fecha_creacion DESC
+      LIMIT 30;
+    `;
+    const result = await pgPool.query(query, [clienteId, targetClientId]);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import { Shield, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
 interface LoginPageProps {
   onLoginSuccess: (user: any, token: string) => void;
-  apiBaseUrl?: string;
+  apiBaseUrl: string;
 }
 
-export default function LoginPage({
-  onLoginSuccess,
-  apiBaseUrl = 'http://localhost:8080/api/v1',
-}: LoginPageProps) {
+export default function LoginPage({ onLoginSuccess, apiBaseUrl }: LoginPageProps) {
   const [email, setEmail] = useState('admin@delivery.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
@@ -17,11 +14,6 @@ export default function LoginPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Por favor ingresa tu correo y contraseña.');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -29,38 +21,29 @@ export default function LoginPage({
       const res = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Credenciales inválidas o acceso no autorizado.');
+        throw new Error(data.message || 'Credenciales de administrador inválidas');
       }
 
-      const user = data.data?.user;
-      const tokens = data.data?.tokens;
+      const user = data.data.user;
+      const token = data.data.tokens?.accessToken;
 
-      if (user?.role !== 'admin') {
-        throw new Error('Acceso restringido: Esta cuenta no tiene permisos de Administrador.');
+      if (user.role !== 'admin') {
+        throw new Error('Acceso denegado: El usuario autenticado no posee rol de Administrador.');
       }
 
-      const token = tokens?.accessToken || '';
       localStorage.setItem('delivery_admin_token', token);
       localStorage.setItem('delivery_admin_user', JSON.stringify(user));
-
       onLoginSuccess(user, token);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error de conexión con el Gateway.');
+    } catch (err: any) {
+      setError(err.message || 'Error de conexión con el servidor central');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAutofillDemo = () => {
-    setEmail('admin@delivery.com');
-    setPassword('admin123');
-    setError('');
   };
 
   return (
@@ -69,84 +52,81 @@ export default function LoginPage({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at 50% 20%, #1e1b4b 0%, #090d16 80%)',
+      background: 'radial-gradient(ellipse at top, #1e293b, #0f172a, #020617)',
+      fontFamily: 'sans-serif',
       padding: '20px',
-      color: '#f8fafc',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
       <div style={{
-        width: '100%',
-        maxWidth: '440px',
         background: '#0f172a',
-        borderRadius: '24px',
         border: '1px solid #1e293b',
+        borderRadius: '24px',
         padding: '36px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+        maxWidth: '420px',
+        width: '100%',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
-            width: '44px',
-            height: '44px',
+            width: '54px',
+            height: '54px',
             background: 'linear-gradient(135deg, #e11d48, #be123c)',
-            borderRadius: '12px',
+            borderRadius: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 16px rgba(225, 29, 72, 0.3)',
+            color: '#fff',
+            margin: '0 auto 16px auto',
+            boxShadow: '0 4px 16px rgba(225, 29, 72, 0.4)',
           }}>
-            <Shield size={22} color="#fff" />
+            <ShieldCheck size={30} />
           </div>
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0, color: '#fff' }}>Backoffice Admin</h1>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>Torre de Control Operativa · Los Ríos</div>
-          </div>
+          <h1 style={{ margin: '0 0 6px 0', fontSize: '22px', fontWeight: '900', color: '#fff' }}>
+            Backoffice Central
+          </h1>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
+            Panel de Operaciones y Control · Baba & Babahoyo
+          </p>
         </div>
-
-        <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: 1.5, margin: '16px 0 24px 0' }}>
-          Ingreso autorizado para supervisión de comandas, locales y tarifas en <strong>Baba</strong> y <strong>Babahoyo</strong>.
-        </p>
 
         {error && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            borderRadius: '12px',
-            padding: '12px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
+            background: '#450a0a',
+            border: '1px solid #7f1d1d',
             color: '#fca5a5',
+            padding: '12px 14px',
+            borderRadius: '12px',
             fontSize: '13px',
             marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}>
             <AlertCircle size={18} />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-              Correo Corporativo
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+              Correo de Administrador
             </label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '14px', top: '14px', color: '#64748b' }}>
-                <Mail size={18} />
-              </div>
+              <Mail size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '13px' }} />
               <input
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@delivery.com"
-                required
                 style={{
                   width: '100%',
-                  padding: '12px 14px 12px 42px',
+                  padding: '10px 12px 10px 38px',
                   background: '#1e293b',
                   border: '1px solid #334155',
                   borderRadius: '12px',
                   color: '#fff',
-                  fontSize: '15px',
+                  fontSize: '14px',
                   boxSizing: 'border-box',
                   outline: 'none',
                 }}
@@ -155,27 +135,25 @@ export default function LoginPage({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-              Contraseña de Acceso
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+              Contraseña
             </label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '14px', top: '14px', color: '#64748b' }}>
-                <Lock size={18} />
-              </div>
+              <Lock size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '13px' }} />
               <input
                 type="password"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                required
                 style={{
                   width: '100%',
-                  padding: '12px 14px 12px 42px',
+                  padding: '10px 12px 10px 38px',
                   background: '#1e293b',
                   border: '1px solid #334155',
                   borderRadius: '12px',
                   color: '#fff',
-                  fontSize: '15px',
+                  fontSize: '14px',
                   boxSizing: 'border-box',
                   outline: 'none',
                 }}
@@ -188,60 +166,29 @@ export default function LoginPage({
             disabled={loading}
             style={{
               marginTop: '8px',
-              padding: '14px',
-              background: 'linear-gradient(135deg, #e11d48, #be123c)',
+              background: '#e11d48',
               color: '#fff',
               border: 'none',
+              padding: '12px',
               borderRadius: '12px',
               fontWeight: '800',
-              fontSize: '15px',
+              fontSize: '14px',
               cursor: loading ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              opacity: loading ? 0.7 : 1,
-              boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+              boxShadow: '0 4px 12px rgba(225, 29, 72, 0.3)',
             }}
           >
-            {loading ? (
-              <>
-                <Loader2 size={18} className="animate-spin" /> Verificando Credenciales...
-              </>
-            ) : (
-              <>
-                Ingresar al Mando Central <ArrowRight size={18} />
-              </>
-            )}
+            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Ingresar al Backoffice'}
           </button>
         </form>
 
-        <div style={{
-          marginTop: '24px',
-          paddingTop: '20px',
-          borderTop: '1px solid #1e293b',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '12px',
-          color: '#64748b',
-        }}>
-          <span>Piloto Los Ríos (Baba - Babahoyo)</span>
-          <button
-            type="button"
-            onClick={handleAutofillDemo}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#38bdf8',
-              cursor: 'pointer',
-              fontWeight: '700',
-              textDecoration: 'underline',
-              padding: 0,
-            }}
-          >
-            Autocompletar Demo
-          </button>
+        <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid #1e293b', textAlign: 'center' }}>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>
+            Credencial demo: <strong>admin@delivery.com</strong> / <strong>admin123</strong>
+          </span>
         </div>
       </div>
     </div>
