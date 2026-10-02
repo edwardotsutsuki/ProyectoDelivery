@@ -77,30 +77,93 @@ function resolveMerchantId(id: string): string {
   return id;
 }
 
-// 1. Listar comercios abiertos con cálculo de distancia espacial PostGIS (Storefront público)
+// ============================================================================
+// 0. VERTICALES DE NEGOCIO (Tipos de Comercio: Restaurantes, Super, Farmacia, etc.)
+// ============================================================================
+catalogRouter.get('/tipos-comercio', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT id, nombre, descripcion, icono, tipo_layout, requiere_cocina, permite_recetas, control_edad_18, orden, is_activo
+      FROM tipos_comercio
+      WHERE is_activo = true
+      ORDER BY orden ASC;
+    `;
+    const result = await pgPool.query(query);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+catalogRouter.post('/tipos-comercio', async (req: Request, res: Response) => {
+  try {
+    const { id, nombre, descripcion, icono, tipoLayout = 'restaurante', requiereCocina = true, permiteRecetas = false, controlEdad18 = false, orden = 0 } = req.body;
+    if (!id || !nombre || !icono) {
+      return res.status(400).json({ success: false, message: 'id, nombre e icono son requeridos' });
+    }
+    const query = `
+      INSERT INTO tipos_comercio (id, nombre, descripcion, icono, tipo_layout, requiere_cocina, permite_recetas, control_edad_18, orden)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (id) DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        descripcion = EXCLUDED.descripcion,
+        icono = EXCLUDED.icono,
+        tipo_layout = EXCLUDED.tipo_layout,
+        requiere_cocina = EXCLUDED.requiere_cocina,
+        permite_recetas = EXCLUDED.permite_recetas,
+        control_edad_18 = EXCLUDED.control_edad_18,
+        orden = EXCLUDED.orden
+      RETURNING *;
+    `;
+    const result = await pgPool.query(query, [id.toLowerCase().trim(), nombre, descripcion, icono, tipoLayout, requiereCocina, permiteRecetas, controlEdad18, orden]);
+    res.status(201).json({ success: true, message: 'Tipo de comercio guardado exitosamente', data: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// ============================================================================
+// 1. LISTAR COMERCIOS (Storefront público con filtro de vertical y PostGIS)
+// ============================================================================
 catalogRouter.get('/comercios', async (req: Request, res: Response) => {
   try {
     const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
     const lng = req.query.lng ? parseFloat(req.query.lng as string) : null;
     const ciudad = (req.query.ciudad as string || '').toLowerCase();
+    const tipo = (req.query.tipo as string || req.query.vertical as string || '').toLowerCase();
 
-    const query = `
+    let query = `
       SELECT 
         c.id, c.nombre_comercial, c.descripcion, c.direccion,
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
         c.calificacion, c.costo_base_envio, c.estado_aprobacion,
+        c.tipo_comercio_id,
+        COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
+        COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
+        COALESCE(tc.tipo_layout, 'restaurante') as tipo_layout,
+        COALESCE(tc.requiere_cocina, true) as requiere_cocina,
+        COALESCE(c.maneja_inventario_general, false) as maneja_inventario_general,
         CASE 
           WHEN $1::numeric IS NOT NULL AND $2::numeric IS NOT NULL THEN
             ROUND((ST_DistanceSphere(c.ubicacion, ST_SetSRID(ST_MakePoint($2, $1), 4326)) / 1000.0)::numeric, 2)
           ELSE NULL
         END as distancia_km
       FROM comercios c
+      LEFT JOIN tipos_comercio tc ON c.tipo_comercio_id = tc.id
       WHERE c.is_abierto = true AND (c.estado_aprobacion IS NULL OR c.estado_aprobacion = 'aprobado')
-      ORDER BY distancia_km ASC NULLS LAST, c.calificacion DESC;
     `;
 
-    const result = await pgPool.query(query, [lat, lng]);
+    const params: any[] = [lat, lng];
+
+    if (tipo && tipo !== 'todos') {
+      params.push(tipo);
+      query += ` AND (c.tipo_comercio_id = $${params.length} OR LOWER(c.categoria) = $${params.length})`;
+    }
+
+    query += ` ORDER BY distancia_km ASC NULLS LAST, c.calificacion DESC;`;
+
+    const result = await pgPool.query(query, params);
     let comercios = result.rows;
 
     if (ciudad) {
@@ -129,10 +192,16 @@ catalogRouter.get('/comercios/admin', async (req: Request, res: Response) => {
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
         c.calificacion, c.costo_base_envio,
+        c.tipo_comercio_id,
+        COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
+        COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
+        COALESCE(tc.tipo_layout, 'restaurante') as tipo_layout,
+        COALESCE(c.maneja_inventario_general, false) as maneja_inventario_general,
         c.ruc, c.razon_social, c.banco, c.tipo_cuenta, c.numero_cuenta, c.titular_cuenta,
         c.estado_aprobacion, c.motivo_rechazo, c.fecha_solicitud, c.fecha_aprobacion,
         u.id as usuario_id, u.email as usuario_email, u.nombre as usuario_nombre, u.telefono as usuario_telefono
       FROM comercios c
+      LEFT JOIN tipos_comercio tc ON c.tipo_comercio_id = tc.id
       LEFT JOIN usuarios u ON c.usuario_id = u.id
       ORDER BY c.fecha_creacion DESC;
     `;
@@ -151,10 +220,14 @@ catalogRouter.get('/comercios/solicitudes', async (req: Request, res: Response) 
         c.id, c.nombre_comercial, c.descripcion, c.direccion,
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
+        c.tipo_comercio_id,
+        COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
+        COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
         c.costo_base_envio, c.ruc, c.razon_social, c.banco, c.tipo_cuenta, c.numero_cuenta, c.titular_cuenta,
         c.estado_aprobacion, c.motivo_rechazo, c.fecha_solicitud,
         u.id as usuario_id, u.email as usuario_email, u.nombre as usuario_nombre, u.telefono as usuario_telefono
       FROM comercios c
+      LEFT JOIN tipos_comercio tc ON c.tipo_comercio_id = tc.id
       LEFT JOIN usuarios u ON c.usuario_id = u.id
       WHERE c.estado_aprobacion = 'pendiente'
       ORDER BY c.fecha_solicitud ASC;
@@ -236,8 +309,17 @@ catalogRouter.get('/comercio/:comercioId', async (req: Request, res: Response) =
         c.id, c.nombre_comercial, c.descripcion, c.direccion,
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
-        c.calificacion, c.costo_base_envio
+        c.calificacion, c.costo_base_envio,
+        c.tipo_comercio_id,
+        COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
+        COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
+        COALESCE(tc.tipo_layout, 'restaurante') as tipo_layout,
+        COALESCE(tc.requiere_cocina, true) as requiere_cocina,
+        COALESCE(tc.permite_recetas, false) as permite_recetas,
+        COALESCE(tc.control_edad_18, false) as control_edad_18,
+        COALESCE(c.maneja_inventario_general, false) as maneja_inventario_general
       FROM comercios c
+      LEFT JOIN tipos_comercio tc ON c.tipo_comercio_id = tc.id
       WHERE c.id::text = $1 OR c.id::text = $2
       LIMIT 1;
     `;
@@ -253,17 +335,139 @@ catalogRouter.get('/comercio/:comercioId', async (req: Request, res: Response) =
   }
 });
 
-// 3. Catálogo de productos con disponibilidad en tiempo real (Redis + Postgres)
+// ============================================================================
+// 2.b CRUD DE CATEGORÍAS DE PRODUCTOS POR COMERCIO (categorias_productos)
+// ============================================================================
+catalogRouter.get('/comercio/:comercioId/categorias', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+
+    const query = `
+      SELECT id, comercio_id, nombre, descripcion, icono, orden, is_activo,
+             (SELECT COUNT(*) FROM productos p WHERE p.categoria_id = cp.id) as total_productos
+      FROM categorias_productos cp
+      WHERE cp.comercio_id::text = $1 OR cp.comercio_id::text = $2
+      ORDER BY cp.orden ASC, cp.nombre ASC;
+    `;
+    const result = await pgPool.query(query, [rawId, targetId]);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+catalogRouter.post('/comercio/:comercioId/categorias', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const { nombre, descripcion = '', icono = '🏷️', orden = 0 } = req.body;
+
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ success: false, message: 'El nombre de la categoría es requerido' });
+    }
+
+    const query = `
+      INSERT INTO categorias_productos (comercio_id, nombre, descripcion, icono, orden)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `;
+    const result = await pgPool.query(query, [targetId, nombre.trim(), descripcion, icono, Number(orden)]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Categoría creada exitosamente',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+catalogRouter.put('/categoria/:categoriaId', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId } = req.params;
+    const { nombre, descripcion, icono, orden, is_activo } = req.body;
+
+    const query = `
+      UPDATE categorias_productos
+      SET
+        nombre = COALESCE($1, nombre),
+        descripcion = COALESCE($2, descripcion),
+        icono = COALESCE($3, icono),
+        orden = COALESCE($4, orden),
+        is_activo = COALESCE($5, is_activo),
+        fecha_actualizacion = NOW()
+      WHERE id::text = $6
+      RETURNING *;
+    `;
+    const result = await pgPool.query(query, [
+      nombre !== undefined ? nombre.trim() : null,
+      descripcion !== undefined ? descripcion : null,
+      icono !== undefined ? icono : null,
+      orden !== undefined ? Number(orden) : null,
+      is_activo !== undefined ? Boolean(is_activo) : null,
+      categoriaId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Categoría no encontrada' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Categoría actualizada correctamente',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+catalogRouter.delete('/categoria/:categoriaId', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId } = req.params;
+
+    // Desvincular productos antes de borrar categoría
+    await pgPool.query('UPDATE productos SET categoria_id = NULL WHERE categoria_id::text = $1', [categoriaId]);
+
+    const query = 'DELETE FROM categorias_productos WHERE id::text = $1 RETURNING id, nombre';
+    const result = await pgPool.query(query, [categoriaId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Categoría no encontrada' });
+    }
+
+    res.json({
+      success: true,
+      message: `Categoría "${result.rows[0].nombre}" eliminada exitosamente`,
+      id: categoriaId,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 3. Catálogo de productos con disponibilidad en tiempo real y soporte de inventario
 catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: Response) => {
   try {
     const rawId = req.params.comercioId;
     const targetId = resolveMerchantId(rawId);
 
     const query = `
-      SELECT id, comercio_id, nombre, descripcion, precio, imagen_url, is_disponible, categoria
-      FROM productos
-      WHERE comercio_id::text = $1 OR comercio_id::text = $2
-      ORDER BY categoria, nombre;
+      SELECT 
+        p.id, p.comercio_id, p.nombre, p.descripcion, p.precio, p.imagen_url, p.is_disponible,
+        p.categoria, p.categoria_id,
+        COALESCE(cp.nombre, p.categoria, 'General') as categoria_nombre,
+        COALESCE(cp.icono, '🏷️') as categoria_icono,
+        COALESCE(p.unidad_medida, 'unidad') as unidad_medida,
+        COALESCE(p.maneja_stock, false) as maneja_stock,
+        p.stock_disponible,
+        COALESCE(p.requiere_receta, false) as requiere_receta
+      FROM productos p
+      LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
+      WHERE p.comercio_id::text = $1 OR p.comercio_id::text = $2
+      ORDER BY COALESCE(cp.orden, 999) ASC, COALESCE(cp.nombre, p.categoria) ASC, p.nombre ASC;
     `;
 
     let productos: any[] = [];
@@ -276,7 +480,14 @@ catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: R
 
     if (!productos || productos.length === 0) {
       if (targetId === '55555555-5555-5555-5555-555555555555') {
-        productos = mockBabaProducts;
+        productos = mockBabaProducts.map((p) => ({
+          ...p,
+          categoria_nombre: p.categoria,
+          unidad_medida: 'unidad',
+          maneja_stock: false,
+          stock_disponible: null,
+          requiere_receta: false,
+        }));
       }
     }
 
@@ -344,7 +555,7 @@ catalogRouter.patch('/producto/:productoId/toggle-disponibilidad', async (req: R
   }
 });
 
-// 5. Crear nuevo local comercial en PostgreSQL + PostGIS (Baba o Babahoyo) con soporte de credenciales
+// 5. Crear nuevo local comercial en PostgreSQL + PostGIS (Baba o Babahoyo) con soporte de credenciales y vertical
 catalogRouter.post('/comercios', async (req: Request, res: Response) => {
   try {
     const {
@@ -360,6 +571,8 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
       lat = -1.7917, // Baba Centro por defecto
       lon = -79.6783,
       categoria = 'Restaurante',
+      tipoComercioId = 'restaurante',
+      manejaInventarioGeneral = false,
       telefono = '+593900000000',
       tiempoEntregaPromedio = 30,
       costoBaseEnvio = 1.50,
@@ -414,19 +627,19 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
     const insertQuery = `
       INSERT INTO comercios (
         usuario_id, nombre_comercial, descripcion, direccion,
-        ubicacion, is_abierto, telefono, categoria,
+        ubicacion, is_abierto, telefono, categoria, tipo_comercio_id, maneja_inventario_general,
         tiempo_entrega_promedio, costo_base_envio,
         ruc, razon_social, banco, tipo_cuenta, numero_cuenta, titular_cuenta,
         estado_aprobacion, fecha_aprobacion
       ) VALUES (
         $1, $2, $3, $4,
         ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17,
-        $18, ${estadoAprobacion === 'aprobado' ? 'NOW()' : 'NULL'}
+        $12, $13, $14, $15, $16, $17, $18, $19,
+        $20, ${estadoAprobacion === 'aprobado' ? 'NOW()' : 'NULL'}
       )
-      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
-                costo_base_envio, tiempo_entrega_promedio, ruc, razon_social, banco, tipo_cuenta, numero_cuenta,
-                titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, tipo_comercio_id,
+                maneja_inventario_general, telefono, costo_base_envio, tiempo_entrega_promedio, ruc, razon_social,
+                banco, tipo_cuenta, numero_cuenta, titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
     `;
 
     const result = await pgPool.query(insertQuery, [
@@ -439,6 +652,8 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
       Boolean(isAbierto),
       telefono,
       categoria,
+      tipoComercioId || 'restaurante',
+      Boolean(manejaInventarioGeneral),
       Number(tiempoEntregaPromedio),
       Number(costoBaseEnvio),
       ruc || null,
@@ -459,7 +674,7 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
 
     res.status(201).json({
       success: true,
-      message: 'Comercio registrado exitosamente con punto espacial PostGIS y usuario asignado',
+      message: 'Comercio registrado exitosamente',
       data: createdComercio,
     });
   } catch (error) {
@@ -479,6 +694,8 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       lat,
       lon,
       categoria,
+      tipoComercioId,
+      manejaInventarioGeneral,
       telefono,
       tiempoEntregaPromedio,
       costoBaseEnvio,
@@ -503,23 +720,25 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
                          THEN ST_SetSRID(ST_MakePoint($5, $4), 4326) 
                          ELSE ubicacion END,
         categoria = COALESCE($6, categoria),
-        telefono = COALESCE($7, telefono),
-        tiempo_entrega_promedio = COALESCE($8, tiempo_entrega_promedio),
-        costo_base_envio = COALESCE($9, costo_base_envio),
-        is_abierto = COALESCE($10, is_abierto),
-        ruc = COALESCE($11, ruc),
-        razon_social = COALESCE($12, razon_social),
-        banco = COALESCE($13, banco),
-        tipo_cuenta = COALESCE($14, tipo_cuenta),
-        numero_cuenta = COALESCE($15, numero_cuenta),
-        titular_cuenta = COALESCE($16, titular_cuenta),
-        estado_aprobacion = COALESCE($17, estado_aprobacion),
-        usuario_id = COALESCE($18, usuario_id),
+        tipo_comercio_id = COALESCE($7, tipo_comercio_id),
+        maneja_inventario_general = COALESCE($8, maneja_inventario_general),
+        telefono = COALESCE($9, telefono),
+        tiempo_entrega_promedio = COALESCE($10, tiempo_entrega_promedio),
+        costo_base_envio = COALESCE($11, costo_base_envio),
+        is_abierto = COALESCE($12, is_abierto),
+        ruc = COALESCE($13, ruc),
+        razon_social = COALESCE($14, razon_social),
+        banco = COALESCE($15, banco),
+        tipo_cuenta = COALESCE($16, tipo_cuenta),
+        numero_cuenta = COALESCE($17, numero_cuenta),
+        titular_cuenta = COALESCE($18, titular_cuenta),
+        estado_aprobacion = COALESCE($19, estado_aprobacion),
+        usuario_id = COALESCE($20, usuario_id),
         fecha_actualizacion = NOW()
-      WHERE id::text = $19 OR id::text = $20
-      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
-                costo_base_envio, tiempo_entrega_promedio, ruc, razon_social, banco, tipo_cuenta, numero_cuenta,
-                titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+      WHERE id::text = $21 OR id::text = $22
+      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, tipo_comercio_id,
+                maneja_inventario_general, telefono, costo_base_envio, tiempo_entrega_promedio, ruc, razon_social,
+                banco, tipo_cuenta, numero_cuenta, titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
     `;
 
     const result = await pgPool.query(query, [
@@ -529,6 +748,8 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       lat !== undefined ? Number(lat) : null,
       lon !== undefined ? Number(lon) : null,
       categoria,
+      tipoComercioId,
+      manejaInventarioGeneral !== undefined ? Boolean(manejaInventarioGeneral) : null,
       telefono,
       tiempoEntregaPromedio !== undefined ? Number(tiempoEntregaPromedio) : null,
       costoBaseEnvio !== undefined ? Number(costoBaseEnvio) : null,
@@ -597,39 +818,77 @@ catalogRouter.patch('/comercio/:comercioId/estado', async (req: Request, res: Re
   }
 });
 
-// 8. Crear un nuevo plato/producto para un comercio
+// 8. Crear un nuevo producto para un comercio con categoría y stock opcional
 catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: Response) => {
   try {
     const rawId = req.params.comercioId;
     const targetId = resolveMerchantId(rawId);
-    const {
+    let {
       nombre,
       descripcion = '',
       precio,
-      categoria = 'Platos Fuertes',
+      categoriaId = null,
+      nuevaCategoriaNombre = null,
+      categoria = 'General',
       imagenUrl = null,
       isDisponible = true,
+      unidadMedida = 'unidad',
+      manejaStock = false,
+      stockDisponible = null,
+      requiereReceta = false,
     } = req.body;
 
     if (!nombre || precio === undefined) {
       return res.status(400).json({ success: false, message: 'nombre y precio son campos requeridos.' });
     }
 
+    // Creación rápida de categoría si se proporcionó nuevaCategoriaNombre
+    if (nuevaCategoriaNombre && nuevaCategoriaNombre.trim()) {
+      const catTrim = nuevaCategoriaNombre.trim();
+      const existingCat = await pgPool.query(
+        'SELECT id FROM categorias_productos WHERE comercio_id = $1 AND LOWER(nombre) = LOWER($2)',
+        [targetId, catTrim]
+      );
+      if (existingCat.rows.length > 0) {
+        categoriaId = existingCat.rows[0].id;
+        categoria = catTrim;
+      } else {
+        const catRes = await pgPool.query(
+          'INSERT INTO categorias_productos (comercio_id, nombre, orden) VALUES ($1, $2, 1) RETURNING id, nombre',
+          [targetId, catTrim]
+        );
+        categoriaId = catRes.rows[0].id;
+        categoria = catTrim;
+      }
+    } else if (categoriaId) {
+      const catCheck = await pgPool.query('SELECT nombre FROM categorias_productos WHERE id = $1', [categoriaId]);
+      if (catCheck.rows.length > 0) {
+        categoria = catCheck.rows[0].nombre;
+      }
+    }
+
     const query = `
       INSERT INTO productos (
-        comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible;
+        comercio_id, categoria_id, nombre, descripcion, precio, categoria,
+        imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id, comercio_id, categoria_id, nombre, descripcion, precio, categoria,
+                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta;
     `;
 
     const result = await pgPool.query(query, [
       targetId,
-      nombre,
+      categoriaId,
+      nombre.trim(),
       descripcion,
       Number(precio),
       categoria,
       imagenUrl,
       Boolean(isDisponible),
+      unidadMedida || 'unidad',
+      Boolean(manejaStock),
+      manejaStock && stockDisponible !== null && stockDisponible !== undefined ? Number(stockDisponible) : null,
+      Boolean(requiereReceta),
     ]);
 
     res.status(201).json({
@@ -646,14 +905,49 @@ catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: 
 catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) => {
   try {
     const { productoId } = req.params;
-    const {
+    let {
       nombre,
       descripcion,
       precio,
+      categoriaId,
+      nuevaCategoriaNombre,
       categoria,
       imagenUrl,
       isDisponible,
+      unidadMedida,
+      manejaStock,
+      stockDisponible,
+      requiereReceta,
     } = req.body;
+
+    // Si se pasa nuevaCategoriaNombre, crearla
+    if (nuevaCategoriaNombre && nuevaCategoriaNombre.trim()) {
+      const prodCheck = await pgPool.query('SELECT comercio_id FROM productos WHERE id::text = $1', [productoId]);
+      if (prodCheck.rows.length > 0) {
+        const comId = prodCheck.rows[0].comercio_id;
+        const catTrim = nuevaCategoriaNombre.trim();
+        const existingCat = await pgPool.query(
+          'SELECT id FROM categorias_productos WHERE comercio_id = $1 AND LOWER(nombre) = LOWER($2)',
+          [comId, catTrim]
+        );
+        if (existingCat.rows.length > 0) {
+          categoriaId = existingCat.rows[0].id;
+          categoria = catTrim;
+        } else {
+          const catRes = await pgPool.query(
+            'INSERT INTO categorias_productos (comercio_id, nombre, orden) VALUES ($1, $2, 1) RETURNING id, nombre',
+            [comId, catTrim]
+          );
+          categoriaId = catRes.rows[0].id;
+          categoria = catTrim;
+        }
+      }
+    } else if (categoriaId) {
+      const catCheck = await pgPool.query('SELECT nombre FROM categorias_productos WHERE id = $1', [categoriaId]);
+      if (catCheck.rows.length > 0) {
+        categoria = catCheck.rows[0].nombre;
+      }
+    }
 
     const query = `
       UPDATE productos
@@ -661,21 +955,35 @@ catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) =
         nombre = COALESCE($1, nombre),
         descripcion = COALESCE($2, descripcion),
         precio = COALESCE($3, precio),
-        categoria = COALESCE($4, categoria),
-        imagen_url = COALESCE($5, imagen_url),
-        is_disponible = COALESCE($6, is_disponible),
+        categoria_id = COALESCE($4, categoria_id),
+        categoria = COALESCE($5, categoria),
+        imagen_url = COALESCE($6, imagen_url),
+        is_disponible = COALESCE($7, is_disponible),
+        unidad_medida = COALESCE($8, unidad_medida),
+        maneja_stock = COALESCE($9, maneja_stock),
+        stock_disponible = CASE 
+          WHEN $9::boolean = false THEN NULL 
+          WHEN $10::int IS NOT NULL THEN $10 
+          ELSE stock_disponible END,
+        requiere_receta = COALESCE($11, requiere_receta),
         fecha_actualizacion = NOW()
-      WHERE id::text = $7
-      RETURNING id, comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible;
+      WHERE id::text = $12
+      RETURNING id, comercio_id, categoria_id, nombre, descripcion, precio, categoria,
+                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta;
     `;
 
     const result = await pgPool.query(query, [
-      nombre,
-      descripcion,
+      nombre !== undefined ? nombre.trim() : null,
+      descripcion !== undefined ? descripcion : null,
       precio !== undefined ? Number(precio) : null,
-      categoria,
-      imagenUrl,
+      categoriaId !== undefined ? categoriaId : null,
+      categoria !== undefined ? categoria : null,
+      imagenUrl !== undefined ? imagenUrl : null,
       isDisponible !== undefined ? Boolean(isDisponible) : null,
+      unidadMedida !== undefined ? unidadMedida : null,
+      manejaStock !== undefined ? Boolean(manejaStock) : null,
+      stockDisponible !== undefined ? (stockDisponible !== null ? Number(stockDisponible) : null) : null,
+      requiereReceta !== undefined ? Boolean(requiereReceta) : null,
       productoId,
     ]);
 

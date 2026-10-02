@@ -66,7 +66,8 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 | **Fase 2** | Autenticación y Perfiles de Usuario | **Login/sesión verificados ✅ / refresh y Mobile pendientes** | Antigravity (Backend/DB) + Codex (Frontend) |
 | **Fase 3** | Ciclo de Vida del Pedido en Tiempo Real | **Kanban y cliente API implementados ✅ / endpoints y eventos pendientes** | Antigravity (WS/Redis) + Codex (Kanban) |
 | **Fase 4** | Geodesia y Tracking en Vivo | **Web implementada ✅ / Mobile y recorrido real pendientes** | Antigravity (OSRM/Gateway) + Codex (Mapas) |
-| **Fase 5** | Billetera Virtual y Ledger Inmutable | **Pendiente ⏳** | Antigravity (Ledger SQL) + ChatGPT (UI Billetera) |
+| **Fase 5** | Billetera Virtual y Ledger Inmutable | **Completada ✅** | Antigravity (Ledger SQL + UI Billetera) |
+| **Fase 5.11** | Arquitectura Multi-Vertical, Categorías y Stock Opcional | **Completada ✅** | Antigravity |
 
 ---
 
@@ -156,8 +157,41 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
     - `GET /resumen-global`: Auditoría consolidada por tipo de movimiento.
 - [ ] **App Repartidor**:
   - [ ] Pantalla de Billetera Digital con saldo neto diario, historial de entregas y botón de retiro.
-- [ ] **Backoffice Web**:
-  - [ ] Módulo administrativo de liquidaciones, comisiones por zona y cuadre de caja de repartidores.
+- [x] **Backoffice Web & Landing Billetera**:
+  - [x] Módulo en Landing Page de Billetera Virtual con saldo neto, movimientos y recargas DeUna / transferencia.
+  - [x] Integración de pago con saldo virtual en checkout.
+
+---
+
+### ✅ Fase 5.11: Arquitectura Multi-Vertical, Módulo de Categorías y Control de Stock Opcional (Completada)
+- [x] **Base de Datos Relacional (`delivery-db-postgis`)**:
+  - [x] Nueva tabla `tipos_comercio`: `id` (`restaurante`, `supermercado`, `farmacia`, `licorera`, `express`), `nombre`, `descripcion`, `icono`, `tipo_layout` (`restaurante` vs `grid_ecommerce`), `requiere_cocina`, `permite_recetas`, `control_edad_18`, `orden`, `is_activo`.
+  - [x] Alteración de tabla `comercios`: adición de `tipo_comercio_id` (FK a `tipos_comercio`) y `maneja_inventario_general`.
+  - [x] Nueva tabla `categorias_productos`: `id UUID`, `comercio_id UUID` (FK a `comercios` con `ON DELETE CASCADE`), `nombre`, `descripcion`, `icono`, `orden`, `is_activo`.
+  - [x] Alteración de tabla `productos`: adición de `categoria_id` (FK con `ON DELETE SET NULL`), `unidad_medida` (unidad, kg, libra, litro, porción, etc.), `maneja_stock BOOLEAN DEFAULT FALSE`, `stock_disponible INT DEFAULT NULL`, `requiere_receta BOOLEAN DEFAULT FALSE`.
+  - [x] Semillas cargadas y migraciones ejecutadas sin pérdida de datos en `02_verticales_y_categorias.sql`.
+- [x] **Regla de Negocio de Control Opcional de Stock**:
+  - [x] Si `maneja_stock = FALSE`: `stock_disponible` se mantiene en `NULL`. El producto se considera con stock ilimitado (ideal para restaurantes de comida criolla, platos preparados y comercios sin inventario digital), controlando disponibilidad únicamente con el switch activo/pausado.
+  - [x] Si `maneja_stock = TRUE`: `stock_disponible >= 0`. El sistema valida existencias en el backend y frontend; si el stock llega a 0, se bloquea la adición al carrito con la etiqueta "Agotado".
+- [x] **Backend Core (`backend-core/src/modules/catalog`)**:
+  - [x] `GET /api/v1/catalog/tipos-comercio`: Retorna las verticales activas del ecosistema.
+  - [x] `POST /api/v1/catalog/tipos-comercio`: Creación y actualización de tipos de comercio.
+  - [x] `GET /api/v1/catalog/comercio/:comercioId/categorias`: Lista categorías propias del comercio con conteo en vivo de productos.
+  - [x] `POST /api/v1/catalog/comercio/:comercioId/categorias`: Crea nueva categoría para el local.
+  - [x] `PUT /api/v1/catalog/categoria/:categoriaId` & `DELETE`: Edita y elimina categorías (desvinculando productos de forma segura sin borrarlos).
+  - [x] `GET /catalog/comercios`: Enriquecido con metadatos de vertical y filtro `?tipo=restaurante|supermercado|...`.
+  - [x] `GET /catalog/comercio/:id/productos` & `POST` / `PUT`: Soporte para `categoria_id`, `unidad_medida`, `maneja_stock`, `stock_disponible` y `requiere_receta`.
+- [x] **Frontend Backoffice Admin (`frontend/backoffice` - Puerto 3004)**:
+  - [x] Nueva vista `CategoriasPage.tsx`: Gestión con pestañas para "Categorías por Local" y "Verticales de Negocio".
+  - [x] Actualización de `ProductosPage.tsx`: Selector de categorías dinámicas, creación rápida de categorías, selector de unidad de medida, switch de control de stock opcional y checkbox de receta.
+  - [x] Actualización de `ComerciosPage.tsx`: Selector de vertical de negocio y toggle de inventario general.
+- [x] **Frontend Aliados / Comercio (`frontend/panel-comercio` - Puerto 3003)**:
+  - [x] Actualización de `MenuManagement.tsx`: Carga dinámica de categorías del local, creación de categorías al vuelo, selector de unidad de medida, switch para stock opcional y badges de existencia en vivo.
+- [x] **Frontend Landing Page Cliente (`frontend/landing-page` - Puerto 3002)**:
+  - [x] Barra horizontal de selección de verticales con iconos y conteo en vivo de locales (`🌟 Todos`, `🍔 Restaurantes`, `🛒 Supermercados`, `💊 Farmacias`, `🍾 Licoreras`, `⚡ Express`).
+  - [x] Layout adaptativo para retail (`grid_ecommerce`): tarjetas compactas tipo estantería, selector de cantidad directo en tarjeta, precio con unidad de medida (`$1.50 / kg`) y badges de stock / agotado.
+  - [x] Layout adaptativo para comida (`restaurante`): experiencia gastronómica con platos, descripciones y pedidos a cocina.
+  - [x] Buscador instantáneo de productos y filtro por categorías dentro de cada local.
 
 ---
 

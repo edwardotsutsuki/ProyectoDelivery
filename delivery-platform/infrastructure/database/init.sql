@@ -66,7 +66,29 @@ CREATE TABLE IF NOT EXISTS usuarios (
     fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Tabla: comercios (incluye is_abierto, coordenadas PostGIS y datos de afiliación)
+-- 4. Tabla: tipos_comercio (Verticales de negocio en la plataforma)
+CREATE TABLE IF NOT EXISTS tipos_comercio (
+    id VARCHAR(50) PRIMARY KEY, -- 'restaurante', 'supermercado', 'farmacia', 'licorera', 'express'
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    icono VARCHAR(50) NOT NULL,
+    tipo_layout VARCHAR(30) DEFAULT 'restaurante', -- 'restaurante' | 'grid_ecommerce'
+    requiere_cocina BOOLEAN DEFAULT TRUE,
+    permite_recetas BOOLEAN DEFAULT FALSE,
+    control_edad_18 BOOLEAN DEFAULT FALSE,
+    orden INT DEFAULT 0,
+    is_activo BOOLEAN DEFAULT TRUE
+);
+
+INSERT INTO tipos_comercio (id, nombre, descripcion, icono, tipo_layout, requiere_cocina, permite_recetas, control_edad_18, orden) VALUES
+('restaurante', 'Restaurantes & Cafeterías', 'Comida preparada al instante, hamburguesas, almuerzos y platos a la carta', '🍔', 'restaurante', true, false, false, 1),
+('supermercado', 'Supermercados & Abarrotes', 'Víveres, frutas, verduras, lácteos y productos del hogar', '🛒', 'grid_ecommerce', false, false, false, 2),
+('farmacia', 'Farmacias & Salud', 'Medicamentos OTC, cuidado personal, higiene y productos para bebés', '💊', 'grid_ecommerce', false, true, false, 3),
+('licorera', 'Licores & Bebidas', 'Cervezas, vinos, licores, hielo y snacks para reuniones (+18)', '🍾', 'grid_ecommerce', false, false, true, 4),
+('express', 'Tiendas Express & Antojos', 'Snacks rápidos, bebidas frías y golosinas con entrega ultrarrápida', '⚡', 'grid_ecommerce', false, false, false, 5)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Tabla: comercios (incluye is_abierto, coordenadas PostGIS y datos de afiliación)
 CREATE TABLE IF NOT EXISTS comercios (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -77,6 +99,8 @@ CREATE TABLE IF NOT EXISTS comercios (
     is_abierto BOOLEAN DEFAULT TRUE,
     telefono VARCHAR(20),
     categoria VARCHAR(50) DEFAULT 'Restaurante',
+    tipo_comercio_id VARCHAR(50) DEFAULT 'restaurante' REFERENCES tipos_comercio(id),
+    maneja_inventario_general BOOLEAN DEFAULT FALSE,
     tiempo_entrega_promedio INT DEFAULT 30, -- Minutos
     calificacion NUMERIC(2,1) DEFAULT 5.0,
     costo_base_envio NUMERIC(10,2) DEFAULT 1.50,
@@ -94,16 +118,34 @@ CREATE TABLE IF NOT EXISTS comercios (
     fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Tabla: productos (persistencia permanente)
+-- 6. Tabla: categorias_productos (Catálogo de categorías por local)
+CREATE TABLE IF NOT EXISTS categorias_productos (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    comercio_id UUID NOT NULL REFERENCES comercios(id) ON DELETE CASCADE,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    icono VARCHAR(50),
+    orden INT DEFAULT 0,
+    is_activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. Tabla: productos (persistencia permanente con soporte de stock opcional)
 CREATE TABLE IF NOT EXISTS productos (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     comercio_id UUID NOT NULL REFERENCES comercios(id) ON DELETE CASCADE,
+    categoria_id UUID REFERENCES categorias_productos(id) ON DELETE SET NULL,
     nombre VARCHAR(150) NOT NULL,
     descripcion TEXT,
     precio NUMERIC(10,2) NOT NULL CHECK (precio >= 0),
     imagen_url TEXT,
     is_disponible BOOLEAN DEFAULT TRUE,
     categoria VARCHAR(50),
+    unidad_medida VARCHAR(20) DEFAULT 'unidad',
+    maneja_stock BOOLEAN DEFAULT FALSE,
+    stock_disponible INT DEFAULT NULL,
+    requiere_receta BOOLEAN DEFAULT FALSE,
     fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

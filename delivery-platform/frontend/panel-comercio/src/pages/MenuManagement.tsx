@@ -26,9 +26,26 @@ interface ProductItem {
   imagen_url?: string;
   is_disponible: boolean;
   categoria: string;
+  categoria_id?: string | null;
+  categoria_nombre?: string | null;
+  categoria_icono?: string | null;
+  unidad_medida?: string;
+  maneja_stock?: boolean;
+  stock_disponible?: number | null;
+  requiere_receta?: boolean;
 }
 
-const CATEGORIES = [
+interface CategoriaComercio {
+  id: string;
+  comercio_id: string;
+  nombre: string;
+  descripcion?: string;
+  icono: string;
+  orden: number;
+  is_activo: boolean;
+}
+
+const DEFAULT_CATEGORIES = [
   'Platos Fuertes',
   'Desayunos y Tradicional',
   'Mariscos y Pescados',
@@ -36,7 +53,10 @@ const CATEGORIES = [
   'Pizzas y Empanadas',
   'Bebidas',
   'Acompañamientos',
-  'Postres'
+  'Postres',
+  'Víveres y Abarrotes',
+  'Farmacia y Salud',
+  'Licores y Vinos'
 ];
 
 export default function MenuManagement() {
@@ -44,6 +64,7 @@ export default function MenuManagement() {
   const comercioId = session?.user?.comercioId || '55555555-5555-5555-5555-555555555555';
 
   const [productos, setProductos] = useState<ProductItem[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaComercio[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -59,9 +80,27 @@ export default function MenuManagement() {
   const [formNombre, setFormNombre] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formPrecio, setFormPrecio] = useState('');
-  const [formCategoria, setFormCategoria] = useState(CATEGORIES[0]);
+  const [formCategoria, setFormCategoria] = useState(DEFAULT_CATEGORIES[0]);
+  const [formCategoriaId, setFormCategoriaId] = useState('');
+  const [formNuevaCategoria, setFormNuevaCategoria] = useState('');
+  const [formUnidadMedida, setFormUnidadMedida] = useState('unidad');
+  const [formManejaStock, setFormManejaStock] = useState(false);
+  const [formStockDisponible, setFormStockDisponible] = useState('');
+  const [formRequiereReceta, setFormRequiereReceta] = useState(false);
   const [formImagenUrl, setFormImagenUrl] = useState('');
   const [formDisponible, setFormDisponible] = useState(true);
+
+  const fetchCategorias = async () => {
+    try {
+      const res = await fetch(`${config.apiBaseUrl}/catalog/comercio/${comercioId}/categorias`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setCategorias(data.data);
+      }
+    } catch (err) {
+      console.warn('Error al cargar categorías del comercio:', err);
+    }
+  };
 
   const fetchProductos = async () => {
     setLoading(true);
@@ -80,6 +119,7 @@ export default function MenuManagement() {
 
   useEffect(() => {
     fetchProductos();
+    fetchCategorias();
   }, [comercioId]);
 
   const handleOpenCreate = () => {
@@ -87,7 +127,13 @@ export default function MenuManagement() {
     setFormNombre('');
     setFormDesc('');
     setFormPrecio('');
-    setFormCategoria(CATEGORIES[0]);
+    setFormCategoria(categorias[0]?.nombre || DEFAULT_CATEGORIES[0]);
+    setFormCategoriaId(categorias[0]?.id || '');
+    setFormNuevaCategoria('');
+    setFormUnidadMedida('unidad');
+    setFormManejaStock(false);
+    setFormStockDisponible('');
+    setFormRequiereReceta(false);
     setFormImagenUrl('');
     setFormDisponible(true);
     setErrorMsg('');
@@ -100,7 +146,13 @@ export default function MenuManagement() {
     setFormNombre(p.nombre);
     setFormDesc(p.descripcion || '');
     setFormPrecio(String(p.precio));
-    setFormCategoria(p.categoria || CATEGORIES[0]);
+    setFormCategoria(p.categoria_nombre || p.categoria || DEFAULT_CATEGORIES[0]);
+    setFormCategoriaId(p.categoria_id || '');
+    setFormNuevaCategoria('');
+    setFormUnidadMedida(p.unidad_medida || 'unidad');
+    setFormManejaStock(Boolean(p.maneja_stock));
+    setFormStockDisponible(p.stock_disponible !== null && p.stock_disponible !== undefined ? String(p.stock_disponible) : '');
+    setFormRequiereReceta(Boolean(p.requiere_receta));
     setFormImagenUrl(p.imagen_url || '');
     setFormDisponible(p.is_disponible);
     setErrorMsg('');
@@ -179,6 +231,12 @@ export default function MenuManagement() {
         descripcion: formDesc.trim(),
         precio: precioNum,
         categoria: formCategoria,
+        categoriaId: formCategoriaId || null,
+        nuevaCategoriaNombre: formNuevaCategoria.trim() || null,
+        unidadMedida: formUnidadMedida,
+        manejaStock: formManejaStock,
+        stockDisponible: formManejaStock && formStockDisponible !== '' ? parseInt(formStockDisponible, 10) : null,
+        requiereReceta: formRequiereReceta,
         imagenUrl: formImagenUrl.trim() || null,
         isDisponible: formDisponible,
       };
@@ -197,13 +255,14 @@ export default function MenuManagement() {
 
       setSuccessMsg(
         isEditing
-          ? `Plato "${data.data.nombre}" actualizado correctamente.`
-          : `¡Plato "${data.data.nombre}" agregado a la carta!`
+          ? `Producto "${data.data.nombre}" actualizado correctamente.`
+          : `¡Producto "${data.data.nombre}" agregado exitosamente!`
       );
       setShowModal(false);
       fetchProductos();
+      fetchCategorias();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error al guardar plato.');
+      setErrorMsg(err instanceof Error ? err.message : 'Error al guardar producto.');
     } finally {
       setSaving(false);
     }
@@ -284,8 +343,8 @@ export default function MenuManagement() {
           >
             Todas ({productos.length})
           </button>
-          {CATEGORIES.map((cat) => {
-            const count = productos.filter((p) => p.categoria === cat).length;
+          {Array.from(new Set([...categorias.map(c => c.nombre), ...productos.map(p => p.categoria_nombre || p.categoria)].filter(Boolean))).map((cat) => {
+            const count = productos.filter((p) => (p.categoria_nombre || p.categoria) === cat).length;
             if (count === 0 && selectedCategory !== cat) return null;
             return (
               <button
@@ -321,13 +380,13 @@ export default function MenuManagement() {
       ) : filteredProductos.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center text-slate-400">
           <UtensilsCrossed size={48} className="mx-auto mb-3 opacity-30 text-rose-500" />
-          <h3 className="text-lg font-bold text-white">No hay platos registrados en esta categoría</h3>
-          <p className="mt-1 text-sm">Empieza agregando tus primeros platos para que los clientes en Baba puedan pedir.</p>
+          <h3 className="text-lg font-bold text-white">No hay productos registrados en esta categoría</h3>
+          <p className="mt-1 text-sm">Empieza agregando tus primeros productos para que los clientes en Baba puedan pedir.</p>
           <button
             onClick={handleOpenCreate}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-500"
           >
-            <Plus size={16} /> Crear Plato Ahora
+            <Plus size={16} /> Crear Producto Ahora
           </button>
         </div>
       ) : (
@@ -342,7 +401,7 @@ export default function MenuManagement() {
               }`}
             >
               <div>
-                {/* Imagen del Plato */}
+                {/* Imagen del Plato / Producto */}
                 <div className="relative h-44 w-full bg-slate-800">
                   {prod.imagen_url ? (
                     <img
@@ -361,7 +420,7 @@ export default function MenuManagement() {
 
                   {/* Badge de Categoría */}
                   <span className="absolute left-3 top-3 rounded-md bg-slate-950/80 px-2.5 py-1 text-[11px] font-bold text-slate-200 backdrop-blur-md">
-                    {prod.categoria || 'Platos Fuertes'}
+                    {prod.categoria_icono || '🏷️'} {prod.categoria_nombre || prod.categoria || 'Platos Fuertes'}
                   </span>
 
                   {/* Badge de Disponibilidad */}
@@ -380,14 +439,42 @@ export default function MenuManagement() {
                 <div className="p-4">
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="text-base font-bold text-white line-clamp-1">{prod.nombre}</h3>
-                    <span className="text-lg font-extrabold text-emerald-400">
-                      ${Number(prod.precio).toFixed(2)}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-lg font-extrabold text-emerald-400">
+                        ${Number(prod.precio).toFixed(2)}
+                      </span>
+                      {prod.unidad_medida && prod.unidad_medida !== 'unidad' && (
+                        <span className="block text-[11px] text-slate-400">/ {prod.unidad_medida}</span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="mt-1 text-xs text-slate-400 line-clamp-2 leading-relaxed">
                     {prod.descripcion || 'Sin descripción detallada.'}
                   </p>
+
+                  {/* Control Opcional de Stock en Tarjeta */}
+                  {prod.maneja_stock ? (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-xs">
+                      {prod.stock_disponible != null && prod.stock_disponible <= 0 ? (
+                        <span className="rounded bg-rose-950/80 px-2 py-0.5 font-bold text-rose-400 border border-rose-800/40">
+                          ❌ Sin Stock (0)
+                        </span>
+                      ) : prod.stock_disponible != null && prod.stock_disponible <= 5 ? (
+                        <span className="rounded bg-amber-950/80 px-2 py-0.5 font-bold text-amber-300 border border-amber-800/40">
+                          ⚡ ¡Quedan {prod.stock_disponible}!
+                        </span>
+                      ) : (
+                        <span className="rounded bg-slate-800 px-2 py-0.5 font-semibold text-slate-300 border border-slate-700">
+                          📦 Stock: {prod.stock_disponible ?? 0} {prod.unidad_medida || 'uds'}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-[11px] text-slate-500 italic">
+                      ✨ Stock ilimitado (sin inventario)
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -481,7 +568,7 @@ export default function MenuManagement() {
                   <input
                     type="number"
                     step="0.01"
-                    min="0.25"
+                    min="0.05"
                     required
                     value={formPrecio}
                     onChange={(e) => setFormPrecio(e.target.value)}
@@ -491,19 +578,103 @@ export default function MenuManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300">Categoría</label>
+                  <label className="block text-xs font-bold text-slate-300">Unidad de Medida</label>
                   <select
-                    value={formCategoria}
-                    onChange={(e) => setFormCategoria(e.target.value)}
+                    value={formUnidadMedida}
+                    onChange={(e) => setFormUnidadMedida(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
                   >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
+                    <option value="unidad">Unidad (ud)</option>
+                    <option value="porción">Porción / Plato</option>
+                    <option value="kg">Kilogramo (kg)</option>
+                    <option value="libra">Libra (lb)</option>
+                    <option value="litro">Litro (L)</option>
+                    <option value="botella">Botella</option>
+                    <option value="paquete">Paquete</option>
+                    <option value="caja">Caja</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300">Categoría del Producto</label>
+                <select
+                  value={formCategoriaId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormCategoriaId(val);
+                    if (val === 'NEW') {
+                      setFormNuevaCategoria('');
+                    } else {
+                      const found = categorias.find(c => c.id === val);
+                      if (found) setFormCategoria(found.nombre);
+                    }
+                  }}
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
+                >
+                  <option value="">-- Seleccionar Categoría --</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icono} {cat.nombre}
+                    </option>
+                  ))}
+                  <option value="NEW">➕ Crear Nueva Categoría...</option>
+                </select>
+
+                {formCategoriaId === 'NEW' && (
+                  <div className="mt-2 rounded-xl border border-rose-500/40 bg-rose-950/20 p-3">
+                    <label className="block text-[11px] font-bold text-rose-300">Nombre de la Nueva Categoría</label>
+                    <input
+                      type="text"
+                      required
+                      value={formNuevaCategoria}
+                      onChange={(e) => {
+                        setFormNuevaCategoria(e.target.value);
+                        setFormCategoria(e.target.value);
+                      }}
+                      placeholder="Ej: Mariscos, Bebidas Frías, Lácteos..."
+                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* CONTROL OPCIONAL DE STOCK / INVENTARIO */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="prodManejaStock"
+                    checked={formManejaStock}
+                    onChange={(e) => setFormManejaStock(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded accent-rose-600"
+                  />
+                  <div>
+                    <label htmlFor="prodManejaStock" className="text-xs font-bold text-slate-200 cursor-pointer">
+                      ¿Controlar inventario / stock numérico?
+                    </label>
+                    <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                      {formManejaStock
+                        ? 'Se descontará con cada venta. Si llega a 0, figurará como Agotado.'
+                        : 'Desactivado: Para restaurantes o comercios sin inventario digital (stock infinito).'}
+                    </p>
+                  </div>
+                </div>
+
+                {formManejaStock && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <label className="block text-xs font-bold text-amber-400">Cantidad de Stock Disponible *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      required={formManejaStock}
+                      value={formStockDisponible}
+                      onChange={(e) => setFormStockDisponible(e.target.value)}
+                      placeholder="Ej: 20"
+                      className="mt-1 w-full rounded-xl border border-amber-500/40 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -517,17 +688,32 @@ export default function MenuManagement() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="prodDisponible"
-                  checked={formDisponible}
-                  onChange={(e) => setFormDisponible(e.target.checked)}
-                  className="h-4 w-4 rounded accent-rose-600"
-                />
-                <label htmlFor="prodDisponible" className="text-xs text-slate-300">
-                  Plato disponible inmediatamente para pedidos de clientes
-                </label>
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="prodDisponible"
+                    checked={formDisponible}
+                    onChange={(e) => setFormDisponible(e.target.checked)}
+                    className="h-4 w-4 rounded accent-rose-600"
+                  />
+                  <label htmlFor="prodDisponible" className="text-xs text-slate-300">
+                    Producto activo inmediatamente para pedidos de clientes
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="prodRequiereReceta"
+                    checked={formRequiereReceta}
+                    onChange={(e) => setFormRequiereReceta(e.target.checked)}
+                    className="h-4 w-4 rounded accent-rose-600"
+                  />
+                  <label htmlFor="prodRequiereReceta" className="text-xs text-rose-300">
+                    💊 Requiere receta médica (Farmacias / Medicamentos controlados)
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-3">

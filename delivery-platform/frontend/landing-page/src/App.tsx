@@ -35,6 +35,17 @@ import {
   Check
 } from 'lucide-react';
 
+interface TipoComercio {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  icono: string;
+  tipo_layout: 'restaurante' | 'grid_ecommerce';
+  requiere_cocina?: boolean;
+  permite_recetas?: boolean;
+  control_edad_18?: boolean;
+}
+
 interface Comercio {
   id: string;
   nombre_comercial: string;
@@ -47,6 +58,12 @@ interface Comercio {
   costo_base_envio: string | number;
   calificacion: string | number;
   canton?: string;
+  tipo_comercio_id?: string;
+  tipo_comercio_nombre?: string;
+  tipo_comercio_icono?: string;
+  tipo_layout?: 'restaurante' | 'grid_ecommerce';
+  requiere_cocina?: boolean;
+  maneja_inventario_general?: boolean;
 }
 
 interface Producto {
@@ -55,6 +72,13 @@ interface Producto {
   descripcion: string;
   precio: number;
   categoria: string;
+  categoria_id?: string | null;
+  categoria_nombre?: string | null;
+  categoria_icono?: string | null;
+  unidad_medida?: string;
+  maneja_stock?: boolean;
+  stock_disponible?: number | null;
+  requiere_receta?: boolean;
   is_disponible: boolean;
   imagen_url?: string;
 }
@@ -97,10 +121,22 @@ const ADDRESS_PRESETS = [
   { label: 'Babahoyo Centro (Comercial)', direccion: 'Av. 9 de Octubre y Pedro Carbo, Babahoyo', canton: 'Babahoyo', lat: -1.8022, lon: -79.5344 },
 ];
 
+const DEFAULT_VERTICALES: TipoComercio[] = [
+  { id: 'todos', nombre: 'Todos los Locales', icono: '🌟', tipo_layout: 'restaurante' },
+  { id: 'restaurante', nombre: 'Restaurantes', icono: '🍔', tipo_layout: 'restaurante' },
+  { id: 'supermercado', nombre: 'Supermercados', icono: '🛒', tipo_layout: 'grid_ecommerce' },
+  { id: 'farmacia', nombre: 'Farmacias', icono: '💊', tipo_layout: 'grid_ecommerce' },
+  { id: 'licorera', nombre: 'Licoreras', icono: '🍾', tipo_layout: 'grid_ecommerce' },
+  { id: 'express', nombre: 'Express', icono: '⚡', tipo_layout: 'grid_ecommerce' },
+];
+
 export default function App() {
   const [vista, setVista] = useState<'home' | 'menu' | 'checkout' | 'tracking'>('home');
   const [ciudadFiltro, setCiudadFiltro] = useState<'Todas' | 'Baba' | 'Babahoyo'>('Baba');
-  const [categoriaFiltro, setCategoriaFiltro] = useState<string>('Todas');
+  const [verticales, setVerticales] = useState<TipoComercio[]>(DEFAULT_VERTICALES);
+  const [verticalFiltro, setVerticalFiltro] = useState<string>('todos');
+  const [menuCategoriaFiltro, setMenuCategoriaFiltro] = useState<string>('todas');
+  const [menuSearch, setMenuSearch] = useState<string>('');
 
   // Datos del backend
   const [comercios, setComercios] = useState<Comercio[]>([]);
@@ -410,10 +446,27 @@ export default function App() {
   const [pedidoConfirmado, setPedidoConfirmado] = useState<any>(null);
   const [trackingEta, setTrackingEta] = useState<any>(null);
 
-  // 1. Cargar comercios desde API
+  // 1. Cargar comercios y verticales desde API
   const fetchComercios = async () => {
     try {
       setLoading(true);
+
+      // Cargar verticales activas
+      try {
+        const resVert = await fetch(`${API_BASE}/catalog/tipos-comercio`);
+        if (resVert.ok) {
+          const dataVert = await resVert.json();
+          if (dataVert.success && Array.isArray(dataVert.data)) {
+            setVerticales([
+              { id: 'todos', nombre: 'Todos los Locales', icono: '🌟', tipo_layout: 'restaurante' },
+              ...dataVert.data
+            ]);
+          }
+        }
+      } catch (errVert) {
+        console.warn('Error al cargar tipos de comercio:', errVert);
+      }
+
       const res = await fetch(`${API_BASE}/catalog/comercios`);
       if (res.ok) {
         const data = await res.json();
@@ -444,6 +497,10 @@ export default function App() {
           costo_base_envio: 1.25,
           calificacion: 4.9,
           canton: 'Baba',
+          tipo_comercio_id: 'restaurante',
+          tipo_comercio_nombre: 'Restaurante',
+          tipo_comercio_icono: '🍔',
+          tipo_layout: 'restaurante',
         },
         {
           id: '77777777-7777-7777-7777-777777777777',
@@ -457,6 +514,10 @@ export default function App() {
           costo_base_envio: 1.50,
           calificacion: 4.8,
           canton: 'Babahoyo',
+          tipo_comercio_id: 'restaurante',
+          tipo_comercio_nombre: 'Restaurante',
+          tipo_comercio_icono: '🍔',
+          tipo_layout: 'restaurante',
         }
       ];
       setComercios(fallbackComercios);
@@ -473,6 +534,8 @@ export default function App() {
   // 2. Cargar menú cuando se selecciona un comercio
   const abrirMenuComercio = async (comercio: Comercio) => {
     setComercioActivo(comercio);
+    setMenuCategoriaFiltro('todas');
+    setMenuSearch('');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/catalog/comercio/${comercio.id}/productos`);
@@ -482,7 +545,14 @@ export default function App() {
           const parsedProducts = data.data.map((p: any) => ({
             ...p,
             precio: parseFloat(p.precio) || 0,
-            categoria: p.categoria || 'Especialidades',
+            categoria: p.categoria_nombre || p.categoria || 'Especialidades',
+            categoria_id: p.categoria_id,
+            categoria_nombre: p.categoria_nombre || p.categoria || 'Especialidades',
+            categoria_icono: p.categoria_icono || '🏷️',
+            unidad_medida: p.unidad_medida || 'unidad',
+            maneja_stock: Boolean(p.maneja_stock),
+            stock_disponible: p.stock_disponible !== null && p.stock_disponible !== undefined ? Number(p.stock_disponible) : null,
+            requiere_receta: Boolean(p.requiere_receta),
             is_disponible: p.is_disponible !== false,
           }));
           setProductos(parsedProducts);
@@ -499,18 +569,18 @@ export default function App() {
 
     // Fallback de menú criollo de Baba
     setProductos([
-      { id: '66666666-6666-6666-6666-666666666601', nombre: 'Seco de gallina criolla Baba', descripcion: 'Preparado con chicha tradicional y hierbitas frescas, arroz y maduro.', precio: 4.50, categoria: 'Platos Fuertes', is_disponible: true },
-      { id: '66666666-6666-6666-6666-666666666602', nombre: 'Bolón mixto con queso y chicharrón', descripcion: 'Plátano verde majado con queso manaba y chicharrón crocante.', precio: 3.75, categoria: 'Desayunos', is_disponible: true },
-      { id: '66666666-6666-6666-6666-666666666603', nombre: 'Seco de pollo de campo', descripcion: 'Guiso tierno con arroz amarillo, ensalada criolla y plátano maduro.', precio: 5.25, categoria: 'Platos Fuertes', is_disponible: true },
-      { id: '66666666-6666-6666-6666-666666666604', nombre: 'Arroz con menestra y carne asada', descripcion: 'Carne al carbón con menestra de lenteja casera.', precio: 6.50, categoria: 'Platos Fuertes', is_disponible: true },
-      { id: '66666666-6666-6666-6666-666666666605', nombre: 'Jugo natural de maracuyá', descripcion: 'Fruta fresca de los huertos de Los Ríos.', precio: 1.50, categoria: 'Bebidas', is_disponible: true },
-      { id: '66666666-6666-6666-6666-666666666606', nombre: 'Patacones con queso criollo', descripcion: 'Porción de patacones crocantes con queso fresco de Baba.', precio: 2.00, categoria: 'Acompañamientos', is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666601', nombre: 'Seco de gallina criolla Baba', descripcion: 'Preparado con chicha tradicional y hierbitas frescas, arroz y maduro.', precio: 4.50, categoria: 'Platos Fuertes', categoria_nombre: 'Platos Fuertes', categoria_icono: '🍲', unidad_medida: 'unidad', maneja_stock: false, stock_disponible: null, is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666602', nombre: 'Bolón mixto con queso y chicharrón', descripcion: 'Plátano verde majado con queso manaba y chicharrón crocante.', precio: 3.75, categoria: 'Desayunos', categoria_nombre: 'Desayunos', categoria_icono: '☕', unidad_medida: 'unidad', maneja_stock: false, stock_disponible: null, is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666603', nombre: 'Seco de pollo de campo', descripcion: 'Guiso tierno con arroz amarillo, ensalada criolla y plátano maduro.', precio: 5.25, categoria: 'Platos Fuertes', categoria_nombre: 'Platos Fuertes', categoria_icono: '🍲', unidad_medida: 'unidad', maneja_stock: false, stock_disponible: null, is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666604', nombre: 'Arroz con menestra y carne asada', descripcion: 'Carne al carbón con menestra de lenteja casera.', precio: 6.50, categoria: 'Platos Fuertes', categoria_nombre: 'Platos Fuertes', categoria_icono: '🍲', unidad_medida: 'unidad', maneja_stock: false, stock_disponible: null, is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666605', nombre: 'Jugo natural de maracuyá', descripcion: 'Fruta fresca de los huertos de Los Ríos.', precio: 1.50, categoria: 'Bebidas', categoria_nombre: 'Bebidas', categoria_icono: '🥤', unidad_medida: 'vaso', maneja_stock: false, stock_disponible: null, is_disponible: true },
+      { id: '66666666-6666-6666-6666-666666666606', nombre: 'Patacones con queso criollo', descripcion: 'Porción de patacones crocantes con queso fresco de Baba.', precio: 2.00, categoria: 'Acompañamientos', categoria_nombre: 'Acompañamientos', categoria_icono: '🍟', unidad_medida: 'porción', maneja_stock: false, stock_disponible: null, is_disponible: true },
     ]);
     setVista('menu');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Gestión de Carrito con Aislamiento Multitienda
+  // Gestión de Carrito con Aislamiento Multitienda y Control Opcional de Stock
   const agregarAlCarrito = (producto: Producto) => {
     if (!comercioActivo) return;
 
@@ -518,6 +588,16 @@ export default function App() {
       setPendingAddProduct(producto);
       setShowSwitchStoreModal(true);
       return;
+    }
+
+    // Validación opcional de stock (solo si el producto tiene maneja_stock = true)
+    if (producto.maneja_stock && producto.stock_disponible !== null && producto.stock_disponible !== undefined) {
+      const existe = carrito.find(item => item.producto.id === producto.id);
+      const cantidadEnCarrito = existe ? existe.cantidad : 0;
+      if (cantidadEnCarrito >= producto.stock_disponible) {
+        alert(`Lo sentimos, solo quedan ${producto.stock_disponible} unidades disponibles de este producto.`);
+        return;
+      }
     }
 
     setComercioCarrito(comercioActivo);
@@ -543,6 +623,17 @@ export default function App() {
 
   const modificarCantidad = (productoId: string, delta: number) => {
     setCarrito(prev => {
+      const itemExistente = prev.find(it => it.producto.id === productoId);
+      if (itemExistente && delta > 0) {
+        const prod = itemExistente.producto;
+        if (prod.maneja_stock && prod.stock_disponible !== null && prod.stock_disponible !== undefined) {
+          if (itemExistente.cantidad >= prod.stock_disponible) {
+            alert(`Stock máximo alcanzado (${prod.stock_disponible} unidades disponibles).`);
+            return prev;
+          }
+        }
+      }
+
       const next = prev
         .map(item => {
           if (item.producto.id === productoId) {
@@ -783,7 +874,8 @@ export default function App() {
 
   const comerciosFiltrados = comercios.filter(c => {
     const matchCiudad = ciudadFiltro === 'Todas' || c.canton === ciudadFiltro;
-    return matchCiudad;
+    const matchVertical = verticalFiltro === 'todos' || c.tipo_comercio_id === verticalFiltro || (!c.tipo_comercio_id && verticalFiltro === 'restaurante');
+    return matchCiudad && matchVertical;
   });
 
   return (
@@ -1075,103 +1167,192 @@ export default function App() {
             </div>
           </div>
 
-          {/* Listado de Restaurantes Disponibles */}
+          {/* Selector de Verticales de Negocio (Multi-Vertical) */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '8px', WebkitOverflowScrolling: 'touch' }}>
+              {verticales.map(v => {
+                const count = v.id === 'todos' 
+                  ? comercios.filter(c => ciudadFiltro === 'Todas' || c.canton === ciudadFiltro).length
+                  : comercios.filter(c => (ciudadFiltro === 'Todas' || c.canton === ciudadFiltro) && (c.tipo_comercio_id === v.id || (!c.tipo_comercio_id && v.id === 'restaurante'))).length;
+                const isSelected = verticalFiltro === v.id;
+
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setVerticalFiltro(v.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 18px',
+                      borderRadius: '12px',
+                      border: isSelected ? '2px solid #e11d48' : '1px solid #e2e8f0',
+                      background: isSelected ? '#fff1f2' : '#fff',
+                      color: isSelected ? '#e11d48' : '#334155',
+                      fontWeight: isSelected ? '800' : '600',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: isSelected ? '0 2px 8px rgba(225, 29, 72, 0.12)' : '0 1px 2px rgba(0,0,0,0.03)',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: '18px' }}>{v.icono}</span>
+                    <span>{v.nombre}</span>
+                    <span style={{
+                      background: isSelected ? '#e11d48' : '#f1f5f9',
+                      color: isSelected ? '#fff' : '#64748b',
+                      fontSize: '11px',
+                      padding: '2px 7px',
+                      borderRadius: '20px',
+                      fontWeight: '700'
+                    }}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Listado de Locales Disponibles */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
               <h2 style={{ fontSize: '22px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
-                Restaurantes disponibles en {ciudadFiltro === 'Todas' ? 'Los Ríos' : ciudadFiltro}
+                {verticalFiltro === 'todos' ? 'Locales y Comercios' : verticales.find(v => v.id === verticalFiltro)?.nombre || 'Locales'} en {ciudadFiltro === 'Todas' ? 'Los Ríos' : `Cantón ${ciudadFiltro}`}
               </h2>
               <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-                Selecciona un restaurante para abrir el menú y agregar platos al carrito.
+                {verticalFiltro === 'restaurante' || verticalFiltro === 'todos' 
+                  ? 'Pide comida preparada, platos típicos, secos y asados con despacho veloz.' 
+                  : 'Abastecimiento de víveres, medicinas y productos de retail entregados en minutos.'}
               </p>
             </div>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-              {comerciosFiltrados.length} local(es) activo(s)
+              {comerciosFiltrados.length} local(es) disponible(s)
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-            {comerciosFiltrados.map((c) => (
-              <div
-                key={c.id}
-                onClick={() => abrirMenuComercio(c)}
+          {comerciosFiltrados.length === 0 ? (
+            <div style={{ background: '#fff', borderRadius: '18px', border: '1px dashed #cbd5e1', padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '42px', marginBottom: '10px' }}>🏪</div>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0' }}>
+                No encontramos locales en este momento
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '420px', margin: '0 auto 18px auto' }}>
+                No hay comercios registrados en esta categoría o cantón con despacho inmediato.
+              </p>
+              <button
+                onClick={() => { setVerticalFiltro('todos'); setCiudadFiltro('Todas'); }}
                 style={{
-                  background: '#fff',
-                  borderRadius: '18px',
-                  border: '1px solid #e2e8f0',
-                  padding: '24px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
+                  background: '#e11d48',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '9px 18px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
                 }}
               >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <span style={{
-                      background: '#ecfdf5',
-                      color: '#059669',
-                      fontSize: '11px',
-                      fontWeight: '800',
-                      padding: '3px 8px',
-                      borderRadius: '6px',
-                    }}>
-                      ● ABIERTO AHORA
-                    </span>
-                    <span style={{
-                      background: '#f1f5f9',
-                      color: '#475569',
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      padding: '3px 8px',
-                      borderRadius: '6px',
-                    }}>
-                      {c.canton?.toUpperCase()}
-                    </span>
-                  </div>
-
-                  <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0' }}>
-                    {c.nombre_comercial}
-                  </h3>
-                  <p style={{ color: '#64748b', fontSize: '13px', lineHeight: 1.4, margin: '0 0 16px 0' }}>
-                    {c.descripcion}
-                  </p>
-                </div>
-
-                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: '14px', fontSize: '12px', color: '#64748b' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={14} color="#e11d48" /> {c.tiempo_entrega_promedio} min
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Bike size={14} color="#10b981" /> Envío ${Number(c.costo_base_envio).toFixed(2)}
-                    </span>
-                  </div>
-                  <span style={{
-                    background: '#e11d48',
-                    color: '#fff',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontWeight: '700',
+                Ver todos los locales
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+              {comerciosFiltrados.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={() => abrirMenuComercio(c)}
+                  style={{
+                    background: '#fff',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '24px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    Ver Menú <ArrowRight size={14} />
-                  </span>
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                      }}>
+                        ● ABIERTO AHORA
+                      </span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span style={{
+                          background: '#fff1f2',
+                          color: '#e11d48',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          {c.tipo_comercio_icono || '🏪'} {c.tipo_comercio_nombre || c.categoria}
+                        </span>
+                        <span style={{
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                        }}>
+                          {c.canton?.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0' }}>
+                      {c.nombre_comercial}
+                    </h3>
+                    <p style={{ color: '#64748b', fontSize: '13px', lineHeight: 1.4, margin: '0 0 16px 0' }}>
+                      {c.descripcion}
+                    </p>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '14px', fontSize: '12px', color: '#64748b' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={14} color="#e11d48" /> {c.tiempo_entrega_promedio} min
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Bike size={14} color="#10b981" /> Envío ${Number(c.costo_base_envio).toFixed(2)}
+                      </span>
+                    </div>
+                    <span style={{
+                      background: '#e11d48',
+                      color: '#fff',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      {c.tipo_layout === 'grid_ecommerce' ? 'Ver Tienda' : 'Ver Menú'} <ArrowRight size={14} />
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </main>
       )}
 
-      {/* 3. Vista Menú del Restaurante */}
+      {/* 3. Vista Menú o Catálogo del Comercio */}
       {vista === 'menu' && comercioActivo && (
-        <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing: 'border-box' }}>
           
           <button
             onClick={() => setVista('home')}
@@ -1188,23 +1369,35 @@ export default function App() {
               marginBottom: '16px',
             }}
           >
-            <ChevronLeft size={18} /> Volver a restaurantes
+            <ChevronLeft size={18} /> Volver a locales
           </button>
 
-          {/* Cabecera del Restaurante */}
-          <div style={{ background: '#fff', padding: '28px', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '28px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* Cabecera del Comercio */}
+          <div style={{ background: '#fff', padding: '28px', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <span style={{ background: '#ffe4e6', color: '#e11d48', fontSize: '11px', fontWeight: '800', padding: '4px 10px', borderRadius: '6px' }}>
-                  {comercioActivo.categoria || 'Restaurante'} · {comercioActivo.canton || 'Baba'}
-                </span>
-                <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', margin: '10px 0 6px 0' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ background: '#ffe4e6', color: '#e11d48', fontSize: '11px', fontWeight: '800', padding: '4px 10px', borderRadius: '6px' }}>
+                    {comercioActivo.tipo_comercio_icono || '🏪'} {comercioActivo.tipo_comercio_nombre || comercioActivo.categoria} · {comercioActivo.canton || 'Baba'}
+                  </span>
+                  <span style={{
+                    background: comercioActivo.tipo_layout === 'grid_ecommerce' ? '#eff6ff' : '#fef3c7',
+                    color: comercioActivo.tipo_layout === 'grid_ecommerce' ? '#1d4ed8' : '#b45309',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    padding: '4px 8px',
+                    borderRadius: '6px'
+                  }}>
+                    {comercioActivo.tipo_layout === 'grid_ecommerce' ? '🛍️ Retail & Despensa' : '🍳 Cocina & Comanda'}
+                  </span>
+                </div>
+                <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', margin: '4px 0 6px 0' }}>
                   {comercioActivo.nombre_comercial}
                 </h1>
-                <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 12px 0' }}>
+                <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 12px 0', maxWidth: '650px' }}>
                   {comercioActivo.descripcion || ''}
                 </p>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#475569' }}>
+                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#475569', flexWrap: 'wrap' }}>
                   <span>📍 {comercioActivo.direccion || 'Baba'}</span>
                   <span>🕒 ~{comercioActivo.tiempo_entrega_promedio || 30} min</span>
                   <span>🛵 Flete base: ${Number(comercioActivo.costo_base_envio || 1.25).toFixed(2)}</span>
@@ -1223,119 +1416,267 @@ export default function App() {
                     fontWeight: '800',
                     fontSize: '14px',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
                   }}
                 >
-                  Ir a Pagar (${total.toFixed(2)}) 🚀
+                  <ShoppingBag size={18} /> Ir a Pagar (${total.toFixed(2)}) 🚀
                 </button>
               )}
             </div>
           </div>
 
-          {/* Menú de Platos */}
-          <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>
-            Carta y Especialidades
-          </h2>
+          {/* Barra de Búsqueda y Filtros de Categorías dentro del Comercio */}
+          <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '220px', background: '#f8fafc', padding: '8px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <Search size={16} color="#94a3b8" />
+                <input
+                  type="text"
+                  placeholder={`Buscar en ${comercioActivo.nombre_comercial}...`}
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '13px', color: '#1e293b' }}
+                />
+                {menuSearch && (
+                  <button onClick={() => setMenuSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-            {productos.map(prod => {
-              const itemCarrito = carrito.find(it => it.producto.id === prod.id);
-              const cantidad = itemCarrito?.cantidad || 0;
-
+            {/* Chips de Categorías */}
+            {(() => {
+              const categoriasUnicas = ['todas', ...Array.from(new Set(productos.map(p => p.categoria_nombre || p.categoria).filter(Boolean)))];
               return (
-                <div
-                  key={prod.id}
-                  style={{
-                    background: '#fff',
-                    borderRadius: '16px',
-                    border: '1px solid #e2e8f0',
-                    padding: '20px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
-                      {prod.categoria || 'Platos Fuertes'}
-                    </span>
-                    <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: '4px 0 6px 0' }}>
-                      {prod.nombre}
-                    </h3>
-                    <p style={{ color: '#64748b', fontSize: '12px', lineHeight: 1.4, margin: '0 0 14px 0' }}>
-                      {prod.descripcion}
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
-                    <span style={{ fontSize: '18px', fontWeight: '900', color: '#e11d48' }}>
-                      ${Number(prod.precio || 0).toFixed(2)}
-                    </span>
-
-                    {cantidad > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button
-                          onClick={() => modificarCantidad(prod.id, -1)}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span style={{ fontWeight: '800', fontSize: '14px', minWidth: '20px', textAlign: 'center' }}>
-                          {cantidad}
-                        </span>
-                        <button
-                          onClick={() => modificarCantidad(prod.id, 1)}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: '#e11d48',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    ) : (
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', WebkitOverflowScrolling: 'touch' }}>
+                  {categoriasUnicas.map(cat => {
+                    const isSelected = menuCategoriaFiltro === cat;
+                    const count = cat === 'todas' ? productos.length : productos.filter(p => (p.categoria_nombre || p.categoria) === cat).length;
+                    return (
                       <button
-                        onClick={() => agregarAlCarrito(prod)}
+                        key={cat}
+                        onClick={() => setMenuCategoriaFiltro(cat)}
                         style={{
-                          background: '#ffe4e6',
-                          color: '#e11d48',
-                          border: 'none',
                           padding: '6px 14px',
                           borderRadius: '8px',
+                          border: isSelected ? '1px solid #e11d48' : '1px solid #e2e8f0',
+                          background: isSelected ? '#e11d48' : '#f8fafc',
+                          color: isSelected ? '#fff' : '#475569',
+                          fontSize: '12px',
                           fontWeight: '700',
-                          fontSize: '13px',
                           cursor: 'pointer',
+                          whiteSpace: 'nowrap',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px'
+                          gap: '6px'
                         }}
                       >
-                        <Plus size={14} /> Agregar
+                        <span>{cat === 'todas' ? '🏷️ Todas las Categorías' : cat}</span>
+                        <span style={{
+                          background: isSelected ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                          color: isSelected ? '#fff' : '#64748b',
+                          fontSize: '10px',
+                          padding: '1px 5px',
+                          borderRadius: '10px'
+                        }}>
+                          {count}
+                        </span>
                       </button>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
               );
-            })}
+            })()}
           </div>
+
+          {/* Listado de Productos (Adaptativo según tipo_layout: 'grid_ecommerce' vs 'restaurante') */}
+          {(() => {
+            const prodsFiltrados = productos.filter(p => {
+              const catName = p.categoria_nombre || p.categoria;
+              const matchCat = menuCategoriaFiltro === 'todas' || catName === menuCategoriaFiltro;
+              const q = menuSearch.trim().toLowerCase();
+              const matchSearch = !q || p.nombre.toLowerCase().includes(q) || (p.descripcion && p.descripcion.toLowerCase().includes(q));
+              return matchCat && matchSearch;
+            });
+
+            if (prodsFiltrados.length === 0) {
+              return (
+                <div style={{ background: '#fff', borderRadius: '16px', border: '1px dashed #cbd5e1', padding: '40px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>🔍</div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>No encontramos productos</h4>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Intenta buscando otro término o seleccionando otra categoría.</p>
+                </div>
+              );
+            }
+
+            const isRetailLayout = comercioActivo.tipo_layout === 'grid_ecommerce';
+
+            return (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isRetailLayout ? 'repeat(auto-fill, minmax(230px, 1fr))' : 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '16px'
+              }}>
+                {prodsFiltrados.map(prod => {
+                  const itemCarrito = carrito.find(it => it.producto.id === prod.id);
+                  const cantidad = itemCarrito?.cantidad || 0;
+                  const isAgotado = prod.maneja_stock && prod.stock_disponible !== null && prod.stock_disponible <= 0;
+
+                  return (
+                    <div
+                      key={prod.id}
+                      style={{
+                        background: '#fff',
+                        borderRadius: '16px',
+                        border: '1px solid #e2e8f0',
+                        padding: isRetailLayout ? '16px' : '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        opacity: isAgotado ? 0.6 : 1,
+                        position: 'relative'
+                      }}
+                    >
+                      <div>
+                        {/* Header de la tarjeta de producto */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
+                            {prod.categoria_icono || '🏷️'} {prod.categoria_nombre || prod.categoria || 'General'}
+                          </span>
+                          {prod.requiere_receta && (
+                            <span style={{ background: '#fee2e2', color: '#dc2626', fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px' }}>
+                              💊 Receta
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 style={{ fontSize: isRetailLayout ? '15px' : '16px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0', lineHeight: 1.3 }}>
+                          {prod.nombre}
+                        </h3>
+
+                        <p style={{ color: '#64748b', fontSize: '12px', lineHeight: 1.4, margin: '0 0 12px 0' }}>
+                          {prod.descripcion}
+                        </p>
+
+                        {/* Control Opcional de Stock: Solo se muestra si maneja_stock = true */}
+                        {prod.maneja_stock && (
+                          <div style={{ marginBottom: '10px' }}>
+                            {isAgotado ? (
+                              <span style={{ background: '#f1f5f9', color: '#dc2626', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
+                                ❌ Agotado
+                              </span>
+                            ) : prod.stock_disponible !== null && prod.stock_disponible <= 5 ? (
+                              <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
+                                ⚡ ¡Solo {prod.stock_disponible} disponibles!
+                              </span>
+                            ) : prod.stock_disponible !== null ? (
+                              <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px' }}>
+                                📦 Stock: {prod.stock_disponible}
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer con Precio, Unidad de Medida y Stepper de Carrito */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
+                        <div>
+                          <div style={{ fontSize: '18px', fontWeight: '900', color: '#e11d48', lineHeight: 1 }}>
+                            ${Number(prod.precio || 0).toFixed(2)}
+                          </div>
+                          {prod.unidad_medida && prod.unidad_medida !== 'unidad' && (
+                            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                              / {prod.unidad_medida}
+                            </span>
+                          )}
+                        </div>
+
+                        {isAgotado ? (
+                          <button
+                            disabled
+                            style={{
+                              background: '#f1f5f9',
+                              color: '#94a3b8',
+                              border: '1px solid #e2e8f0',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: '700',
+                              cursor: 'not-allowed'
+                            }}
+                          >
+                            Sin Stock
+                          </button>
+                        ) : cantidad > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              onClick={() => modificarCantidad(prod.id, -1)}
+                              style={{
+                                width: '30px',
+                                height: '30px',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                background: '#f8fafc',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <span style={{ fontWeight: '800', fontSize: '13px', minWidth: '18px', textAlign: 'center' }}>
+                              {cantidad}
+                            </span>
+                            <button
+                              onClick={() => modificarCantidad(prod.id, 1)}
+                              style={{
+                                width: '30px',
+                                height: '30px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#e11d48',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => agregarAlCarrito(prod)}
+                            style={{
+                              background: '#ffe4e6',
+                              color: '#e11d48',
+                              border: 'none',
+                              padding: '6px 14px',
+                              borderRadius: '8px',
+                              fontWeight: '700',
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Plus size={14} /> Agregar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </main>
       )}
 
@@ -1643,7 +1984,12 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                 {carrito.map(it => (
                   <div key={it.producto.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                    <span style={{ color: '#334155' }}>{it.cantidad}x {it.producto.nombre}</span>
+                    <span style={{ color: '#334155' }}>
+                      {it.cantidad}x {it.producto.nombre}
+                      {it.producto.unidad_medida && it.producto.unidad_medida !== 'unidad' ? (
+                        <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '4px' }}>({it.producto.unidad_medida})</span>
+                      ) : null}
+                    </span>
                     <strong style={{ color: '#0f172a' }}>${(Number(it.producto.precio || 0) * it.cantidad).toFixed(2)}</strong>
                   </div>
                 ))}
@@ -1860,7 +2206,12 @@ export default function App() {
                   {carrito.map(it => (
                     <div key={it.producto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f8fafc', paddingBottom: '10px' }}>
                       <div>
-                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>{it.producto.nombre}</strong>
+                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                          {it.producto.nombre}
+                          {it.producto.unidad_medida && it.producto.unidad_medida !== 'unidad' ? (
+                            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', marginLeft: '4px' }}>({it.producto.unidad_medida})</span>
+                          ) : null}
+                        </strong>
                         <div style={{ fontSize: '12px', color: '#e11d48', fontWeight: '700' }}>${Number(it.producto.precio || 0).toFixed(2)} c/u</div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

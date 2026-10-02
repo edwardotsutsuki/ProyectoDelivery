@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import ComerciosPage from './pages/ComerciosPage';
+import CategoriasPage from './pages/CategoriasPage';
 import ProductosPage from './pages/ProductosPage';
 import ZonasTarifasPage from './pages/ZonasTarifasPage';
 import FlotaCajaPage from './pages/FlotaCajaPage';
@@ -26,7 +27,8 @@ import {
   AlertCircle,
   LogOut,
   UserCheck,
-  Users
+  Users,
+  FolderTree
 } from 'lucide-react';
 
 interface LedgerSummaryItem {
@@ -46,7 +48,7 @@ interface MovementItem {
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-type NavSection = 'dashboard' | 'comercios' | 'productos' | 'usuarios' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
+type NavSection = 'dashboard' | 'comercios' | 'categorias' | 'productos' | 'usuarios' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
 
 export default function App() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -201,6 +203,26 @@ export default function App() {
             }}
           >
             <Building2 size={18} /> Gestión de Locales
+          </button>
+
+          <button
+            onClick={() => setSeccion('categorias')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '14px',
+              background: seccion === 'categorias' ? '#e11d48' : 'transparent',
+              color: seccion === 'categorias' ? '#fff' : '#94a3b8',
+              textAlign: 'left',
+            }}
+          >
+            <FolderTree size={18} /> Categorías y Verticales
           </button>
 
           <button
@@ -374,6 +396,7 @@ export default function App() {
             <h1 style={{ fontSize: '26px', fontWeight: '800', margin: '4px 0 0 0' }}>
               {seccion === 'dashboard' && 'Dashboard Ejecutivo de Operaciones'}
               {seccion === 'comercios' && 'Gestión Comercial de Locales'}
+              {seccion === 'categorias' && 'Gestión de Categorías y Verticales de Negocio'}
               {seccion === 'productos' && 'Administración de Menús y Catálogo'}
               {seccion === 'usuarios' && 'Directorio Central de Usuarios y Permisos'}
               {seccion === 'zonas' && 'Geofencing de Zonas y Tarifación'}
@@ -494,7 +517,7 @@ export default function App() {
         )}
 
         {seccion === 'comercios' && <ComerciosPage apiBaseUrl={API_BASE} />}
-
+        {seccion === 'categorias' && <CategoriasPage apiBaseUrl={API_BASE} />}
         {seccion === 'productos' && <ProductosPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'usuarios' && <UsuariosPage apiBaseUrl={API_BASE} />}

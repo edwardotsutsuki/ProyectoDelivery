@@ -40,6 +40,10 @@ export interface Comercio {
   is_abierto: boolean;
   telefono: string;
   categoria: string;
+  tipo_comercio_id?: string;
+  tipo_comercio_nombre?: string;
+  tipo_comercio_icono?: string;
+  maneja_inventario_general?: boolean;
   tiempo_entrega_promedio: number;
   costo_base_envio: string | number;
   calificacion?: string | number;
@@ -66,6 +70,7 @@ export default function ComerciosPage({
   const [comercios, setComercios] = useState<Comercio[]>([]);
   const [solicitudes, setSolicitudes] = useState<Comercio[]>([]);
   const [merchantUsers, setMerchantUsers] = useState<{ id: string; nombre: string; email: string }[]>([]);
+  const [verticales, setVerticales] = useState<{ id: string; nombre: string; icono: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState<'all' | 'baba' | 'babahoyo'>('all');
@@ -84,11 +89,13 @@ export default function ComerciosPage({
   const [rejectReason, setRejectReason] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
 
-  // Form State - Negocio
+  // Form State - Negocio & Vertical
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formCategory, setFormCategory] = useState('Restaurante');
+  const [formTipoComercioId, setFormTipoComercioId] = useState('restaurante');
+  const [formManejaInventario, setFormManejaInventario] = useState(false);
   const [formPhone, setFormPhone] = useState('+5939');
   const [formCity, setFormCity] = useState<'baba' | 'babahoyo'>('baba');
   const [formLat, setFormLat] = useState(-1.7917);
@@ -120,6 +127,10 @@ export default function ComerciosPage({
       if (data.success && Array.isArray(data.data)) {
         setComercios(data.data);
       }
+      // Cargar tipos de comercio / verticales
+      fetch(`${apiBaseUrl}/catalog/tipos-comercio`).then(r => r.json()).then(d => {
+        if (d.success && Array.isArray(d.data)) setVerticales(d.data);
+      }).catch(() => {});
     } catch (err) {
       console.error('Error cargando comercios:', err);
     } finally {
@@ -256,6 +267,8 @@ export default function ComerciosPage({
     setFormDesc(c.descripcion || '');
     setFormAddress(c.direccion);
     setFormCategory(c.categoria || 'Restaurante');
+    setFormTipoComercioId(c.tipo_comercio_id || 'restaurante');
+    setFormManejaInventario(Boolean(c.maneja_inventario_general));
     setFormPhone(c.telefono || '+5939');
     setFormLat(c.lat);
     setFormLon(c.lon);
@@ -314,6 +327,8 @@ export default function ComerciosPage({
         lat: Number(formLat),
         lon: Number(formLon),
         categoria: formCategory,
+        tipoComercioId: formTipoComercioId,
+        manejaInventarioGeneral: formManejaInventario,
         telefono: formPhone.trim(),
         costoBaseEnvio: Number(formBaseFee),
         tiempoEntregaPromedio: Number(formPrepTime),
@@ -374,6 +389,8 @@ export default function ComerciosPage({
     setFormDesc('');
     setFormAddress('');
     setFormCategory('Restaurante');
+    setFormTipoComercioId('restaurante');
+    setFormManejaInventario(false);
     setFormPhone('+5939');
     setCoordinatesBaba();
     setFormBaseFee(1.50);
@@ -825,8 +842,11 @@ export default function ComerciosPage({
                           fontWeight: '800',
                           padding: '3px 8px',
                           borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
                         }}>
-                          {comercio.categoria || 'Restaurante'}
+                          {comercio.tipo_comercio_icono || '🍔'} {comercio.tipo_comercio_nombre || comercio.categoria || 'Restaurante'}
                         </span>
 
                         <div style={{ display: 'flex', gap: '6px' }}>
@@ -1068,11 +1088,11 @@ export default function ComerciosPage({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Categoría
+                    Tipo de Comercio / Vertical *
                   </label>
                   <select
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
+                    value={formTipoComercioId}
+                    onChange={(e) => setFormTipoComercioId(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
@@ -1083,25 +1103,33 @@ export default function ComerciosPage({
                       boxSizing: 'border-box',
                     }}
                   >
-                    <option value="Restaurante">Restaurante Típico</option>
-                    <option value="Comida Rápida">Comida Rápida / Burgers</option>
-                    <option value="Pizzería">Pizzería Artesanal</option>
-                    <option value="Mariscos">Pescados y Mariscos</option>
-                    <option value="Parrilladas">Parrilladas y Carnes</option>
-                    <option value="Postres">Postres y Cafetería</option>
+                    {verticales.length > 0 ? (
+                      verticales.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.icono} {v.nombre}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="restaurante">🍔 Restaurantes & Cafeterías</option>
+                        <option value="supermercado">🛒 Supermercados & Abarrotes</option>
+                        <option value="farmacia">💊 Farmacias & Salud</option>
+                        <option value="licorera">🍾 Licores & Bebidas</option>
+                        <option value="express">⚡ Tiendas Express & Antojos</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Teléfono del Local
+                    Especialidad / Subcategoría
                   </label>
                   <input
                     type="text"
-                    required
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    placeholder="+5939..."
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    placeholder="Ej: Abarrotes, Mariscos, Bebidas..."
                     style={{
                       width: '100%',
                       padding: '10px 12px',
@@ -1113,6 +1141,46 @@ export default function ComerciosPage({
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Checkbox de Inventario por Defecto */}
+              <div style={{ background: '#1e293b', padding: '12px 14px', borderRadius: '10px', border: '1px solid #334155' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={formManejaInventario}
+                    onChange={(e) => setFormManejaInventario(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  📦 Manejar inventario numérico por defecto en productos nuevos
+                </label>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', marginLeft: '28px' }}>
+                  {formManejaInventario
+                    ? 'Recomendado para Supermercados, Farmacias y Licoreras con stock medido.'
+                    : 'Recomendado para Restaurantes, comidas preparadas y negocios sin inventario digital (stock ilimitado).'}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                  Teléfono del Local
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                  placeholder="+5939..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: '10px',
+                    color: '#fff',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               {/* Botones de Selección Rápida de Ciudad */}
