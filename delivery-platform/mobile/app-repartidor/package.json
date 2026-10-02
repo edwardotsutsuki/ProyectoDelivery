@@ -5,8 +5,11 @@
   "main": "App.tsx",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android"
+    "android": "expo start --android",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit"
   },
+  "engines": { "node": ">=22.18.0" },
   "dependencies": {
     "expo-location": "~17.0.1",
     "expo-task-manager": "~11.8.2",

@@ -5,6 +5,7 @@ import authRoutes from './modules/auth/auth.routes';
 import { orderRouter } from './modules/orders/order.controller';
 import { catalogRouter } from './modules/catalog/catalog.controller';
 import { ledgerRouter } from './modules/finance-ledger/ledger.controller';
+import { trackingRouter } from './modules/tracking/tracking.controller';
 import { pool } from './config/database';
 import { redisClient } from './config/redis';
 
@@ -66,6 +67,8 @@ app.use('/api/v1/catalog', catalogRouter);
 app.use('/api/catalog', catalogRouter);
 app.use('/api/v1/ledger', ledgerRouter);
 app.use('/api/ledger', ledgerRouter);
+app.use('/api/v1/tracking', trackingRouter);
+app.use('/api/tracking', trackingRouter);
 
 // Manejador de 404
 app.use((req: Request, res: Response) => {

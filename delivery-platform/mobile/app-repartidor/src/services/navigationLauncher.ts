@@ -1,14 +1,15 @@
 import { Linking, Alert, Platform } from 'react-native';
+import { navigationUrls } from '../courierModel';
 
 export const NavigationLauncher = {
   abrirWaze: async (lat: number, lon: number) => {
-    const url = `waze://?ll=${lat},${lon}&navigate=yes`;
     try {
+      const { waze: url, wazeWeb } = navigationUrls({ lat, lng: lon }, Platform.OS);
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
       } else {
-        await Linking.openURL(`https://waze.com/ul?ll=${lat},${lon}&navigate=yes`);
+        await Linking.openURL(wazeWeb);
       }
     } catch (error) {
       Alert.alert('Error', 'No se pudo iniciar la navegación con Waze.');
@@ -16,18 +17,13 @@ export const NavigationLauncher = {
   },
 
   abrirGoogleMaps: async (lat: number, lon: number) => {
-    const url = Platform.select({
-      android: `google.navigation:q=${lat},${lon}&mode=d`,
-      ios: `comgooglemaps://?daddr=${lat},${lon}&directionsmode=driving`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`,
-    });
-
     try {
+      const { maps: url, mapsWeb } = navigationUrls({ lat, lng: lon }, Platform.OS);
       const supported = await Linking.canOpenURL(url!);
       if (supported) {
         await Linking.openURL(url!);
       } else {
-        await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`);
+        await Linking.openURL(mapsWeb);
       }
     } catch (error) {
       Alert.alert('Error', 'No se pudo iniciar Google Maps.');

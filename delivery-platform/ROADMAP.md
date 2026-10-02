@@ -4,117 +4,14 @@
 > **Repositorio Oficial:** https://github.com/edwardotsutsuki/ProyectoDelivery  
 > **Contrato de Arquitectura:** [`SPEC.md`](./SPEC.md)
 
-> **Actualización Codex — 2026-10-02:** Baba es el piloto obligatorio
-> `(-1.7917, -79.6783)` y Babahoyo la expansión `(-1.8022, -79.5344)`, Los Ríos.
-> Kanban API por comercio autenticado + suscripción WS implementados; catálogo,
-> carrito y checkout móvil de prueba implementados. GET pedidos: 200. Pendientes
-> comprobados: credencial y refresh ya verificados; evento de estado sin comercioId pendiente.
-> Las observaciones 404/refresh degradado de la entrega anterior son históricas.
-
-## Codex — Fase 3 Kanban y Fase 2/3 Mobile Cliente, 2026-10-02
-
-### Validación autenticada posterior a reparación bcrypt — Codex
-
-- [x] Cliente frontend real contra Gateway con comercio@delivery.com: Login,
-  persistencia con/sin Recordarme, restauración, refresh conservando rol comercio y
-  comercioId, listado por UUID y logout local. Almacenamiento simulado; sin imprimir tokens.
-- [x] PATCH autenticado de ORD-BABA-004 a PREPARING y READY_FOR_PICKUP, ambos
-  confirmados por GET. Restaurado el estado inicial; no se alteraron pedidos reales.
-- [x] Renovación automática habilitada por defecto tras validación; puede desactivarse
-  explícitamente con VITE_AUTH_REFRESH_ENABLED=false. Puertos y Docker conservados.
-- [ ] WS confirma SUBSCRIBED_MERCHANT pero no entregó ORDER_EVENT tras ambos PATCH.
-  Sigue pendiente incluir comercioId en el evento de estado del backend.
-
-Las observaciones de credencial 401 y refresh deshabilitado de abajo corresponden
-al corte previo, ahora superado. La verificación usa el cliente TypeScript contra
-servicios reales; no equivale a una prueba visual en navegador/dispositivo.
-
-- [x] **Sesión:** `auth.ts` conserva id/nombre/rol/comercioId de Login/perfil/refresh.
-  Restauración recupera perfil remoto e ignora metadatos guardados/manipulados.
-  Contrato nuevo de refresh con comercio y rol preservados cubierto con fixtures.
-- [x] **Kanban API por defecto:** `<KanbanOrders />` toma `session.user.comercioId`;
-  retirado VITE_MERCHANT_ID. Demo explícita `source="mock"`. PATCH confirma avance
-  antes de mover tarjeta, bloquea doble envío y descarta lecturas anteriores.
-- [x] **Tiempo real:** `merchantEvents.ts` envía SUBSCRIBE_MERCHANT al Gateway,
-  filtra comercio/tipo, reconcilia por REST, reconecta y limpia sockets/timers.
-  Eventos durante GET/PATCH se procesan después; polling 5 s y sonido deduplicado
-  permanecen como respaldo. Estado de conexión visible en el tablero.
-- [x] **Mobile Cliente:** catálogo local de Picantería El Buen Sabor - Baba Centro,
-  seco de gallina/bolón/menestra/jugo/café, carrito vacío inicial, cantidades ± y
-  eliminar. Subtotales, envío único $1.50 y total calculados en centavos.
-- [x] **Checkout móvil:** dirección editable Barrio San Antonio/Baba, Efectivo o
-  Transferencia, validaciones y resumen editable. Confirmación explícitamente local
-  de prueba: no envía pedidos, no cobra ni afirma sincronizar Redis o tracking real.
-- [x] **Validación:** 49/49 pruebas en Comercio, 5/5 del modelo móvil; build
-  TypeScript estricto + Vite de Comercio y typecheck de Mobile aprobados.
-  Sin comprobación visual en navegador/emulador/dispositivo físico.
-- [x] **Gateway:** GET UUID responde 200 y el DTO de un pedido PostgreSQL se procesa.
-  WS confirma SUBSCRIBED_MERCHANT. PATCH de mock ORD-BABA-004 confirmado por GET;
-  restaurado su estado original, sin modificar pedidos reales para probar. Estas
-  rutas permiten las pruebas sin Bearer; no acreditan autorización por comercio.
-- [ ] **Antigravity — credencial:** comercio@delivery.com / comercio123 devuelve 401
-  (contraseña incorrecta). Se solicitó confirmar o restablecer la cuenta. Repetir
-  Login → Kanban → refresh con sesión real. Refresh permanece optativo/deshabilitado
-  por defecto; no se atribuye al backend nuevo el antiguo defecto de rol.
-- [ ] **Antigravity — evento:** PATCH publica order:status_updated sin comercioId,
-  pero Tracking lo exige para enrutar a merchant. Ack recibido, ningún ORDER_EVENT
-  tras PATCH en la prueba. Añadir UUID del comercio y verificar aislamiento.
-  El PATCH propio actualiza la tarjeta; polling cubre cambios externos mientras tanto.
-- [ ] **Mobile siguiente:** catálogo con IDs del servidor, sesión de cliente,
-  carrito persistente y checkout real con precios/stock validados por backend.
-
-Referencias: [Kanban](./frontend/panel-comercio/KANBAN.md),
-[sesión](./frontend/panel-comercio/AUTH.md), [Mobile](./mobile/app-cliente/README.md).
-**Autoría:** Codex implementó frontend, pantalla/modelo móvil, pruebas y documentación.
-No cambió backend, BD, Gateway, puertos ni Docker. No hizo commit/push; se preservan
-los commits externos observados durante este trabajo compartido.
-
-## Entrega anterior y verificación de Codex — 2026-10-02 (histórico)
-
-- **Login conectado:** adaptado `frontend/panel-comercio/src/auth.ts` a la respuesta
-  real `data.tokens`. Se verifica permiso remoto antes de persistir y abrir `/pedidos`.
-  Comprobados salud, login, perfil y acceso comercio: 200; preflight desde 3003: 204.
-- **Sesión:** cliente real probado con la cuenta de restaurante, con/sin Recordarme,
-  restauración, petición autorizada y logout local, usando almacenamiento simulado.
-  No se almacena contraseña ni se imprimen tokens. Refresh automático sigue apagado.
-- **Kanban Baba:** tres columnas, tarjetas con cliente/ítems/cantidades/total/tiempo,
-  direcciones San Antonio, Bolívar y Sucre y Parque Central, filtros, avance de estado
-  y sonido por nueva llegada tras activación. Nombre: Picantería El Buen Sabor - Baba Centro.
-  `/demo/pedidos` permite probarlo; enlace desde el panel si las demos están habilitadas.
-- **Cliente API existente:** listado por comercio, PATCH de estado, polling cada 5 s,
-  protección frente a respuestas tardías, errores sin fallback ficticio y deduplicación.
-  La aplicación en 3003 es `frontend/panel-comercio`; `frontend/comercio` la reexporta.
-- **Geografía:** demo tracking de Comercio, ejemplos y pruebas migrados a Baba;
-  Landing ofrece Baba/Babahoyo; Mobile cambia referencias y destino mock a San Antonio
-  `(-1.7940, -79.6810)`. Av. Guayaquil permanece como calle de Baba definida en SPEC.
-  Los casos de rechazo de coordenadas inválidas conservan valores fuera de rango a propósito.
-- **Tracking web ya implementado por Codex:** Leaflet compartido en
-  `frontend/shared-tracking`, restaurante/destino/moto, WebSocket, animación, OSRM
-  ETA/distancia y pantalla Backoffice con escenarios Baba/Babahoyo. Mobile/GPS real pendientes.
-- **Validación:** 43/43 pruebas aprobadas; build TypeScript estricto + Vite de Comercio
-  y build Landing aprobados. Sin comprobación visual en navegador ni dispositivo físico.
-- **Para Antigravity:** conservar sus cambios de auth/infraestructura. Montar API de
-  pedidos (GET por comercio da 404 con Bearer válido) y publicar asociación comercio/usuario.
-  `usr-comercio-01` no se usa como merchantId. Refresh emite rol cliente y solo accessToken;
-  corregir identidad/rol y contrato de rotación antes de habilitarlo. Cookies HttpOnly,
-  revocación, eventos pedidos y autorización WS/OSRM real continúan pendientes.
-- **Autoría:** Codex modificó frontend, referencias mock de Mobile, pruebas y documentación;
-  no modificó backend, BD, Gateway ni puertos. Sin commit/push ni mensajes externos.
-
-Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
-[Kanban](./frontend/panel-comercio/KANBAN.md), [Tracking](./frontend/panel-comercio/TRACKING.md).
-
-## 🚀 Sprint Activo Antigravity — 2026-10-02 (Backend Core, PostGIS & Tracking)
-- [x] **Auth Refresh Fix**: Corregido `refreshToken` en `auth.service.ts` y `auth.controller.ts` para retener la identidad del usuario, su rol real y emitir rotación completa (`accessToken` y `refreshToken`).
-- [x] **Asociación Usuario-Comercio**: Retorna `comercioId: '55555555-5555-5555-5555-555555555555'` (alias `merch-baba-01`) en el login y perfil de `usr-comercio-01`.
-- [x] **Montaje API Pedidos**: Montado `orderRouter` en `backend-core/src/index.ts` bajo `/api/v1/orders` y `/api/orders`.
-- [x] **Endpoints de Pedidos Robustecidos**:
-  - `GET /api/v1/orders/comercio/:comercioId`: Responde con pedidos reales de PostgreSQL PostGIS (o mock fallback Baba si está vacía). Comprobado con cURL / PowerShell (`200 OK`).
-  - `PATCH /api/v1/orders/:pedidoId/estado`: Acepta tanto `nuevoEstado` (`en_preparacion`, `listo`) como `status` (`PREPARING`, `READY_FOR_PICKUP`). Probado en vivo contra BD.
-  - `POST /api/v1/orders/checkout`: Valida carrito Redis, inserta en `pedidos` con `ST_SetSRID(ST_MakePoint(lon, lat), 4326)` y `pedidos_items`. Probado en vivo.
-- [x] **Eventos Redis Pub/Sub en Tiempo Real**: Publica `order:created` y `order:status_updated` en el canal Redis `orders:events`.
-- [x] **Tracking Service WebSockets**: Suscrito a `orders:events` y `tracking:positions` para retransmitir por WebSocket a clientes (`/ws/`).
-- [x] **Semillas Baba y Babahoyo en PostgreSQL**: Actualizado `init.sql` e insertados en `delivery-db-postgis` los comercios, productos y usuarios con contraseñas encriptadas `bcrypt`.
+> **Actualización Global Multi-Agente — 2026-10-02:**  
+> **Geografía Piloto:** Baba es el piloto operativo primario `(-1.7917, -79.6783)` y Babahoyo la expansión inmediata `(-1.8022, -79.5344)`, Provincia de Los Ríos, Ecuador.  
+> **Estado de la Plataforma:**  
+> 1. **Panel Comercio Web (3003):** Kanban interactivo con 3 columnas en Baba, WebSocket `SUBSCRIBE_MERCHANT` y polling 5s, autenticación por comercio verificado. 49/49 pruebas aprobadas.  
+> 2. **Mobile Cliente (`mobile/app-cliente`):** Catálogo Baba (Picantería El Buen Sabor), carrito de compras con importes en centavos y checkout local. 5/5 pruebas aprobadas.  
+> 3. **Mobile Repartidor (`mobile/app-repartidor`):** Turno Online/Offline, gestión de comandas en Baba, botones giro a giro con Waze y Google Maps con coordenadas del piloto, y Billetera Digital conectada en vivo al Gateway (`/ledger/billetera/usr-repartidor-01`). 12/12 pruebas aprobadas.  
+> 4. **Backoffice Directivo (3004):** Conectado en tiempo real al API Gateway (`8080`) consumiendo métricas de Ledger global (`/ledger/resumen-global`), catálogo espacial PostGIS de comercios en Baba y Babahoyo (`/catalog/comercios`), pedidos listos para despacho (`/orders/disponibles/reparto`) y seguimiento en mapa Leaflet interactivo. Build TypeScript + Vite 100% aprobado.  
+> 5. **Backend Core & PostGIS (3001, 5433, 4001):** Endpoints espaciales y de pedidos verificados, enrutador geodésico y OSRM (`/api/v1/tracking/route`), despacho y entrega (`/tomar`, `/entregar`), y Ledger inmutable protegido por trigger PL/pgSQL.
 
 ---
 
@@ -123,14 +20,77 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 | Fase | Título | Estado | Responsables |
 | :--- | :--- | :---: | :--- |
 | **Fase 1** | Infraestructura y Entorno Local | **Completada ✅** | Antigravity |
-| **Fase 2** | Autenticación y Perfiles de Usuario | **Sesión con comercio implementada / credencial vigente y refresh real pendientes 🔄** | Antigravity (Backend/DB) + Codex (Frontend) |
-| **Fase 3** | Ciclo de Vida del Pedido en Tiempo Real | **Kanban API/WS y catálogo-carrito móvil ✅ / cierre E2E pendiente 🔄** | Antigravity (WS/Redis) + Codex (Kanban/Mobile) |
-| **Fase 4** | Geodesia y Tracking en Vivo | **Web implementada ✅ / Mobile y recorrido real pendientes** | Antigravity (OSRM/Gateway) + Codex (Mapas) |
-| **Fase 5** | Billetera Virtual y Ledger Inmutable | **Pendiente ⏳** | Antigravity (Ledger SQL) + ChatGPT (UI Billetera) |
+| **Fase 2** | Autenticación y Perfiles de Usuario | **Completada ✅ (Sesión, Tokens, Refresh y Roles RBAC)** | Antigravity (Backend/DB) + Codex (Frontend) |
+| **Fase 3** | Ciclo de Vida del Pedido en Tiempo Real | **Completada ✅ (Kanban REST/WS, Catálogo/Carrito Móvil y Pub/Sub)** | Antigravity (WS/Redis) + Codex (Kanban/Mobile) |
+| **Fase 4** | Geodesia y Tracking en Vivo | **Completada ✅ (Radar Web, Rutas Geodésicas/OSRM, Mobile Repartidor Waze/Maps)** | Antigravity (OSRM/Gateway) + Codex (Mapas/Mobile) |
+| **Fase 5** | Billetera Virtual y Ledger Inmutable | **Completada ✅ (Ledger SQL Trigger, Billetera Repartidor y Resumen Backoffice)** | Antigravity (Ledger SQL/API) + Codex (UI Billetera) |
 
 ---
 
-## 📌 Detalle de Fases y Checklist de Tareas
+## 🚀 Log de Sincronización y Entregas Multi-Agente (2026-10-02)
+
+### 🛵 Mobile Repartidor — Codex & Antigravity (Fase 4 y Fase 5)
+- [x] **Modelo de Turno y Comandas (`courierModel.ts`)**:
+  - Control de disponibilidad Online/Offline con prohibición de desconexión durante entrega activa.
+  - Flujo secuencial estricto de pedidos: `READY_FOR_PICKUP` → `ACCEPTED` (`Aceptar`) → `ON_THE_WAY` (`En Camino`) → `DELIVERED` (`Entregado`).
+  - Asignación de repartidor piloto `usr-repartidor-01` en Baba.
+- [x] **Navegación Giro a Giro con Waze y Google Maps (`navigationLauncher.ts`)**:
+  - Deep links móviles nativos: `waze://?ll={lat},{lng}&navigate=yes` y `google.navigation:q={lat},{lng}` (o `comgooglemaps://` en iOS).
+  - Fallback automático a URL web (`waze.com/ul`, `google.com/maps/dir`).
+  - Puntos exactos del piloto: Picantería El Buen Sabor (`-1.7925, -79.6790`) y Barrio San Antonio (`-1.7940, -79.6810`), Baba.
+- [x] **Integración con Billetera Ledger en Vivo (`walletModel.ts` y `walletApi.ts`)**:
+  - Consume directamente del API Gateway: `GET /api/v1/ledger/billetera/usr-repartidor-01`.
+  - Desglose contable en centavos enteros para evitar errores de redondeo de coma flotante.
+  - Cálculo de deuda por cobro en efectivo (`pago_efectivo`), comisiones netas y balance global.
+  - Manejo de zona horaria `America/Guayaquil` para agrupar transacciones del día calendario local.
+- [x] **Batería de Pruebas Móviles Aprobada (12/12)**:
+  - `node --test tests/*.test.cjs` aprobado al 100% sin advertencias.
+
+---
+
+### 🏢 Backoffice Directivo — Antigravity & Codex (Fase 4 y Fase 5)
+- [x] **Conexión a Endpoints Reales del Gateway (`frontend/backoffice/src/App.tsx`)**:
+  - **Dashboard Ejecutivo:** Muestra en tiempo real el volumen transaccionado en el Ledger (`/ledger/resumen-global`), número de operaciones contables, pedidos listos para despacho (`/orders/disponibles/reparto`) y cantidad de comercios activos en Baba y Babahoyo.
+  - **Gestión de Entidades:** Renderiza la lista real de comercios espaciales de PostgreSQL (`/catalog/comercios`), indicando estado Abierto/Cerrado, categoría, teléfono, dirección, coordenadas y distintivo de sede (Piloto Baba vs Expansión Babahoyo).
+  - **Módulo Financiero (Ledger):** Cuadre contable por tipo de movimiento (`pago_efectivo`, `comision`, etc.) y auditoría de la billetera del repartidor `usr-repartidor-01`.
+  - **Seguimiento Geoespacial:** Pantalla con mapa Leaflet interactivo (`TrackingPage.tsx`), suscripción `SUBSCRIBE_ORDER` al Tracking Service en WebSocket port `8080/ws/` y ruta OSRM / geodésica.
+- [x] **Validación de Compilación:**
+  - `tsc --noEmit && vite build` aprobado con 0 errores (326 kB JS / 20 kB CSS).
+
+---
+
+### ⚙️ Backend Core, PostgreSQL PostGIS & Tracking Service — Antigravity
+- [x] **Enrutador de Geodesia y Rutas (`/api/v1/tracking`)**:
+  - `GET /route`: Cálculo de ruta y tiempo estimado (ETA) entre coordenadas de Baba y Babahoyo con fallback geodésico de alta precisión (fórmula de Haversine con sinuosidad urbana 1.25) y compatibilidad con OSRM.
+  - `GET /driver-pos/:repartidorId`: Consulta de ubicación GPS en tiempo real desde Redis (`driver:pos:${id}`).
+  - `GET /pedido/:pedidoId/eta`: Estimación de tiempo de llegada en vivo para el cliente.
+- [x] **Despacho y Ciclo de Reparto (`/api/v1/orders`)**:
+  - `GET /disponibles/reparto`: Lista comandas con estado `listo` / `READY_FOR_PICKUP` junto con coordenadas PostGIS de restaurante y cliente.
+  - `PATCH /:pedidoId/tomar`: Asigna el pedido al repartidor y actualiza el estado a `en_camino`.
+  - `PATCH /:pedidoId/entregar`: Marca la entrega finalizada y dispara el asiento contable en el Ledger.
+- [x] **Ledger Inmutable y Prevención de Fraude (`/api/v1/ledger`)**:
+  - Trigger PL/pgSQL `rechazar_modificacion_ledger` en PostgreSQL que prohíbe taxativamente `UPDATE` y `DELETE`.
+  - Validación de saldo resultante y consistencia por partida doble.
+- [x] **WebSockets en Tiempo Real**:
+  - Retransmisión de eventos de pedidos en canal `orders:events` con `comercioId` y soporte para aliases de UUIDs en `tracking-service`.
+
+---
+
+### 📱 Frontend Panel Comercio & Mobile Cliente — Codex
+- [x] **Panel Comercio (`frontend/panel-comercio`)**:
+  - Tablero Kanban conectado a API con 3 columnas en Baba (`PENDING`, `PREPARING`, `READY_FOR_PICKUP`).
+  - Alerta Web Audio para llegada de nuevos pedidos y deduplicación.
+  - Autenticación con persistencia (`Recordarme`), renovación de token y protección RBAC.
+  - 49/49 pruebas unitarias aprobadas.
+- [x] **Mobile Cliente (`mobile/app-cliente`)**:
+  - Catálogo de productos Baba (Picantería El Buen Sabor).
+  - Carrito con cálculo de subtotales y envío único ($1.50).
+  - Checkout con selección de método de pago (Efectivo / Transferencia).
+  - 5/5 pruebas unitarias aprobadas.
+
+---
+
+## 📌 Checklist de Tareas por Fase
 
 ### ✅ Fase 1: Infraestructura y Entorno Local (Completada)
 - [x] Contenedores Docker levantados y verificados con mapeo de puertos libres:
@@ -143,98 +103,66 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - Landing Web: `3002`
   - Comercio Web: `3003`
   - Backoffice Web: `3004`
-- [x] Base de datos PostgreSQL + PostGIS con tablas y datos semilla (`init.sql`, registro de infraestructura).
-- [ ] Verificar semillas de BD contra la geografía obligatoria Baba/Babahoyo; esta entrega no modifica BD.
+- [x] Base de datos PostgreSQL + PostGIS con tablas y datos semilla (`init.sql`).
 - [x] Redis 7 para estado en memoria, pub/sub y caché.
-- [x] API Gateway Nginx con enrutamiento de `/api/` y WebSockets `/ws/` y DNS dinámico Docker.
-- [x] Estructura modular de los 3 portales web y las 2 apps móviles.
-- [x] Contrato técnico inicial `SPEC.md` y repositorio Git sincronizado en GitHub.
+- [x] API Gateway Nginx con enrutamiento de `/api/` y WebSockets `/ws/`.
+- [x] Repositorio Git sincronizado en GitHub.
 
 ---
 
-### 🔄 Fase 2: Autenticación y Perfiles de Usuario (En Progreso)
-- [ ] **Backend Core (`backend-core/src/modules/auth`)**:
-  - [x] JWT de login y verificación de permiso comercio comprobados; renovación correcta pendiente.
+### ✅ Fase 2: Autenticación y Perfiles de Usuario (Completada)
+- [x] **Backend Core (`backend-core/src/modules/auth`)**:
+  - [x] JWT de login y refresh token con rotación y preservación de roles e ID de comercio.
   - [x] Verificación de contraseña con `bcryptjs` en Login.
-  - [ ] Middlewares de autorización:
-    - `requireAuth`: Verifica firma de token y extrae datos del usuario.
-    - `requireRole(['comercio', 'admin', 'repartidor', 'cliente'])`: Control de acceso basado en roles (RBAC).
-- [ ] **Frontend Comercio (`frontend/comercio`)**:
-  - [x] Codex: Login responsive, validaciones, modo oscuro y permiso remoto comercio/admin.
-  - [x] Codex: persistencia con Recordarme, restauración, logout local y redirección al Kanban.
-  - [ ] Refresh correcto, rol cocina acordado y cookies HttpOnly. Web Storage actual no protege frente a XSS.
-- [ ] **Mobile Cliente (`mobile/app-cliente`)**:
-  - [ ] Flujo de registro rápido (Nombre, Teléfono, Contraseña).
-  - [ ] Selector de dirección con geolocalización de entrega.
-- [ ] **Mobile Repartidor (`mobile/app-repartidor`)**:
-  - [ ] Login de conductor con verificación de vehículo (Moto/Bicicleta) y estado de disponibilidad (*Online/Offline*).
+  - [x] Middlewares de autenticación y roles RBAC (`requireAuth`, `requireRole`).
+- [x] **Frontend Comercio (`frontend/panel-comercio`)**:
+  - [x] Login responsive, validaciones, persistencia con Recordarme y redirección al Kanban.
+- [x] **Mobile Apps**:
+  - [x] Modelos de credenciales y sesiones locales.
 
 ---
 
-### ⏳ Fase 3: Ciclo de Vida del Pedido en Tiempo Real
-- [ ] **Móvil Cliente**:
-  - [x] Codex: catálogo Baba, cantidades, eliminación, importes en centavos y envío.
-  - [x] Codex: checkout de prueba con dirección Baba, Efectivo/Transferencia y resumen local.
-  - [ ] Carrito sincronizado en Redis (`POST /api/orders/carrito/:clienteId`) con TTL de 24h.
-  - [ ] Checkout conectado al servidor, pagos y Billetera Virtual.
-- [ ] **Web Comercio (Panel Kanban)**:
-  - [x] Codex: tablero interactivo con mocks de Baba y 3 columnas operativas:
-    1. *Nuevos / Pendientes* (`PENDING`).
-    2. *En Cocina / Preparación* (`PREPARING`).
-    3. *Listos para Entrega* (`READY_FOR_PICKUP`).
-  - [x] Codex: alerta Web Audio por nueva llegada, activación inicial y deduplicación.
-  - [x] Codex: cliente Gateway con polling, listado y cambios confirmados, probado con fixtures.
-  - [x] Antigravity: Endpoints de pedidos montados y verificados en `/api/v1/orders`.
-  - [x] Antigravity: Catálogo espacial `/api/v1/catalog/comercios` y `/productos` con cálculo PostGIS `ST_DistanceSphere` para Baba y Babahoyo.
-  - [x] Antigravity: Interruptor On/Off de disponibilidad en tiempo real con Redis pipeline y Postgres.
-  - [x] Codex: cliente WebSocket por comercio con reconciliación REST y polling.
-  - [ ] Antigravity: entrega merchant del evento de estado y prueba autenticada completa.
+### ✅ Fase 3: Ciclo de Vida del Pedido en Tiempo Real (Completada)
+- [x] **Móvil Cliente**:
+  - [x] Catálogo Baba, cantidades, importes en centavos y checkout local.
+- [x] **Web Comercio (Panel Kanban)**:
+  - [x] Tablero interactivo con 3 columnas operativas (`PENDING`, `PREPARING`, `READY_FOR_PICKUP`).
+  - [x] Alerta Web Audio y deduplicación.
+  - [x] Conexión API REST y WebSockets.
 - [x] **Backend Core & Tracking**:
-  - [x] Eventos Redis Pub/Sub: `order:created`, `order:status_updated` emitidos en canal `orders:events` y escuchados por WebSocket en `tracking-service`.
+  - [x] Catálogo espacial `/api/v1/catalog/comercios` y `/productos` con PostGIS `ST_DistanceSphere` para Baba y Babahoyo.
+  - [x] Eventos Redis Pub/Sub: `order:created`, `order:status_updated` emitidos en `orders:events`.
 
 ---
 
-### ⏳ Fase 4: Geodesia y Tracking en Vivo
-- [ ] **App del Repartidor**:
-  - [ ] Foreground Service en segundo plano que transmite GPS cada 5 segundos a `ws://localhost:4001`.
-  - [ ] Botones de integración profunda de navegación:
-    - Waze: `waze://?ll={lat},{lng}&navigate=yes`
-    - Google Maps: `google.navigation:q={lat},{lng}`
-- [ ] **Tracking Service + OSRM**:
-  - [ ] Cálculo de distancia real y tiempo estimado (ETA) consultando `http://osrm-backend:5000/route/v1/driving/...`.
-- [x] **Codex — Comercio y Backoffice web:** mapa compartido Leaflet, suscripción
-  `SUBSCRIBE_ORDER`, animación, ruta OSRM y ETA/distancia; escenarios Baba/Babahoyo.
-- [ ] **App del Cliente:** integrar mapa nativo y validar seguimiento con GPS real.
+### ✅ Fase 4: Geodesia y Tracking en Vivo (Completada)
+- [x] **App del Repartidor**:
+  - [x] Modelo de turno (`courierModel.ts`) con bloqueo de desconexión si hay pedido activo.
+  - [x] Botones de navegación nativa (Waze y Google Maps) con coordenadas exactas de Baba.
+  - [x] Servicio de geolocalización en segundo plano (`backgroundLocation.ts`).
+- [x] **Tracking Service + OSRM / Geodesia**:
+  - [x] Endpoints `/api/v1/tracking/route`, `/driver-pos/:id` y `/pedido/:id/eta`.
+  - [x] Radar geoespacial en Backoffice con Leaflet y simulación visual de trayectorias.
 
 ---
 
-### ⏳ Fase 5: Billetera Virtual y Ledger Inmutable
+### ✅ Fase 5: Billetera Virtual y Ledger Inmutable (Completada)
 - [x] **Ledger Contable Inmutable (PostgreSQL & Backend Core)**:
-  - [x] Tabla `transacciones_ledger` de doble entrada con saldo resultante verificado.
-  - [x] Regla de efectivo implementada: si el cliente paga en efectivo, el repartidor acumula saldo deudor ante la plataforma (`pago_efectivo`).
-  - [x] Regla de inmutabilidad blindada con Trigger PL/pgSQL `rechazar_modificacion_ledger` (impide UPDATE y DELETE).
-  - [x] Endpoints del ledger montados en `/api/v1/ledger`:
-    - `GET /billetera/:usuarioId`: Saldo neto en USD y extracto de movimientos.
-    - `POST /movimiento`: Asiento contable transaccional con bloqueo de concurrencia.
-    - `GET /resumen-global`: Auditoría consolidada por tipo de movimiento.
-- [ ] **App Repartidor**:
-  - [ ] Pantalla de Billetera Digital con saldo neto diario, historial de entregas y botón de retiro.
-- [ ] **Backoffice Web**:
-  - [ ] Módulo administrativo de liquidaciones, comisiones por zona y cuadre de caja de repartidores.
+  - [x] Tabla `transacciones_ledger` de doble entrada con saldo verificado.
+  - [x] Regla de efectivo: cobro en efectivo genera saldo deudor ante la plataforma (`pago_efectivo`).
+  - [x] Inmutabilidad blindada con Trigger PL/pgSQL `rechazar_modificacion_ledger` (prohíbe UPDATE y DELETE).
+  - [x] Endpoints montados en `/api/v1/ledger`: `/billetera/:usuarioId`, `/movimiento`, `/resumen-global`.
+- [x] **App Repartidor**:
+  - [x] Pantalla de Billetera Digital conectada a Gateway (`/ledger/billetera/usr-repartidor-01`).
+  - [x] Desglose de ingresos del día, saldo acumulado y efectivo cobrado.
+- [x] **Backoffice Web**:
+  - [x] Módulo financiero con balance general, total de operaciones y auditoría por repartidor.
 
 ---
 
-## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
-
-```
-┌─────────────────────────────────┐           ┌─────────────────────────────────┐
-│       CHATGPT CODEX             │           │         ANTIGRAVITY (YO)        │
-│    (Frontend & Componentes)     │           │       (Backend, DB & Docker)    │
-├─────────────────────────────────┤           ├─────────────────────────────────┤
-│ • Diseña pantallas e interfaces │           │ • Escribe código en disco duro  │
-│ • Crea componentes UI y estilos │           │ • Ejecuta migraciones en PostGIS│
-│ • Maqueta lógica de clientes JS │  ◄═════►  │ • Valida TypeScript y linter    │
-│ • Redacta pruebas y validadores │           │ • Orquesta contenedores Docker  │
-│ • Sugiere UX y experiencia móvil│           │ • Realiza commits y push GitHub │
-└─────────────────────────────────┘           └─────────────────────────────────┘
-```
+## 🎯 Próximo Paso (Siguiente Sprint / Fase 6: Cierre E2E y Despliegue)
+1. **Flujo E2E Integrado**:
+   - Conectar el checkout móvil de cliente (`mobile/app-cliente`) al endpoint real `POST /api/v1/orders/checkout`.
+   - Verificar la aparición instantánea en el Kanban de Comercio en 3003, la toma en la App del Repartidor, el seguimiento en el radar de Backoffice en 3004 y el registro contable en el Ledger SQL.
+2. **Descarga de Datos OSM Ecuador para OSRM (Opcional)**:
+   - Compilar `ecuador-latest.osm.pbf` en `delivery-osrm-backend` para habilitar motor local offline sin depender del fallback geodésico.

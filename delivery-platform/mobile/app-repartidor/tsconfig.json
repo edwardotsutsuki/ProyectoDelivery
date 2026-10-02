@@ -4,6 +4,8 @@
     "module": "esnext",
     "jsx": "react-native",
     "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "moduleResolution": "node",
     "skipLibCheck": true
   }

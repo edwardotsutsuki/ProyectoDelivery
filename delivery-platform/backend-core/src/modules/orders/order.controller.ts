@@ -412,3 +412,187 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
 
 orderRouter.patch('/:pedidoId/estado', handleStatusUpdate);
 orderRouter.patch('/:pedidoId/status', handleStatusUpdate);
+
+// 6. Listar pedidos listos para despacho (para la App del Repartidor en Baba)
+orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.direccion_entrega, p.notas, p.fecha_creacion,
+        ST_Y(p.ubicacion_entrega) as lat_entrega,
+        ST_X(p.ubicacion_entrega) as lon_entrega,
+        u.nombre as cliente_nombre, u.telefono as cliente_telefono,
+        c.nombre_comercial as comercio_nombre, c.direccion as comercio_direccion,
+        ST_Y(c.ubicacion) as comercio_lat, ST_X(c.ubicacion) as comercio_lon,
+        (
+          SELECT json_agg(json_build_object(
+            'producto', COALESCE(pr.nombre, 'Plato especial'),
+            'cantidad', pi.cantidad,
+            'precio_unitario', pi.precio_unitario
+          ))
+          FROM pedidos_items pi
+          LEFT JOIN productos pr ON pr.id = pi.producto_id
+          WHERE pi.pedido_id = p.id
+        ) as items
+      FROM pedidos p
+      JOIN usuarios u ON u.id = p.cliente_id
+      JOIN comercios c ON c.id = p.comercio_id
+      WHERE p.estado::text IN ('listo', 'READY_FOR_PICKUP') AND p.repartidor_id IS NULL
+      ORDER BY p.fecha_creacion ASC;
+    `;
+    const result = await pgPool.query(query);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Helper para resolver ID de repartidor
+function resolveDriverId(id: string): string {
+  if (id === 'usr-repartidor-01' || id === 'rep-baba-01') {
+    return '33333333-3333-3333-3333-333333333333';
+  }
+  return id;
+}
+
+// 7. Repartidor toma el pedido e inicia ruta (en_camino)
+orderRouter.patch('/:pedidoId/tomar', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    const rawRepartidorId = req.body.repartidorId || '33333333-3333-3333-3333-333333333333';
+    const repartidorId = resolveDriverId(rawRepartidorId);
+
+    const updateQuery = `
+      UPDATE pedidos 
+      SET estado = 'en_camino', repartidor_id = $1, fecha_actualizacion = NOW()
+      WHERE id::text = $2
+      RETURNING id, estado, comercio_id, cliente_id;
+    `;
+    const result = await pgPool.query(updateQuery, [repartidorId, pedidoId]);
+
+    // Publicar evento en Redis Pub/Sub
+    const eventPayload = {
+      event: 'order:status_updated',
+      type: 'ORDER_STATUS_CHANGED',
+      pedidoId,
+      nuevoEstado: 'en_camino',
+      status: 'en_camino',
+      repartidorId,
+      comercioId: result.rows[0]?.comercio_id || '55555555-5555-5555-5555-555555555555',
+      merchant_id: result.rows[0]?.comercio_id || '55555555-5555-5555-5555-555555555555',
+      timestamp: new Date().toISOString(),
+    };
+    await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    res.json({
+      success: true,
+      message: 'Pedido tomado por el repartidor. Ahora en camino a entrega.',
+      data: { pedidoId, estado: 'en_camino', repartidorId },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 8. Repartidor marca pedido como entregado (Liquida automáticamente en Ledger Contable)
+orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => {
+  let client;
+  try {
+    const { pedidoId } = req.params;
+
+    client = await pgPool.connect();
+    await client.query('BEGIN');
+
+    // 1. Obtener detalles del pedido
+    const orderRes = await client.query('SELECT * FROM pedidos WHERE id::text = $1 FOR UPDATE', [pedidoId]);
+    if (orderRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
+    }
+    const order = orderRes.rows[0];
+
+    // 2. Marcar pedido como entregado
+    await client.query("UPDATE pedidos SET estado = 'entregado', fecha_actualizacion = NOW() WHERE id = $1", [order.id]);
+
+    // 3. Asentar movimiento en transacciones_ledger (Doble Entrada Inmutable)
+    const repartidorId = order.repartidor_id || '33333333-3333-3333-3333-333333333333';
+    const subtotal = parseFloat(order.subtotal);
+    const costoEnvio = parseFloat(order.costo_envio);
+    const comisionPlataforma = 0.50; // Tarifa fija plataforma por orden
+
+    if (order.metodo_pago === 'efectivo') {
+      // Repartidor cobró total en efectivo (subtotal + costoEnvio)
+      // Debe pagar a la plataforma el subtotal + comisionPlataforma
+      const deudaRepartidor = -(subtotal + comisionPlataforma);
+
+      const balRes = await client.query('SELECT COALESCE(SUM(monto), 0) as s FROM transacciones_ledger WHERE usuario_id = $1', [repartidorId]);
+      const prevBal = parseFloat(balRes.rows[0]?.s || '0');
+      const newBal = prevBal + deudaRepartidor;
+
+      await client.query(`
+        INSERT INTO transacciones_ledger (
+          usuario_id, pedido_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+        ) VALUES ($1, $2, 'pago_efectivo', $3, $4, $5, $6)
+      `, [
+        repartidorId,
+        order.id,
+        deudaRepartidor,
+        newBal,
+        `Cobro en efectivo pedido #${order.id} (Deuda plataforma)`,
+        JSON.stringify({ subtotal, costoEnvio, comisionPlataforma, metodoPago: 'efectivo' }),
+      ]);
+    } else {
+      // Transferencia / Digital: la plataforma ya cobró
+      // Acredita ganancia al repartidor
+      const gananciaRepartidor = costoEnvio - comisionPlataforma;
+      const balRes = await client.query('SELECT COALESCE(SUM(monto), 0) as s FROM transacciones_ledger WHERE usuario_id = $1', [repartidorId]);
+      const prevBal = parseFloat(balRes.rows[0]?.s || '0');
+      const newBal = prevBal + gananciaRepartidor;
+
+      await client.query(`
+        INSERT INTO transacciones_ledger (
+          usuario_id, pedido_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+        ) VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)
+      `, [
+        repartidorId,
+        order.id,
+        gananciaRepartidor,
+        newBal,
+        `Ganancia por entrega pedido #${order.id}`,
+        JSON.stringify({ costoEnvio, comisionPlataforma, metodoPago: order.metodo_pago }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    // 4. Publicar evento en Redis Pub/Sub
+    const eventPayload = {
+      event: 'order:status_updated',
+      type: 'ORDER_STATUS_CHANGED',
+      pedidoId: order.id,
+      nuevoEstado: 'entregado',
+      status: 'entregado',
+      comercioId: order.comercio_id,
+      merchant_id: order.comercio_id,
+      repartidorId,
+      timestamp: new Date().toISOString(),
+    };
+    await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    res.json({
+      success: true,
+      message: 'Pedido marcado como entregado y asentado en el ledger contable',
+      data: {
+        pedidoId: order.id,
+        estado: 'entregado',
+        repartidorId,
+      },
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK');
+    res.status(500).json({ success: false, error: (error as Error).message });
+  } finally {
+    if (client) client.release();
+  }
+});
