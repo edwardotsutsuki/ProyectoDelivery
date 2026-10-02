@@ -20,8 +20,9 @@ Consultar `.env.example`. No guardar secretos ni credenciales en variables VITE.
 
 Reiniciar Vite/reconstruir después de cambiar variables. Las demos públicas
 `/demo/pedidos` y `/demo/tracking` solo se registran cuando están habilitadas.
-`/pedidos` monta ahora el Kanban en modo API con `VITE_MERCHANT_ID` (o ID pasado
-al componente). `/demo/pedidos` conserva exclusivamente los mocks de Baba.
+`/pedidos` monta el Kanban en modo API con `session.user.comercioId` obtenido del
+servidor. No necesita `VITE_MERCHANT_ID`; esa variable ya no se consume.
+`/demo/pedidos` monta explícitamente `source="mock"` y conserva los mocks de Baba.
 Ver `KANBAN.md` para rutas, polling y límites de integración del backend.
 
 ## Contrato implementado y comprobación del Gateway
@@ -41,16 +42,21 @@ Ver `KANBAN.md` para rutas, polling y límites de integración del backend.
 5. No existe logout remoto acordado: **Cerrar sesión borra solo la sesión local**.
    La revocación del token en el servidor permanece pendiente.
 
-Comprobado el 2026-10-02 con `comercio@delivery.com`: `/health`, POST login,
-`/auth/comercio/check` y `/auth/me` devuelven 200. El cliente real pasó login,
-persistencia con/sin Recordarme, restauración, GET autorizado y logout contra
-Gateway con almacenamiento simulado. Preflight desde 3003: 204.
+En la entrega inicial del 2026-10-02 se comprobó Login con 200. Después de la
+migración de Antigravity, la cuenta `comercio@delivery.com` con la contraseña de
+prueba anterior devuelve 401 (contraseña incorrecta). Se solicitó confirmar la
+credencial vigente; el recorrido autenticado completo queda pendiente de repetir.
 
-**Refresh permanece deshabilitado:** devuelve solo accessToken con rol `cliente`;
-la comprobación comercio con ese token devuelve 403. Antigravity debe conservar
-identidad/rol y acordar rotación antes de habilitarlo. Login ya funciona; al expirar
-la sesión se solicita ingresar nuevamente. Pedidos devuelve 404 y falta confirmar
-la asociación usuario/comercio antes de configurar `VITE_MERCHANT_ID`.
+El contrato actualizado incluye `user.comercioId` en Login/perfil y refresh con
+`{user,tokens,accessToken,refreshToken}`. El cliente conserva solo id, nombre, rol
+y comercioId del usuario; no persiste campos adicionales del backend. Al restaurar
+descarta el usuario de Web Storage y recupera el perfil desde la comprobación
+remota de permisos, evitando usar un comercio almacenado/manipulado como identidad.
+Las pruebas cubren recuperación del comercio y refresh con rol preservado.
+
+Refresh sigue optativo (`VITE_AUTH_REFRESH_ENABLED=false` por defecto) hasta poder
+repetir su validación real con credenciales vigentes. Ya no se atribuye al código
+actual del backend el antiguo problema de degradación de rol.
 
 ## Comportamiento
 

@@ -53,6 +53,19 @@ test('nested tokens never bypass permission checks or a failed response envelope
     assert.equal(window.sessionStorage.getItem(SESSION_KEY), null);
   }
 });
+test('merchant scope is recovered from the server on login, restore and rotated refresh', async () => {
+  const user = { id: 'usr-comercio-01', role: 'comercio', name: 'Baba', comercioId: '55555555-5555-5555-5555-555555555555' };
+  global.fetch = async url => response(url.endsWith('/comercio/check') ? { success: true, user } : { success: true, data: { user, tokens: session(1800) } });
+  const auth = client(); await signIn(auth, true);
+  assert.equal(auth.getSnapshot().session.user.comercioId, user.comercioId);
+  const saved = JSON.parse(window.localStorage.getItem(SESSION_KEY));
+  saved.user.comercioId = 'tampered'; window.localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+  const restored = client(); await restored.restore();
+  assert.equal(restored.getSnapshot().session.user.comercioId, user.comercioId);
+  await restored.refresh();
+  assert.equal(restored.getSnapshot().session.user.role, 'comercio');
+  assert.equal(restored.getSnapshot().session.user.comercioId, user.comercioId);
+});
 test('a valid-looking JWT without server permission never opens the panel', async () => {
   const auth = client();
   global.fetch = async url => url.endsWith('/login') ? response(session()) : new Response('internal detail', { status: 403 });

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import * as React from 'react';
+import { useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import { CATALOG, RESTAURANT, DEFAULT_ADDRESS, MAX_QUANTITY, cartLines, cartTotals, changeQuantity, checkoutError, prepareCheckout, money, type Cart, type Payment, type ProductId } from './src/orderModel';
 

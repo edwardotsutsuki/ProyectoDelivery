@@ -28,22 +28,21 @@ Los mocks se reinician al recargar; nunca se envían como mutaciones a la API.
 
 ## Modo API
 
-Actualización 2026-10-02: Login/sesión verificados contra Gateway real. GET
-`/api/v1/orders/comercio/merch-baba-01` devuelve 404 incluso con Bearer válido.
-El usuario recibido tiene ID `usr-comercio-01`, pero no identifica su comercio;
-no confundir ambos IDs. Falta habilitar el router y confirmar la asociación.
-La demo Baba permite probar las tarjetas; hay un enlace desde el panel cuando
-las demos están habilitadas. No se sustituyen errores API por pedidos ficticios.
+Actualización Fase 3: GET por UUID responde 200 y el DTO de PostgreSQL se procesa
+correctamente. El backend también puede entregar sus propios mocks de Baba.
+Se comprobó PATCH sobre `ORD-BABA-004` y lectura del estado confirmado, restaurando
+su estado original al terminar. No se modificaron pedidos reales para esta prueba.
 
-`/pedidos` requiere sesión y monta `<KanbanOrders source="api" />`.
-La demo monta el mismo componente con `source="mock"` (valor predeterminado).
-También se puede pasar `merchantId` y una implementación `api` para pruebas.
+`<KanbanOrders />` usa API por defecto y toma `session.user.comercioId`.
+`/pedidos` requiere sesión; la demo monta explícitamente `source="mock"`.
+Se pueden inyectar `merchantId` y `api` para pruebas aisladas. No se obtiene el
+comercio de variables de entorno ni del ID de usuario. Sin comercio se muestra error.
 
 Configurar en `.env.local` y reiniciar Vite:
 
 ```dotenv
 VITE_API_BASE_URL=http://localhost:8080/api/v1
-VITE_MERCHANT_ID=ID_AUTORIZADO_DEL_COMERCIO
+VITE_TRACKING_URL=ws://localhost:8080/ws/
 ```
 
 Base efectiva de pedidos: **http://localhost:8080/api/v1/orders**.
@@ -74,18 +73,27 @@ Mutaciones bloqueadas por tarjeta mientras se confirman. Las lecturas anteriores
 a una mutación se descartan para no revertir un estado recién confirmado.
 Se abortan peticiones/temporizadores al desmontar o cambiar de comercio.
 
-No se inventa un canal WS de comercio: el Tracking Service inspeccionado todavía
-no implementa suscripción a eventos de pedidos. Por eso el cliente usa polling.
+WebSocket envía `{type:"SUBSCRIBE_MERCHANT",comercioId:merchantId}` y espera
+`SUBSCRIBED_MERCHANT`. `ORDER_EVENT` con `order:created`/`order:status_updated`
+(o tipos ORDER_CREATED/ORDER_STATUS_CHANGED) invalida la lista únicamente si
+corresponde al comercio. Se vuelve a consultar REST; no se pintan payloads parciales.
+Eventos durante GET/PATCH quedan pendientes y se reconcilian después. Polling 5 s
+como respaldo, reconexión con espera creciente hasta 30 s y limpieza al cambiar
+comercio/desmontar. Al reconectar se actualiza la lista para recuperar eventos perdidos.
 La preferencia de audio persiste, pero requiere un gesto para reactivarse en una
 nueva carga; no hay alertas por reloj, carga inicial, filtros o cambios de estado.
 
 ## Estado del backend
 
-En el corte 2026-09-29 los pedidos respondían 502. El 2026-10-02, GET
-`/api/v1/orders/comercio/merch-baba-01` responde 404 con sesión válida.
-`index.ts` no monta todavía el router de pedidos bajo
-`/api/v1/orders`. La integración de cliente está implementada y probada con
-fixtures; la operación real queda pendiente de Antigravity (montaje, disponibilidad,
-autorización y transiciones válidas). No se modificó backend ni base de datos.
+El antiguo 404 está resuelto. La suscripción WS real recibe confirmación, pero el
+PATCH probado no produjo ORDER_EVENT para el comercio. En el código inspeccionado,
+`order:status_updated` no incluye `comercioId`; Tracking lo necesita para enrutar.
+Antigravity debe incluir el UUID del comercio en ese payload. El PATCH propio
+actualiza la tarjeta tras confirmación y el polling cubre cambios externos.
+
+La contraseña anterior del restaurante ahora devuelve 401; pendiente probar el
+flujo autenticado completo con la credencial vigente. La prueba real GET/PATCH/WS
+se hizo sobre endpoints actualmente accesibles sin Bearer; no acredita autorización
+por comercio. No se modificaron backend, DB, puertos ni configuraciones Docker.
 
 Verificación: `npm test` y `npm run build` (incluye TypeScript estricto).

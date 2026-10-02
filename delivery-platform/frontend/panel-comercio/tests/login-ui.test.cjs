@@ -160,3 +160,53 @@ test('a late poll response cannot undo a confirmed state change', async () => {
   await act(async () => releasePoll(createMockOrders()));
   assert.ok(within(screen.getByRole('region', { name: 'En Cocina / Preparación' })).getByRole('heading', { name: '#ORD-BABA-004' }));
 });
+test('default API Kanban uses the authenticated merchant, events reconcile once and sockets follow scope', async () => {
+  const merchant = '55555555-5555-5555-5555-555555555555';
+  const user = { id: 'restaurant-user', name: 'Baba', role: 'comercio', comercioId: merchant };
+  global.fetch = async url => new Response(JSON.stringify(url.endsWith('/login') ? { data: { user, tokens: { accessToken, refreshToken: 'opaque' } } } : { success: true, user }));
+  await authClient.signIn('comercio@delivery.com', 'test', false, new AbortController().signal);
+  let data = createMockOrders(); let calls = 0;
+  const api = { list: async id => { assert.equal(id, merchant); calls++; return data; }, advance: async () => 'PREPARING' };
+  const view = render(h(KanbanOrders, { api }));
+  await screen.findByRole('heading', { name: '#ORD-BABA-004' });
+  await act(async () => sockets[0].onopen());
+  assert.deepEqual(sockets[0].sent, [{ type: 'SUBSCRIBE_MERCHANT', comercioId: merchant }]);
+  const event = id => ({ data: JSON.stringify({ type: 'ORDER_EVENT', payload: { event: 'order:created', comercioId: id } }) });
+  await act(async () => sockets[0].onmessage(event('other'))); assert.equal(calls, 1);
+  data = [...data, createIncomingOrder(0)];
+  await act(async () => sockets[0].onmessage(event(merchant)));
+  await screen.findByRole('heading', { name: '#ORD-BABA-005' });
+  assert.equal(screen.getAllByRole('article').length, 5);
+  await act(async () => sockets[0].onmessage(event(merchant)));
+  assert.equal(screen.getAllByRole('article').length, 5);
+  view.rerender(h(KanbanOrders, { source: 'mock' }));
+  assert.equal(sockets[0].closed, true);
+  view.unmount();
+});
+test('event received during a pending list is reconciled after that list completes', async () => {
+  let calls = 0; let finish;
+  const api = { list: () => ++calls === 1 ? new Promise(resolve => { finish = resolve; }) : Promise.resolve([...createMockOrders(), createIncomingOrder(0)]), advance: async () => 'PREPARING' };
+  const view = render(h(KanbanOrders, { merchantId: 'merchant', api }));
+  await act(async () => sockets[0].onmessage({ data: JSON.stringify({ type: 'ORDER_EVENT', payload: { event: 'order:created', comercioId: 'merchant' } }) }));
+  assert.equal(calls, 1);
+  await act(async () => finish(createMockOrders()));
+  await screen.findByRole('heading', { name: '#ORD-BABA-005' });
+  assert.equal(calls, 2); view.unmount();
+});
+test('a merchant event waits for an in-flight PATCH and then reconciles the confirmed state', async () => {
+  let data = createMockOrders(); let calls = 0; let complete;
+  const api = { list: async () => { calls++; return data; }, advance: () => new Promise(resolve => { complete = () => {
+    data = [...data.map(order => order.id === 'ORD-BABA-004' ? { ...order, status: 'PREPARING' } : order), createIncomingOrder(0)];
+    resolve('PREPARING');
+  }; }) };
+  const view = render(h(KanbanOrders, { merchantId: 'merchant', api })); const user = userEvent.setup();
+  await screen.findByRole('heading', { name: '#ORD-BABA-004' });
+  await user.click(screen.getByRole('button', { name: 'Empezar preparación, pedido ORD-BABA-004' }));
+  await act(async () => sockets[0].onmessage({ data: JSON.stringify({ type: 'ORDER_EVENT', payload: { event: 'order:status_updated', comercioId: 'merchant' } }) }));
+  assert.equal(calls, 1);
+  await act(async () => complete());
+  await screen.findByRole('heading', { name: '#ORD-BABA-005' });
+  assert.equal(calls, 2);
+  assert.ok(within(screen.getByRole('region', { name: 'En Cocina / Preparación' })).getByRole('heading', { name: '#ORD-BABA-004' }));
+  view.unmount();
+});

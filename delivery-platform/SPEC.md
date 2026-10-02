@@ -106,6 +106,27 @@ Para evitar colisiones con puertos reservados del host y contenedores preexisten
 
 ## 5. Integración frontend — corte Codex 2026-09-29
 
+### Estado vigente — Fase 3 Kanban / catálogo móvil, 2026-10-02
+
+- Kanban API por defecto; alcance `session.user.comercioId` desde Login/perfil.
+  Se descarta el perfil almacenado al restaurar y se recupera del permiso remoto.
+  `VITE_MERCHANT_ID` retirado. Demo requiere `source="mock"` explícito.
+- GET pedidos por UUID: 200; PATCH `{nuevoEstado}` confirmado por lectura sobre
+  mock Baba. WebSocket envía `SUBSCRIBE_MERCHANT` con `comercioId` y recibe ack.
+  `ORDER_EVENT` del comercio dispara reconciliación REST; polling 5 s permanece.
+  Reconexión, limpieza y eventos durante solicitudes cubiertos con pruebas.
+- Contrato refresh corregido observado en código y probado con fixtures. Prueba
+  autenticada real pendiente: contraseña anterior de comercio devuelve 401.
+  Renovación automática conserva su configuración optativa/deshabilitada por defecto.
+- Pendiente backend: el emisor de cambios de estado omite `comercioId`; no se
+  recibió ORDER_EVENT de comercio tras PATCH. Añadirlo para que Tracking enrute.
+- Mobile Cliente: catálogo local de Baba, carrito en centavos, envío $1.50 y
+  checkout Efectivo/Transferencia con resumen local explícitamente de prueba.
+  No se declara integración con checkout, pagos o Redis. Ver su README.
+
+Los cortes siguientes son históricos; sus referencias a 404, falta de comercio
+y ausencia de suscripción no describen el cliente vigente.
+
 ### Actualización comprobada — 2026-10-02
 
 - Baba `(-1.7917, -79.6783)` y Babahoyo `(-1.8022, -79.5344)` confirmados por el
