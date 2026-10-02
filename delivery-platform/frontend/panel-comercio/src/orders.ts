@@ -1,5 +1,5 @@
 export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY_FOR_PICKUP';
-export const BABA_RESTAURANT = 'Picantería El Buen Sabor · Baba Centro';
+export const BABA_RESTAURANT = 'Picantería El Buen Sabor - Baba Centro';
 export interface Order {
   id: string; customer: string; restaurant: string; address: string;
   items: { name: string; quantity: number; unitPrice: number }[];

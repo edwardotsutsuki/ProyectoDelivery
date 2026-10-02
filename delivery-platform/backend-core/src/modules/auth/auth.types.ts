@@ -6,6 +6,7 @@ export interface UserPayload {
   role: UserRole;
   name: string;
   phone?: string;
+  comercioId?: string;
 }
 
 export interface AuthTokens {
@@ -25,3 +26,4 @@ declare global {
     }
   }
 }
+

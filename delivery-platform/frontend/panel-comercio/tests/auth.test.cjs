@@ -27,6 +27,31 @@ test('login posts credentials, checks server permission then persists according 
   assert.equal(window.localStorage.getItem(SESSION_KEY), null);
   assert.ok(window.sessionStorage.getItem(SESSION_KEY));
 });
+test('Gateway nested tokens authenticate, restore and clear without persisting credentials', async () => {
+  const auth = client(false);
+  global.fetch = async url => response(url.endsWith('/login')
+    ? { success: true, data: { user: { id: 'usr-comercio-01', name: 'Picantería El Buen Sabor - Baba Centro', role: 'comercio' }, tokens: session() } }
+    : { success: true });
+  await signIn(auth, true);
+  assert.equal(auth.getSnapshot().status, 'authenticated');
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(SESSION_KEY)), session());
+  const restored = client(false);
+  await restored.restore();
+  assert.equal(restored.getSnapshot().status, 'authenticated');
+  restored.signOut();
+  assert.equal(window.localStorage.getItem(SESSION_KEY), null);
+  assert.equal(restored.getSnapshot().status, 'anonymous');
+});
+test('nested tokens never bypass permission checks or a failed response envelope', async () => {
+  for (const success of [true, false]) {
+    global.fetch = async url => url.endsWith('/login')
+      ? response({ success, data: { tokens: session() } }) : new Response(null, { status: 403 });
+    const auth = client(false);
+    await assert.rejects(signIn(auth));
+    assert.notEqual(auth.getSnapshot().status, 'authenticated');
+    assert.equal(window.sessionStorage.getItem(SESSION_KEY), null);
+  }
+});
 test('a valid-looking JWT without server permission never opens the panel', async () => {
   const auth = client();
   global.fetch = async url => url.endsWith('/login') ? response(session()) : new Response('internal detail', { status: 403 });

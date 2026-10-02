@@ -58,7 +58,7 @@ test('server outage shows a focused error and allows retry', async () => {
 });
 test('successful login redirects only after server permission check, without saving password', async () => {
   const urls = [];
-  global.fetch = async url => { urls.push(url); return new Response(JSON.stringify(url.endsWith('/login') ? { accessToken, refreshToken: 'opaque' } : { success: true })); };
+  global.fetch = async url => { urls.push(url); return new Response(JSON.stringify(url.endsWith('/login') ? { success: true, data: { user: { role: 'comercio' }, tokens: { accessToken, refreshToken: 'opaque' } } } : { success: true })); };
   mount(); const user = userEvent.setup();
   await user.type(screen.getByLabelText('Correo electrónico'), 'chef@example.com');
   await user.type(screen.getByLabelText('Contraseña'), 'test password');

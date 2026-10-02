@@ -1,4 +1,4 @@
-# Login y sesión del comercio — entrega Codex 2026-09-29
+# Login y sesión del comercio — actualización Codex 2026-10-02
 
 Aplicación: `frontend/panel-comercio`. La ruta solicitada
 `frontend/comercio/src/pages/Login.tsx` reexporta la implementación.
@@ -24,10 +24,11 @@ Reiniciar Vite/reconstruir después de cambiar variables. Las demos públicas
 al componente). `/demo/pedidos` conserva exclusivamente los mocks de Baba.
 Ver `KANBAN.md` para rutas, polling y límites de integración del backend.
 
-## Contrato implementado por el cliente (pendiente de validar con Antigravity)
+## Contrato implementado y comprobación del Gateway
 
 1. `POST /auth/login`: JSON `{ email, password }`.
-2. Respuesta 200: `{ accessToken, refreshToken }`, o esos campos dentro de `data`.
+2. Respuesta real 200: `{ success: true, data: { user, tokens: { accessToken, refreshToken } } }`.
+   También se admiten tokens directos o dentro de `data` para compatibilidad.
    Access token JWT con `exp` futuro en segundos. Refresh token no vacío; puede
    ser opaco. No se exige decodificar un refresh token como JWT.
 3. Antes de persistir y abrir `/pedidos`, `GET /auth/comercio/check` con
@@ -40,10 +41,16 @@ Ver `KANBAN.md` para rutas, polling y límites de integración del backend.
 5. No existe logout remoto acordado: **Cerrar sesión borra solo la sesión local**.
    La revocación del token en el servidor permanece pendiente.
 
-Los paths están declarados en el ROADMAP recibido, pero aún no hay una respuesta
-real validada: en esta entrega salud/login del Gateway devolvieron HTTP 502;
-los archivos auth y el middleware inspeccionados estaban vacíos. La implementación
-del cliente no demuestra disponibilidad ni seguridad del servicio.
+Comprobado el 2026-10-02 con `comercio@delivery.com`: `/health`, POST login,
+`/auth/comercio/check` y `/auth/me` devuelven 200. El cliente real pasó login,
+persistencia con/sin Recordarme, restauración, GET autorizado y logout contra
+Gateway con almacenamiento simulado. Preflight desde 3003: 204.
+
+**Refresh permanece deshabilitado:** devuelve solo accessToken con rol `cliente`;
+la comprobación comercio con ese token devuelve 403. Antigravity debe conservar
+identidad/rol y acordar rotación antes de habilitarlo. Login ya funciona; al expirar
+la sesión se solicita ingresar nuevamente. Pedidos devuelve 404 y falta confirmar
+la asociación usuario/comercio antes de configurar `VITE_MERCHANT_ID`.
 
 ## Comportamiento
 

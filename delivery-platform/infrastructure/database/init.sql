@@ -158,23 +158,41 @@ CREATE INDEX IF NOT EXISTS idx_comercios_ubicacion ON comercios USING GIST (ubic
 CREATE INDEX IF NOT EXISTS idx_pedidos_ubicacion_entrega ON pedidos USING GIST (ubicacion_entrega);
 CREATE INDEX IF NOT EXISTS idx_ledger_usuario ON transacciones_ledger(usuario_id, fecha_creacion DESC);
 
--- DATOS SEMILLA BÁSICOS (Guayaquil Centro)
+-- DATOS SEMILLA OFICIALES: PILOTO BABA Y EXPANSIÓN BABAHOYO (LOS RÍOS, ECUADOR)
 INSERT INTO usuarios (id, nombre, email, password_hash, telefono, rol, ubicacion)
 VALUES 
-    ('11111111-1111-1111-1111-111111111111', 'Admin Central', 'admin@delivery.com', '$2b$10$abcdefghijklmnopqrstuvwxyz123456', '0990000001', 'admin', ST_SetSRID(ST_MakePoint(-79.8891, -2.1894), 4326)),
-    ('22222222-2222-2222-2222-222222222222', 'Comercio Pizza Express', 'pizza@delivery.com', '$2b$10$abcdefghijklmnopqrstuvwxyz123456', '0990000002', 'comercio', ST_SetSRID(ST_MakePoint(-79.8920, -2.1850), 4326)),
-    ('33333333-3333-3333-3333-333333333333', 'Repartidor Juan Pérez', 'repartidor@delivery.com', '$2b$10$abcdefghijklmnopqrstuvwxyz123456', '0990000003', 'repartidor', ST_SetSRID(ST_MakePoint(-79.8900, -2.1880), 4326)),
-    ('44444444-4444-4444-4444-444444444444', 'Cliente María Silva', 'cliente@delivery.com', '$2b$10$abcdefghijklmnopqrstuvwxyz123456', '0990000004', 'cliente', ST_SetSRID(ST_MakePoint(-79.8850, -2.1910), 4326))
-ON CONFLICT (email) DO NOTHING;
+    ('11111111-1111-1111-1111-111111111111', 'Admin Central (Los Ríos)', 'admin@delivery.com', '$2a$10$cpFBqwYIT0w0X.dOJlhqo.em2V9/qviZCsfU/4d9iLVa5rQSZL5eW', '+593991234567', 'admin', ST_SetSRID(ST_MakePoint(-79.6783, -1.7917), 4326)),
+    ('22222222-2222-2222-2222-222222222222', 'Picantería El Buen Sabor - Baba Centro', 'comercio@delivery.com', '$2a$10$Hb8XntryLvi7O5186XJWhenqaTaoZX4CqSoOmS8wDjkJ8zeifIItO', '+593987654321', 'comercio', ST_SetSRID(ST_MakePoint(-79.6783, -1.7917), 4326)),
+    ('33333333-3333-3333-3333-333333333333', 'Carlos Repartidor - Moto Baba 01', 'repartidor@delivery.com', '$2a$10$hvz3NEPBQWcCBCtM4a6ujOi4kuCHmW0BhPxemtb0CHocRp1ODe4FG', '+593990011223', 'repartidor', ST_SetSRID(ST_MakePoint(-79.6790, -1.7925), 4326)),
+    ('44444444-4444-4444-4444-444444444444', 'Edward Otsutsuki (Baba, Los Ríos)', 'edward.otsutsuki@gmail.com', '$2a$10$2x8c3wlaIcfZecBRGZCCV.yMKc3xu3PcBXh76LGtlzZAs2PM1UELS', '+593995544332', 'cliente', ST_SetSRID(ST_MakePoint(-79.6810, -1.7940), 4326))
+ON CONFLICT (email) DO UPDATE SET
+    nombre = EXCLUDED.nombre,
+    password_hash = EXCLUDED.password_hash,
+    telefono = EXCLUDED.telefono,
+    rol = EXCLUDED.rol,
+    ubicacion = EXCLUDED.ubicacion;
 
 INSERT INTO comercios (id, usuario_id, nombre_comercial, descripcion, direccion, ubicacion, is_abierto, telefono, categoria)
 VALUES 
-    ('55555555-5555-5555-5555-555555555555', '22222222-2222-2222-2222-222222222222', 'Pizzería Napolitana Gourmet', 'Las mejores pizzas artesanales a la leña', 'Av. 9 de Octubre y Malecón', ST_SetSRID(ST_MakePoint(-79.8920, -2.1850), 4326), TRUE, '042000001', 'Pizzería')
-ON CONFLICT DO NOTHING;
+    ('55555555-5555-5555-5555-555555555555', '22222222-2222-2222-2222-222222222222', 'Picantería El Buen Sabor - Baba Centro', 'Comida criolla típica, secos y asados en el corazón de Baba', 'Calle Bolívar y Sucre, Barrio San Antonio, Baba', ST_SetSRID(ST_MakePoint(-79.6783, -1.7917), 4326), TRUE, '+593987654321', 'Restaurante'),
+    ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111', 'Restaurante El Gran Chef Babahoyo', 'Gastronomía de mariscos y cortes finos en Babahoyo', 'Av. 9 de Octubre y Pedro Carbo, Babahoyo', ST_SetSRID(ST_MakePoint(-79.5344, -1.8022), 4326), TRUE, '+593998877665', 'Restaurante')
+ON CONFLICT (id) DO UPDATE SET
+    nombre_comercial = EXCLUDED.nombre_comercial,
+    descripcion = EXCLUDED.descripcion,
+    direccion = EXCLUDED.direccion,
+    ubicacion = EXCLUDED.ubicacion,
+    is_abierto = EXCLUDED.is_abierto,
+    telefono = EXCLUDED.telefono;
 
-INSERT INTO productos (comercio_id, nombre, descripcion, precio, is_disponible, categoria)
+INSERT INTO productos (id, comercio_id, nombre, descripcion, precio, is_disponible, categoria)
 VALUES 
-    ('55555555-5555-5555-5555-555555555555', 'Pizza Margherita Mediana', 'Salsa de tomate San Marzano, mozzarella fior di latte y albahaca fresca', 9.50, TRUE, 'Pizzas'),
-    ('55555555-5555-5555-5555-555555555555', 'Pizza Cuatro Quesos', 'Gorgonzola, parmesano, provolone y mozzarella', 12.00, TRUE, 'Pizzas'),
-    ('55555555-5555-5555-5555-555555555555', 'Gaseosa 500ml', 'Bebida refrescante bien fría', 1.50, TRUE, 'Bebidas')
-ON CONFLICT DO NOTHING;
+    ('66666666-6666-6666-6666-666666666601', '55555555-5555-5555-5555-555555555555', 'Seco de gallina criolla Baba', 'Preparado con chicha tradicional y hierbitas frescas, acompañado de arroz y maduro', 4.50, TRUE, 'Platos Fuertes'),
+    ('66666666-6666-6666-6666-666666666602', '55555555-5555-5555-5555-555555555555', 'Bolón mixto con queso y chicharrón', 'Plátano verde majado con queso manaba y chicharrón crocante', 3.75, TRUE, 'Desayunos y Tradicional'),
+    ('66666666-6666-6666-6666-666666666603', '55555555-5555-5555-5555-555555555555', 'Seco de pollo de campo', 'Guiso tierno con arroz amarillo, ensalada criolla y plátano maduro', 5.25, TRUE, 'Platos Fuertes'),
+    ('66666666-6666-6666-6666-666666666604', '55555555-5555-5555-5555-555555555555', 'Arroz con menestra y carne asada', 'Carne de res asada al carbón con menestra de lenteja casera', 6.50, TRUE, 'Platos Fuertes'),
+    ('66666666-6666-6666-6666-666666666605', '55555555-5555-5555-5555-555555555555', 'Jugo natural de maracuyá', 'Jugo natural refrescante de fruta fresca de Los Ríos', 1.50, TRUE, 'Bebidas'),
+    ('66666666-6666-6666-6666-666666666606', '55555555-5555-5555-5555-555555555555', 'Patacones con queso criollo', 'Porción de patacones crocantes con queso fresco de la zona', 2.00, TRUE, 'Acompañamientos')
+ON CONFLICT (id) DO UPDATE SET
+    nombre = EXCLUDED.nombre,
+    precio = EXCLUDED.precio,
+    descripcion = EXCLUDED.descripcion;

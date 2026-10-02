@@ -106,6 +106,22 @@ Para evitar colisiones con puertos reservados del host y contenedores preexisten
 
 ## 5. Integración frontend — corte Codex 2026-09-29
 
+### Actualización comprobada — 2026-10-02
+
+- Baba `(-1.7917, -79.6783)` y Babahoyo `(-1.8022, -79.5344)` confirmados por el
+  usuario como únicas ciudades para mocks/mapas/pruebas. Comercio tracking,
+  ejemplos y pruebas ya migrados; referencias mock de Landing/Mobile actualizadas.
+- Gateway `/health`, POST `/api/v1/auth/login`, GET `/api/v1/auth/comercio/check`
+  y `/api/v1/auth/me`: 200 con la cuenta de comercio proporcionada. Preflight 204.
+- Login real retorna `{success:true,data:{user,tokens:{accessToken,refreshToken}}}`;
+  el cliente ya lo consume y pasó persistencia/restauración contra Gateway.
+- Refresh actual retorna solo `data.accessToken` y asigna rol cliente; ese token
+  recibe 403 en permiso comercio. Sigue deshabilitado hasta corregir el backend.
+- Pedidos por comercio: 404 con Bearer válido; falta router operativo y asociación
+  usuario/comercio. Login no devuelve merchantId y no se deriva del ID del usuario.
+- Los 502 y archivos vacíos mencionados abajo son observaciones históricas del
+  2026-09-29, superadas para Login. No acreditan el estado actual del servicio.
+
 Esta sección registra lo implementado por el cliente y lo que falta confirmar;
 no convierte propuestas en endpoints operativos. No modifica los puertos ni las
 decisiones geográficas anteriores. El comercio desplegado es `frontend/panel-comercio`;

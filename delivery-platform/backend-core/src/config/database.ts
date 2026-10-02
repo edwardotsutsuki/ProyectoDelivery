@@ -15,3 +15,4 @@ export const pool = pgPool;
 pgPool.on('error', (err) => {
   console.error('Error inesperado en cliente de PostgreSQL:', err);
 });
+

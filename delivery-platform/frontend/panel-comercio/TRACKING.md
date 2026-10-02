@@ -4,21 +4,21 @@ Actualización Codex: la fuente del mapa y helpers vive ahora en
 `frontend/shared-tracking`, paquete local `@delivery/tracking-web` usado también
 por Backoffice. El archivo de Comercio es un wrapper que aplica `src/config.ts`.
 Backoffice dispone de seguimiento en `http://localhost:3004/#tracking` con
-escenarios Baba/Babahoyo del SPEC. La demo histórica de Comercio sigue usando
-los puntos originales de Guayaquil. Las demos públicas de Comercio solo se
+escenarios Baba/Babahoyo del SPEC. La demo de Comercio usa el restaurante de
+Baba y la entrega en Barrio San Antonio. Las demos públicas de Comercio solo se
 registran cuando `VITE_ENABLE_DEMOS` está habilitado (desarrollo por defecto).
 
-Demo: `http://localhost:3003/demo/tracking`. Puntos de ejemplo en Guayaquil y
-pedido `GYE-1042`. La demo no inventa posiciones del repartidor ni un ETA si
+Demo: `http://localhost:3003/demo/tracking`. Puntos de ejemplo en Baba y
+pedido `ORD-BABA-001`. La demo no inventa posiciones del repartidor ni un ETA si
 OSRM falla. El selector permite comparar conexión directa y Gateway.
 
 ```tsx
 import CourierTrackingMap from './components/CourierTrackingMap';
 
 <CourierTrackingMap
-  orderId="GYE-1042"
-  restaurant={{ lat: -2.1933, lng: -79.8805, name: 'Restaurante' }}
-  destination={{ lat: -2.1890, lng: -79.8895, name: 'Cliente' }}
+  orderId="ORD-BABA-001"
+  restaurant={{ lat: -1.7925, lng: -79.6790, name: 'Restaurante' }}
+  destination={{ lat: -1.7940, lng: -79.6810, name: 'Cliente' }}
   trackingUrl="ws://localhost:8080/ws/"
   osrmUrl="http://localhost:5001"
 />
@@ -31,18 +31,18 @@ Leaflet y sus estilos se instalan localmente; no se necesita token Mapbox.
 ## WebSocket
 
 El servicio existente usa `ws`, no Socket.IO. En cada conexión y reconexión se
-envía `{ "type": "SUBSCRIBE_ORDER", "pedidoId": "GYE-1042" }`.
+envía `{ "type": "SUBSCRIBE_ORDER", "pedidoId": "ORD-BABA-001" }`.
 URLs admitidas: `ws://localhost:4001`, `ws://localhost:8080/ws/` y equivalentes
 HTTP/HTTPS (convertidos a WS/WSS). No usar el puerto 8080 sin `/ws/`.
 
 Se aceptan estos mensajes JSON:
 
 ```json
-{"event":"courier:location_update","payload":{"order_id":"GYE-1042","lat":-2.193,"lng":-79.881,"speed":5,"heading":270}}
+{"event":"courier:location_update","payload":{"order_id":"ORD-BABA-001","lat":-1.7920,"lng":-79.6785,"speed":5,"heading":270}}
 ```
 
 ```json
-{"type":"DRIVER_LOCATION","payload":{"pedidoId":"GYE-1042","repartidorId":"courier-1","lat":-2.193,"lon":-79.881,"speed":5,"heading":270,"timestamp":"2026-09-29T15:00:00Z"}}
+{"type":"DRIVER_LOCATION","payload":{"pedidoId":"ORD-BABA-001","repartidorId":"courier-1","lat":-1.7920,"lon":-79.6785,"speed":5,"heading":270,"timestamp":"2026-09-29T15:00:00Z"}}
 ```
 
 El primer formato también admite `type` en lugar de `event`, y `data` en lugar

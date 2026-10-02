@@ -71,13 +71,17 @@ export class AuthController {
         return;
       }
 
-      const userPayload = {
+      const userPayload: any = {
         id: user.id,
         email: user.email,
         role: user.role,
         name: user.name,
         phone: user.phone,
       };
+
+      if (user.role === 'comercio') {
+        userPayload.comercioId = user.comercioId || '55555555-5555-5555-5555-555555555555';
+      }
 
       const tokens = AuthService.generateTokens(userPayload);
 
@@ -110,17 +114,27 @@ export class AuthController {
       }
 
       const decoded = AuthService.verifyRefreshToken(refreshToken);
-      const newTokens = AuthService.generateTokens({
-        id: decoded.id,
-        email: '',
-        name: '',
-        role: 'cliente',
-      });
+      const user = await AuthService.findUserById(decoded.id);
+
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          message: 'Usuario no encontrado para este token de renovación',
+        });
+        return;
+      }
+
+      const newTokens = AuthService.generateTokens(user);
 
       res.status(200).json({
         success: true,
         message: 'Token refrescado correctamente',
-        data: { accessToken: newTokens.accessToken },
+        data: {
+          user,
+          tokens: newTokens,
+          accessToken: newTokens.accessToken,
+          refreshToken: newTokens.refreshToken,
+        },
       });
     } catch (error) {
       res.status(401).json({
@@ -138,3 +152,4 @@ export class AuthController {
     });
   }
 }
+

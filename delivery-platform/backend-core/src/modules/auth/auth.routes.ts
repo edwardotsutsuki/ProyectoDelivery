@@ -22,3 +22,4 @@ router.get('/comercio/check', requireAuth, requireRole(['comercio', 'admin']), (
 });
 
 export default router;
+

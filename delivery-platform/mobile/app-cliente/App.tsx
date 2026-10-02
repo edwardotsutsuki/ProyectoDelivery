@@ -15,7 +15,7 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.brandTitle}>Delivery<Text style={{ color: '#e11d48' }}>Ya</Text></Text>
-        <Text style={styles.headerSubtitle}>📍 Guayaquil Centro</Text>
+        <Text style={styles.headerSubtitle}>📍 Baba Centro · Los Ríos</Text>
       </View>
 
       <View style={styles.tabBar}>
@@ -35,7 +35,7 @@ export default function App() {
           <View>
             <Text style={styles.sectionTitle}>Comercios Abiertos Cerca de Ti</Text>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Pizzería Napolitana Gourmet</Text>
+              <Text style={styles.cardTitle}>Pizzería de prueba · Baba Centro</Text>
               <Text style={styles.cardSubtitle}>Pizzas Artesanales • 25-35 min • ⭐ 4.9</Text>
               <View style={styles.productRow}>
                 <View>

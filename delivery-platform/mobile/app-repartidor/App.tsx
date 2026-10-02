@@ -17,8 +17,8 @@ export default function App() {
     }
   };
 
-  const destinoLat = -2.1894;
-  const destinoLon = -79.8891;
+  const destinoLat = -1.7940;
+  const destinoLon = -79.6810;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -55,17 +55,17 @@ export default function App() {
           <View>
             <View style={styles.orderCard}>
               <View style={styles.orderHeader}>
-                <Text style={styles.orderBadge}>PEDIDO EN CURSO #PED-101</Text>
+                <Text style={styles.orderBadge}>PEDIDO EN CURSO #ORD-BABA-001</Text>
                 <Text style={styles.timeTag}>12 min restantes</Text>
               </View>
 
               <Text style={styles.sectionHeader}>1. Recogida en Restaurante</Text>
-              <Text style={styles.placeName}>Pizzería Napolitana Gourmet</Text>
-              <Text style={styles.placeAddress}>Av. 9 de Octubre y Boyacá</Text>
+              <Text style={styles.placeName}>Picantería El Buen Sabor - Baba Centro</Text>
+              <Text style={styles.placeAddress}>Centro de Baba, Los Ríos</Text>
 
               <Text style={[styles.sectionHeader, { marginTop: 14 }]}>2. Destino del Cliente</Text>
               <Text style={styles.placeName}>Carlos Andrade</Text>
-              <Text style={styles.placeAddress}>Malecón 2000, Torre B, Apto 402</Text>
+              <Text style={styles.placeAddress}>Barrio San Antonio, Calle Bolívar y Sucre, Baba</Text>
 
               <View style={styles.paymentAlert}>
                 <Text style={styles.paymentAlertText}>💵 COBRAR EN EFECTIVO AL CLIENTE: $22.00</Text>

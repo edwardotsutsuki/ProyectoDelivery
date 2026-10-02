@@ -10,7 +10,7 @@ Abrir http://localhost:3003/demo/pedidos. Las demos están habilitadas por defec
 en desarrollo; `VITE_ENABLE_DEMOS=true` permite habilitarlas explícitamente.
 No se necesita login ni API para la demo.
 
-Restaurante: **Picantería El Buen Sabor · Baba Centro**. IDs `ORD-BABA-*`, con
+Restaurante: **Picantería El Buen Sabor - Baba Centro**. IDs `ORD-BABA-*`, con
 entregas en Barrio San Antonio, Calle Bolívar y Sucre, Parque Central de Baba,
 Calle Sucre y Rocafuerte y Av. Guayaquil **en Baba** (no la ciudad Guayaquil).
 Platos de prueba: seco de gallina, bolón mixto, menestra y jugos. Babahoyo se
@@ -27,6 +27,13 @@ tiempo desde creación. Prioridad por antigüedad y foco accesible al moverlas.
 Los mocks se reinician al recargar; nunca se envían como mutaciones a la API.
 
 ## Modo API
+
+Actualización 2026-10-02: Login/sesión verificados contra Gateway real. GET
+`/api/v1/orders/comercio/merch-baba-01` devuelve 404 incluso con Bearer válido.
+El usuario recibido tiene ID `usr-comercio-01`, pero no identifica su comercio;
+no confundir ambos IDs. Falta habilitar el router y confirmar la asociación.
+La demo Baba permite probar las tarjetas; hay un enlace desde el panel cuando
+las demos están habilitadas. No se sustituyen errores API por pedidos ficticios.
 
 `/pedidos` requiere sesión y monta `<KanbanOrders source="api" />`.
 La demo monta el mismo componente con `source="mock"` (valor predeterminado).
@@ -74,8 +81,9 @@ nueva carga; no hay alertas por reloj, carga inicial, filtros o cambios de estad
 
 ## Estado del backend
 
-En esta entrega GET `/api/v1/orders` y `/api/v1/orders/comercio/merch-baba-01`
-respondieron HTTP 502. `index.ts` no monta todavía el router de pedidos bajo
+En el corte 2026-09-29 los pedidos respondían 502. El 2026-10-02, GET
+`/api/v1/orders/comercio/merch-baba-01` responde 404 con sesión válida.
+`index.ts` no monta todavía el router de pedidos bajo
 `/api/v1/orders`. La integración de cliente está implementada y probada con
 fixtures; la operación real queda pendiente de Antigravity (montaje, disponibilidad,
 autorización y transiciones válidas). No se modificó backend ni base de datos.

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MapPin, Search, Store, Bike, ShieldCheck, Clock, ArrowRight } from 'lucide-react';
 
 export default function App() {
-  const [ciudad, setCiudad] = useState('Guayaquil');
+  const [ciudad, setCiudad] = useState('Baba');
   const [direccion, setDireccion] = useState('');
 
   return (
@@ -43,10 +43,8 @@ export default function App() {
                 onChange={(e) => setCiudad(e.target.value)}
                 style={{ border: 'none', background: 'transparent', outline: 'none', fontWeight: '700', color: '#1e293b', width: '100%', cursor: 'pointer' }}
               >
-                <option value="Guayaquil">Guayaquil</option>
-                <option value="Quito">Quito</option>
-                <option value="Cuenca">Cuenca</option>
-                <option value="Manta">Manta</option>
+                <option value="Baba">Baba · Piloto principal</option>
+                <option value="Babahoyo">Babahoyo · Expansión</option>
               </select>
             </div>
 

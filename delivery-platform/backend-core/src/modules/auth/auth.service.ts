@@ -13,6 +13,7 @@ interface MockUser {
   passwordHash: string;
   role: UserRole;
   phone?: string;
+  comercioId?: string;
 }
 
 // Usuarios de prueba predeterminados para desarrollo - Zona Baba & Babahoyo (Los Ríos, Ecuador)
@@ -32,6 +33,7 @@ const mockUsers: MockUser[] = [
     passwordHash: bcrypt.hashSync('comercio123', 10),
     role: 'comercio' as UserRole,
     phone: '+593987654321',
+    comercioId: '55555555-5555-5555-5555-555555555555',
   },
   {
     id: 'usr-repartidor-01',
@@ -54,22 +56,28 @@ const mockUsers: MockUser[] = [
 export class AuthService {
   static generateTokens(payload: UserPayload): AuthTokens {
     const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: payload.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ id: payload.id, role: payload.role }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
     return { accessToken, refreshToken };
   }
 
   static async findUserByEmail(email: string) {
     try {
-      const res = await pool.query('SELECT * FROM users WHERE email = $1 LIMIT 1', [email]);
+      const res = await pool.query(`
+        SELECT u.id, u.nombre, u.email, u.password_hash, u.rol, u.telefono, c.id as comercio_id
+        FROM usuarios u
+        LEFT JOIN comercios c ON c.usuario_id = u.id
+        WHERE LOWER(u.email) = LOWER($1) LIMIT 1
+      `, [email]);
       if (res.rows && res.rows.length > 0) {
         const u = res.rows[0];
         return {
           id: u.id,
-          name: u.name,
+          name: u.nombre,
           email: u.email,
-          passwordHash: u.password_hash || u.password,
-          role: u.role as UserRole,
-          phone: u.phone,
+          passwordHash: u.password_hash,
+          role: u.rol as UserRole,
+          phone: u.telefono,
+          comercioId: u.comercio_id,
         };
       }
     } catch (err) {
@@ -77,6 +85,43 @@ export class AuthService {
     }
 
     return mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  static async findUserById(id: string): Promise<UserPayload | null> {
+    try {
+      const res = await pool.query(`
+        SELECT u.id, u.nombre, u.email, u.rol, u.telefono, c.id as comercio_id
+        FROM usuarios u
+        LEFT JOIN comercios c ON c.usuario_id = u.id
+        WHERE u.id::text = $1 LIMIT 1
+      `, [id]);
+      if (res.rows && res.rows.length > 0) {
+        const u = res.rows[0];
+        return {
+          id: u.id,
+          name: u.nombre,
+          email: u.email,
+          role: u.rol as UserRole,
+          phone: u.telefono,
+          comercioId: u.comercio_id,
+        };
+      }
+    } catch (err) {
+      // Fallback a mock
+    }
+
+    const mock = mockUsers.find((u) => u.id === id);
+    if (mock) {
+      return {
+        id: mock.id,
+        name: mock.name,
+        email: mock.email,
+        role: mock.role,
+        phone: mock.phone,
+        comercioId: mock.comercioId,
+      };
+    }
+    return null;
   }
 
   static async registerUser(data: { name: string; email: string; password: string; role: UserRole; phone?: string }) {
@@ -90,9 +135,9 @@ export class AuthService {
 
     try {
       const insertQuery = `
-        INSERT INTO users (id, name, email, password_hash, role, phone, created_at)
+        INSERT INTO usuarios (id, nombre, email, password_hash, rol, telefono, fecha_creacion)
         VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        RETURNING id, name, email, role, phone
+        RETURNING id, nombre as name, email, rol as role, telefono as phone
       `;
       const res = await pool.query(insertQuery, [newId, data.name, data.email, passwordHash, data.role, data.phone || null]);
       if (res.rows && res.rows.length > 0) {
@@ -121,7 +166,8 @@ export class AuthService {
     };
   }
 
-  static verifyRefreshToken(refreshToken: string): { id: string } {
-    return jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { id: string };
+  static verifyRefreshToken(refreshToken: string): { id: string; role?: UserRole } {
+    return jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { id: string; role?: UserRole };
   }
 }
+

@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './modules/auth/auth.routes';
+import { orderRouter } from './modules/orders/order.controller';
 import { pool } from './config/database';
 import { redisClient } from './config/redis';
 
@@ -57,6 +58,8 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 
 // Rutas de la API
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/orders', orderRouter);
+app.use('/api/orders', orderRouter);
 
 // Manejador de 404
 app.use((req: Request, res: Response) => {

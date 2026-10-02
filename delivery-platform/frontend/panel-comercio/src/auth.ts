@@ -14,7 +14,8 @@ export function tokenExpiresAt(token: string): number {
 async function decodeSession(response: Response): Promise<Session> {
   try {
     const body = await response.json();
-    const data = body?.data ?? body;
+    if (body?.success === false) throw new Error();
+    const data = body?.data?.tokens ?? body?.data ?? body;
     if (typeof data?.accessToken !== 'string' || typeof data?.refreshToken !== 'string'
       || !data.refreshToken.trim() || tokenExpiresAt(data.accessToken) <= Date.now()) throw new Error();
     return { accessToken: data.accessToken, refreshToken: data.refreshToken };
