@@ -187,3 +187,202 @@ trackingRouter.get('/pedido/:pedidoId/eta', async (req: Request, res: Response) 
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
+
+// 4. Listar todas las zonas de cobertura y polígonos GeoJSON (Baba y Babahoyo)
+trackingRouter.get('/zonas', async (_req: Request, res: Response) => {
+  try {
+    const result = await pgPool.query(`
+      SELECT 
+        id, nombre, codigo, canton,
+        tarifa_base, costo_km_adicional, tiempo_estimado_min, activa,
+        ST_AsGeoJSON(poligono) as geojson
+      FROM zonas_cobertura
+      ORDER BY canton ASC, nombre ASC;
+    `);
+
+    const zonas = result.rows.map((row: any) => ({
+      id: row.id,
+      nombre: row.nombre,
+      codigo: row.codigo,
+      canton: row.canton,
+      tarifaBase: parseFloat(row.tarifa_base),
+      costoKmAdicional: parseFloat(row.costo_km_adicional),
+      tiempoEstimadoMin: row.tiempo_estimado_min,
+      activa: row.activa,
+      geometria: JSON.parse(row.geojson),
+    }));
+
+    res.json({
+      success: true,
+      total: zonas.length,
+      data: zonas,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 5. Alternar activación de una zona de cobertura (Admin Backoffice)
+trackingRouter.patch('/zonas/:id/toggle', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await pgPool.query(`
+      UPDATE zonas_cobertura
+      SET activa = NOT activa, fecha_actualizacion = CURRENT_TIMESTAMP
+      WHERE id::text = $1 OR codigo = $1
+      RETURNING id, nombre, codigo, canton, activa;
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Zona no encontrada' });
+    }
+
+    res.json({
+      success: true,
+      message: `Zona ${result.rows[0].nombre} ${result.rows[0].activa ? 'activada' : 'desactivada'} exitosamente`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 6. Cálculo de tarifa dinámica por geolocalización y polígonos PostGIS
+trackingRouter.post('/calcular-tarifa', async (req: Request, res: Response) => {
+  try {
+    const { originLat, originLon, destLat, destLon, isNight, isRain } = req.body;
+
+    if (
+      originLat === undefined || originLon === undefined ||
+      destLat === undefined || destLon === undefined ||
+      isNaN(parseFloat(originLat)) || isNaN(parseFloat(originLon)) ||
+      isNaN(parseFloat(destLat)) || isNaN(parseFloat(destLon))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'originLat, originLon, destLat y destLon son obligatorios y numéricos',
+      });
+    }
+
+    const oLat = parseFloat(originLat);
+    const oLon = parseFloat(originLon);
+    const dLat = parseFloat(destLat);
+    const dLon = parseFloat(destLon);
+
+    // 1. Verificar cobertura del destino en zonas activas
+    const zoneQuery = `
+      SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, tiempo_estimado_min
+      FROM zonas_cobertura
+      WHERE activa = TRUE 
+        AND ST_Contains(poligono, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+      ORDER BY tarifa_base ASC
+      LIMIT 1;
+    `;
+    const destZoneRes = await pgPool.query(zoneQuery, [dLon, dLat]);
+    const originZoneRes = await pgPool.query(zoneQuery, [oLon, oLat]);
+
+    if (destZoneRes.rows.length === 0) {
+      return res.status(422).json({
+        success: false,
+        coberturaValida: false,
+        message: 'La dirección de entrega se encuentra fuera de nuestra zona de cobertura en Baba y Babahoyo.',
+      });
+    }
+
+    // Si origen y destino están en diferentes cantones, aplicar tarifa de corredor intercantonal
+    let selectedZone = destZoneRes.rows[0];
+    const isIntercantonal = originZoneRes.rows.length > 0 &&
+      originZoneRes.rows[0].canton !== destZoneRes.rows[0].canton &&
+      originZoneRes.rows[0].canton !== 'Intercantonal' &&
+      destZoneRes.rows[0].canton !== 'Intercantonal';
+
+    if (isIntercantonal) {
+      const intercantonalRes = await pgPool.query(`
+        SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, tiempo_estimado_min
+        FROM zonas_cobertura
+        WHERE codigo = 'corredor_e484' AND activa = TRUE
+        LIMIT 1;
+      `);
+      if (intercantonalRes.rows.length > 0) {
+        selectedZone = intercantonalRes.rows[0];
+      }
+    }
+
+    // 2. Calcular distancia y duración (vía OSRM con fallback geodésico)
+    let distanceMeters = 0;
+    let durationSeconds = 0;
+    let source = 'geodesic-fallback';
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1200);
+      const osrmEndpoint = `${OSRM_URL}/route/v1/driving/${oLon},${oLat};${dLon},${dLat}?overview=false`;
+      const response = await fetch(osrmEndpoint, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        const osrmData = (await response.json()) as any;
+        if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+          distanceMeters = Math.round(osrmData.routes[0].distance);
+          durationSeconds = Math.round(osrmData.routes[0].duration);
+          source = 'osrm-engine';
+        }
+      }
+    } catch {
+      // Ignorar, fallback geodésico continuará
+    }
+
+    if (distanceMeters === 0) {
+      const straightMeters = haversineDistanceMeters(oLat, oLon, dLat, dLon);
+      distanceMeters = Math.round(straightMeters * 1.28);
+      durationSeconds = Math.max(60, Math.round(distanceMeters / 6.94));
+    }
+
+    const distanceKm = +(distanceMeters / 1000).toFixed(2);
+    const etaMinutes = Math.max(1, Math.round(durationSeconds / 60));
+
+    // 3. Tarificación dinámica
+    const tarifaBase = parseFloat(selectedZone.tarifa_base);
+    const costoKmAdic = parseFloat(selectedZone.costo_km_adicional);
+    const distanciaBaseKm = 2.0; // Los primeros 2 km incluidos en tarifa base
+    const kmExtra = Math.max(0, +(distanceKm - distanciaBaseKm).toFixed(2));
+    const subtotalDistancia = +(kmExtra * costoKmAdic).toFixed(2);
+
+    // Recargos
+    const horaActualEcuador = (new Date().getUTCHours() - 5 + 24) % 24; // UTC-5 hora continental Ecuador
+    const esNocturno = isNight === true || horaActualEcuador >= 20 || horaActualEcuador < 6;
+    const recargoNocturno = esNocturno ? 0.50 : 0.00;
+    const recargoClima = isRain === true ? 0.75 : 0.00;
+
+    const tarifaFinal = +(tarifaBase + subtotalDistancia + recargoNocturno + recargoClima).toFixed(2);
+
+    res.json({
+      success: true,
+      coberturaValida: true,
+      source,
+      zona: {
+        id: selectedZone.id,
+        nombre: selectedZone.nombre,
+        codigo: selectedZone.codigo,
+        canton: selectedZone.canton,
+      },
+      distanciaMetros: distanceMeters,
+      distanciaKm: distanceKm,
+      duracionSegundos: durationSeconds,
+      etaMinutos: etaMinutes,
+      desgloseTarifa: {
+        tarifaBase,
+        distanciaBaseKm,
+        kmExtra,
+        costoKmAdicional: costoKmAdic,
+        subtotalDistancia,
+        recargoNocturno,
+        recargoClima,
+        tarifaFinal,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+

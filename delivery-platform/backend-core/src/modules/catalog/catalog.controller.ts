@@ -229,3 +229,285 @@ catalogRouter.patch('/producto/:productoId/toggle-disponibilidad', async (req: R
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
+
+// 5. Crear nuevo local comercial en PostgreSQL + PostGIS (Baba o Babahoyo)
+catalogRouter.post('/comercios', async (req: Request, res: Response) => {
+  try {
+    const {
+      usuarioId = '22222222-2222-2222-2222-222222222222',
+      nombreComercial,
+      descripcion = '',
+      direccion,
+      lat = -1.7917, // Baba Centro por defecto
+      lon = -79.6783,
+      categoria = 'Restaurante',
+      telefono = '+593900000000',
+      tiempoEntregaPromedio = 30,
+      costoBaseEnvio = 1.50,
+      isAbierto = true,
+    } = req.body;
+
+    if (!nombreComercial || !direccion) {
+      return res.status(400).json({
+        success: false,
+        message: 'nombreComercial y direccion son campos obligatorios.',
+      });
+    }
+
+    const insertQuery = `
+      INSERT INTO comercios (
+        usuario_id, nombre_comercial, descripcion, direccion,
+        ubicacion, is_abierto, telefono, categoria,
+        tiempo_entrega_promedio, costo_base_envio
+      ) VALUES (
+        $1, $2, $3, $4,
+        ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, $8, $9, $10, $11
+      )
+      RETURNING id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
+                costo_base_envio, tiempo_entrega_promedio, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+    `;
+
+    const result = await pgPool.query(insertQuery, [
+      usuarioId,
+      nombreComercial,
+      descripcion,
+      direccion,
+      Number(lon),
+      Number(lat),
+      Boolean(isAbierto),
+      telefono,
+      categoria,
+      Number(tiempoEntregaPromedio),
+      Number(costoBaseEnvio),
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Comercio registrado exitosamente con punto espacial PostGIS',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 6. Actualizar datos de un local comercial existente
+catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const {
+      nombreComercial,
+      descripcion,
+      direccion,
+      lat,
+      lon,
+      categoria,
+      telefono,
+      tiempoEntregaPromedio,
+      costoBaseEnvio,
+      isAbierto,
+    } = req.body;
+
+    const query = `
+      UPDATE comercios
+      SET
+        nombre_comercial = COALESCE($1, nombre_comercial),
+        descripcion = COALESCE($2, descripcion),
+        direccion = COALESCE($3, direccion),
+        ubicacion = CASE WHEN $4::numeric IS NOT NULL AND $5::numeric IS NOT NULL 
+                         THEN ST_SetSRID(ST_MakePoint($5, $4), 4326) 
+                         ELSE ubicacion END,
+        categoria = COALESCE($6, categoria),
+        telefono = COALESCE($7, telefono),
+        tiempo_entrega_promedio = COALESCE($8, tiempo_entrega_promedio),
+        costo_base_envio = COALESCE($9, costo_base_envio),
+        is_abierto = COALESCE($10, is_abierto),
+        fecha_actualizacion = NOW()
+      WHERE id::text = $11 OR id::text = $12
+      RETURNING id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
+                costo_base_envio, tiempo_entrega_promedio, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+    `;
+
+    const result = await pgPool.query(query, [
+      nombreComercial,
+      descripcion,
+      direccion,
+      lat !== undefined ? Number(lat) : null,
+      lon !== undefined ? Number(lon) : null,
+      categoria,
+      telefono,
+      tiempoEntregaPromedio !== undefined ? Number(tiempoEntregaPromedio) : null,
+      costoBaseEnvio !== undefined ? Number(costoBaseEnvio) : null,
+      isAbierto !== undefined ? Boolean(isAbierto) : null,
+      rawId,
+      targetId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Comercio no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Comercio actualizado exitosamente',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 7. Interruptor rápido de apertura de local
+catalogRouter.patch('/comercio/:comercioId/estado', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const { isAbierto, is_abierto } = req.body;
+    const finalState = isAbierto !== undefined ? isAbierto : is_abierto;
+
+    if (finalState === undefined) {
+      return res.status(400).json({ success: false, message: 'Debe especificar isAbierto (booleano)' });
+    }
+
+    const query = `
+      UPDATE comercios
+      SET is_abierto = $1, fecha_actualizacion = NOW()
+      WHERE id::text = $2 OR id::text = $3
+      RETURNING id, nombre_comercial, is_abierto;
+    `;
+    const result = await pgPool.query(query, [Boolean(finalState), rawId, targetId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Comercio no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: `Comercio ahora está ${finalState ? 'ABIERTO' : 'CERRADO'}`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 8. Crear un nuevo plato/producto para un comercio
+catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const {
+      nombre,
+      descripcion = '',
+      precio,
+      categoria = 'Platos Fuertes',
+      imagenUrl = null,
+      isDisponible = true,
+    } = req.body;
+
+    if (!nombre || precio === undefined) {
+      return res.status(400).json({ success: false, message: 'nombre y precio son campos requeridos.' });
+    }
+
+    const query = `
+      INSERT INTO productos (
+        comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible;
+    `;
+
+    const result = await pgPool.query(query, [
+      targetId,
+      nombre,
+      descripcion,
+      Number(precio),
+      categoria,
+      imagenUrl,
+      Boolean(isDisponible),
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Producto creado exitosamente en el catálogo',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 9. Editar un producto existente
+catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) => {
+  try {
+    const { productoId } = req.params;
+    const {
+      nombre,
+      descripcion,
+      precio,
+      categoria,
+      imagenUrl,
+      isDisponible,
+    } = req.body;
+
+    const query = `
+      UPDATE productos
+      SET
+        nombre = COALESCE($1, nombre),
+        descripcion = COALESCE($2, descripcion),
+        precio = COALESCE($3, precio),
+        categoria = COALESCE($4, categoria),
+        imagen_url = COALESCE($5, imagen_url),
+        is_disponible = COALESCE($6, is_disponible),
+        fecha_actualizacion = NOW()
+      WHERE id::text = $7
+      RETURNING id, comercio_id, nombre, descripcion, precio, categoria, imagen_url, is_disponible;
+    `;
+
+    const result = await pgPool.query(query, [
+      nombre,
+      descripcion,
+      precio !== undefined ? Number(precio) : null,
+      categoria,
+      imagenUrl,
+      isDisponible !== undefined ? Boolean(isDisponible) : null,
+      productoId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Producto actualizado exitosamente',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 10. Eliminar un producto
+catalogRouter.delete('/producto/:productoId', async (req: Request, res: Response) => {
+  try {
+    const { productoId } = req.params;
+    const query = 'DELETE FROM productos WHERE id::text = $1 RETURNING id, nombre';
+    const result = await pgPool.query(query, [productoId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+    }
+
+    await redisClient.del(`catalog:disponibilidad:${productoId}`);
+
+    res.json({
+      success: true,
+      message: `Producto "${result.rows[0].nombre}" eliminado correctamente`,
+      id: productoId,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
