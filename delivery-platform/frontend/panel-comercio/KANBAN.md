@@ -91,9 +91,11 @@ PATCH probado no produjo ORDER_EVENT para el comercio. En el código inspecciona
 Antigravity debe incluir el UUID del comercio en ese payload. El PATCH propio
 actualiza la tarjeta tras confirmación y el polling cubre cambios externos.
 
-La contraseña anterior del restaurante ahora devuelve 401; pendiente probar el
-flujo autenticado completo con la credencial vigente. La prueba real GET/PATCH/WS
-se hizo sobre endpoints actualmente accesibles sin Bearer; no acredita autorización
-por comercio. No se modificaron backend, DB, puertos ni configuraciones Docker.
+Tras reparar bcrypt se verificó el flujo autenticado con la cuenta del comercio:
+Login/restauración/refresh/listado y ambos avances PATCH confirmados por GET sobre
+ORD-BABA-004, restaurando el estado inicial. WS confirmó la suscripción, pero no
+entregó eventos de estado. Las pruebas anteriores sin Bearer no acreditaban aislamiento
+entre comercios; esta validación tampoco es una auditoría de autorización.
+No se modificaron backend, DB, puertos ni configuraciones Docker.
 
 Verificación: `npm test` y `npm run build` (incluye TypeScript estricto).

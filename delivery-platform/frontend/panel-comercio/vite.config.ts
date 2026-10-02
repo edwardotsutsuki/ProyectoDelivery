@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
     trackingUrl: env.VITE_TRACKING_URL || 'ws://localhost:8080/ws/',
     trackingDirectUrl: env.VITE_TRACKING_DIRECT_URL || 'ws://localhost:4001',
     osrmUrl: env.VITE_OSRM_URL || 'http://localhost:5001',
-    refreshEnabled: env.VITE_AUTH_REFRESH_ENABLED === 'true',
+    refreshEnabled: env.VITE_AUTH_REFRESH_ENABLED !== 'false',
     demosEnabled: env.VITE_ENABLE_DEMOS === 'true' || (mode === 'development' && env.VITE_ENABLE_DEMOS !== 'false'),
   }) },
   plugins: [react()],

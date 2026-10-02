@@ -6,10 +6,70 @@
 
 > **Actualización Codex — 2026-10-02:** Baba es el piloto obligatorio
 > `(-1.7917, -79.6783)` y Babahoyo la expansión `(-1.8022, -79.5344)`, Los Ríos.
-> Login/sesión comprobados contra Gateway real. Pedidos: 404. Refresh: devuelve
-> token sin permiso comercio (403); sigue deshabilitado. El 502 de auth quedó resuelto.
+> Kanban API por comercio autenticado + suscripción WS implementados; catálogo,
+> carrito y checkout móvil de prueba implementados. GET pedidos: 200. Pendientes
+> comprobados: credencial y refresh ya verificados; evento de estado sin comercioId pendiente.
+> Las observaciones 404/refresh degradado de la entrega anterior son históricas.
 
-## Entrega y verificación de Codex — 2026-10-02
+## Codex — Fase 3 Kanban y Fase 2/3 Mobile Cliente, 2026-10-02
+
+### Validación autenticada posterior a reparación bcrypt — Codex
+
+- [x] Cliente frontend real contra Gateway con comercio@delivery.com: Login,
+  persistencia con/sin Recordarme, restauración, refresh conservando rol comercio y
+  comercioId, listado por UUID y logout local. Almacenamiento simulado; sin imprimir tokens.
+- [x] PATCH autenticado de ORD-BABA-004 a PREPARING y READY_FOR_PICKUP, ambos
+  confirmados por GET. Restaurado el estado inicial; no se alteraron pedidos reales.
+- [x] Renovación automática habilitada por defecto tras validación; puede desactivarse
+  explícitamente con VITE_AUTH_REFRESH_ENABLED=false. Puertos y Docker conservados.
+- [ ] WS confirma SUBSCRIBED_MERCHANT pero no entregó ORDER_EVENT tras ambos PATCH.
+  Sigue pendiente incluir comercioId en el evento de estado del backend.
+
+Las observaciones de credencial 401 y refresh deshabilitado de abajo corresponden
+al corte previo, ahora superado. La verificación usa el cliente TypeScript contra
+servicios reales; no equivale a una prueba visual en navegador/dispositivo.
+
+- [x] **Sesión:** `auth.ts` conserva id/nombre/rol/comercioId de Login/perfil/refresh.
+  Restauración recupera perfil remoto e ignora metadatos guardados/manipulados.
+  Contrato nuevo de refresh con comercio y rol preservados cubierto con fixtures.
+- [x] **Kanban API por defecto:** `<KanbanOrders />` toma `session.user.comercioId`;
+  retirado VITE_MERCHANT_ID. Demo explícita `source="mock"`. PATCH confirma avance
+  antes de mover tarjeta, bloquea doble envío y descarta lecturas anteriores.
+- [x] **Tiempo real:** `merchantEvents.ts` envía SUBSCRIBE_MERCHANT al Gateway,
+  filtra comercio/tipo, reconcilia por REST, reconecta y limpia sockets/timers.
+  Eventos durante GET/PATCH se procesan después; polling 5 s y sonido deduplicado
+  permanecen como respaldo. Estado de conexión visible en el tablero.
+- [x] **Mobile Cliente:** catálogo local de Picantería El Buen Sabor - Baba Centro,
+  seco de gallina/bolón/menestra/jugo/café, carrito vacío inicial, cantidades ± y
+  eliminar. Subtotales, envío único $1.50 y total calculados en centavos.
+- [x] **Checkout móvil:** dirección editable Barrio San Antonio/Baba, Efectivo o
+  Transferencia, validaciones y resumen editable. Confirmación explícitamente local
+  de prueba: no envía pedidos, no cobra ni afirma sincronizar Redis o tracking real.
+- [x] **Validación:** 49/49 pruebas en Comercio, 5/5 del modelo móvil; build
+  TypeScript estricto + Vite de Comercio y typecheck de Mobile aprobados.
+  Sin comprobación visual en navegador/emulador/dispositivo físico.
+- [x] **Gateway:** GET UUID responde 200 y el DTO de un pedido PostgreSQL se procesa.
+  WS confirma SUBSCRIBED_MERCHANT. PATCH de mock ORD-BABA-004 confirmado por GET;
+  restaurado su estado original, sin modificar pedidos reales para probar. Estas
+  rutas permiten las pruebas sin Bearer; no acreditan autorización por comercio.
+- [ ] **Antigravity — credencial:** comercio@delivery.com / comercio123 devuelve 401
+  (contraseña incorrecta). Se solicitó confirmar o restablecer la cuenta. Repetir
+  Login → Kanban → refresh con sesión real. Refresh permanece optativo/deshabilitado
+  por defecto; no se atribuye al backend nuevo el antiguo defecto de rol.
+- [ ] **Antigravity — evento:** PATCH publica order:status_updated sin comercioId,
+  pero Tracking lo exige para enrutar a merchant. Ack recibido, ningún ORDER_EVENT
+  tras PATCH en la prueba. Añadir UUID del comercio y verificar aislamiento.
+  El PATCH propio actualiza la tarjeta; polling cubre cambios externos mientras tanto.
+- [ ] **Mobile siguiente:** catálogo con IDs del servidor, sesión de cliente,
+  carrito persistente y checkout real con precios/stock validados por backend.
+
+Referencias: [Kanban](./frontend/panel-comercio/KANBAN.md),
+[sesión](./frontend/panel-comercio/AUTH.md), [Mobile](./mobile/app-cliente/README.md).
+**Autoría:** Codex implementó frontend, pantalla/modelo móvil, pruebas y documentación.
+No cambió backend, BD, Gateway, puertos ni Docker. No hizo commit/push; se preservan
+los commits externos observados durante este trabajo compartido.
+
+## Entrega anterior y verificación de Codex — 2026-10-02 (histórico)
 
 - **Login conectado:** adaptado `frontend/panel-comercio/src/auth.ts` a la respuesta
   real `data.tokens`. Se verifica permiso remoto antes de persistir y abrir `/pedidos`.
@@ -63,8 +123,8 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 | Fase | Título | Estado | Responsables |
 | :--- | :--- | :---: | :--- |
 | **Fase 1** | Infraestructura y Entorno Local | **Completada ✅** | Antigravity |
-| **Fase 2** | Autenticación y Perfiles de Usuario | **Login/sesión verificados ✅ / refresh y Mobile pendientes** | Antigravity (Backend/DB) + Codex (Frontend) |
-| **Fase 3** | Ciclo de Vida del Pedido en Tiempo Real | **Kanban y cliente API implementados ✅ / endpoints y eventos pendientes** | Antigravity (WS/Redis) + Codex (Kanban) |
+| **Fase 2** | Autenticación y Perfiles de Usuario | **Sesión con comercio implementada / credencial vigente y refresh real pendientes 🔄** | Antigravity (Backend/DB) + Codex (Frontend) |
+| **Fase 3** | Ciclo de Vida del Pedido en Tiempo Real | **Kanban API/WS y catálogo-carrito móvil ✅ / cierre E2E pendiente 🔄** | Antigravity (WS/Redis) + Codex (Kanban/Mobile) |
 | **Fase 4** | Geodesia y Tracking en Vivo | **Web implementada ✅ / Mobile y recorrido real pendientes** | Antigravity (OSRM/Gateway) + Codex (Mapas) |
 | **Fase 5** | Billetera Virtual y Ledger Inmutable | **Pendiente ⏳** | Antigravity (Ledger SQL) + ChatGPT (UI Billetera) |
 
@@ -113,8 +173,10 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 
 ### ⏳ Fase 3: Ciclo de Vida del Pedido en Tiempo Real
 - [ ] **Móvil Cliente**:
+  - [x] Codex: catálogo Baba, cantidades, eliminación, importes en centavos y envío.
+  - [x] Codex: checkout de prueba con dirección Baba, Efectivo/Transferencia y resumen local.
   - [ ] Carrito sincronizado en Redis (`POST /api/orders/carrito/:clienteId`) con TTL de 24h.
-  - [ ] Checkout interactivo con métodos de pago: Efectivo, Transferencia, Billetera Virtual.
+  - [ ] Checkout conectado al servidor, pagos y Billetera Virtual.
 - [ ] **Web Comercio (Panel Kanban)**:
   - [x] Codex: tablero interactivo con mocks de Baba y 3 columnas operativas:
     1. *Nuevos / Pendientes* (`PENDING`).
@@ -125,7 +187,8 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] Antigravity: Endpoints de pedidos montados y verificados en `/api/v1/orders`.
   - [x] Antigravity: Catálogo espacial `/api/v1/catalog/comercios` y `/productos` con cálculo PostGIS `ST_DistanceSphere` para Baba y Babahoyo.
   - [x] Antigravity: Interruptor On/Off de disponibilidad en tiempo real con Redis pipeline y Postgres.
-  - [ ] Transición de estados con actualización en tiempo real por WebSocket.
+  - [x] Codex: cliente WebSocket por comercio con reconciliación REST y polling.
+  - [ ] Antigravity: entrega merchant del evento de estado y prueba autenticada completa.
 - [x] **Backend Core & Tracking**:
   - [x] Eventos Redis Pub/Sub: `order:created`, `order:status_updated` emitidos en canal `orders:events` y escuchados por WebSocket en `tracking-service`.
 

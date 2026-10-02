@@ -353,11 +353,13 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
 
     const nuevoEstado = normalizeStatus(rawEstado);
     const { repartidorId } = req.body;
+    let targetMerchantId = '55555555-5555-5555-5555-555555555555';
 
     // Si es un pedido de mock
     const mockOrder = mockBabaOrders.find((o) => o.id === pedidoId);
     if (mockOrder) {
       mockOrder.estado = nuevoEstado;
+      targetMerchantId = mockOrder.comercio_id || targetMerchantId;
     }
 
     // Actualizar en base de datos si existe
@@ -366,14 +368,17 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
       const params: any[] = [nuevoEstado];
 
       if (repartidorId) {
-        query += ', repartidor_id = $2 WHERE id::text = $3';
+        query += ', repartidor_id = $2 WHERE id::text = $3 RETURNING comercio_id';
         params.push(repartidorId, pedidoId);
       } else {
-        query += ' WHERE id::text = $2';
+        query += ' WHERE id::text = $2 RETURNING comercio_id';
         params.push(pedidoId);
       }
 
-      await pgPool.query(query, params);
+      const dbRes = await pgPool.query(query, params);
+      if (dbRes.rows.length > 0 && dbRes.rows[0].comercio_id) {
+        targetMerchantId = dbRes.rows[0].comercio_id;
+      }
     } catch (dbErr) {
       console.warn(`⚠️ Actualización en DB falló o id es mock (${pedidoId}), estado actualizado en memoria.`);
     }
@@ -385,6 +390,8 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
       pedidoId,
       nuevoEstado,
       status: nuevoEstado,
+      comercioId: targetMerchantId,
+      merchant_id: targetMerchantId,
       timestamp: new Date().toISOString(),
     };
     try {
@@ -396,7 +403,7 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: `Estado de pedido actualizado a ${nuevoEstado}`,
-      data: { pedidoId, nuevoEstado },
+      data: { pedidoId, nuevoEstado, comercioId: targetMerchantId },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });

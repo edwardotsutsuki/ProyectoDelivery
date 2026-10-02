@@ -14,7 +14,7 @@ Consultar `.env.example`. No guardar secretos ni credenciales en variables VITE.
 - `VITE_TRACKING_URL`: `ws://localhost:8080/ws/`.
 - `VITE_TRACKING_DIRECT_URL`: `ws://localhost:4001`.
 - `VITE_OSRM_URL`: `http://localhost:5001`.
-- `VITE_AUTH_REFRESH_ENABLED`: `false` hasta validar el contrato de refresh.
+- `VITE_AUTH_REFRESH_ENABLED`: `true` por defecto tras validar el Gateway; `false` desactiva renovación.
 - `VITE_ENABLE_DEMOS`: en ausencia de valor, true en desarrollo y false en build
   de producción. Un valor explícito prevalece. `.env.example` propone false.
 
@@ -54,9 +54,11 @@ descarta el usuario de Web Storage y recupera el perfil desde la comprobación
 remota de permisos, evitando usar un comercio almacenado/manipulado como identidad.
 Las pruebas cubren recuperación del comercio y refresh con rol preservado.
 
-Refresh sigue optativo (`VITE_AUTH_REFRESH_ENABLED=false` por defecto) hasta poder
-repetir su validación real con credenciales vigentes. Ya no se atribuye al código
-actual del backend el antiguo problema de degradación de rol.
+**Validación posterior a reparar bcrypt:** Login, restauración con/sin Recordarme,
+refresh con rol comercio y comercioId preservados, listado autenticado y logout
+pasaron contra Gateway. El 401 anterior quedó resuelto. Renovación habilitada por
+defecto; `VITE_AUTH_REFRESH_ENABLED=false` permite desactivarla explícitamente.
+Se usó el cliente real con almacenamiento simulado, sin inspección visual de navegador.
 
 ## Comportamiento
 

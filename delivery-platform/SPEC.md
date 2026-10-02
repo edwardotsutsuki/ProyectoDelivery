@@ -108,6 +108,12 @@ Para evitar colisiones con puertos reservados del host y contenedores preexisten
 
 ### Estado vigente — Fase 3 Kanban / catálogo móvil, 2026-10-02
 
+**Validación posterior a reparación bcrypt:** Login, restauración, refresh con rol
+y comercioId preservados, listado y PATCH autenticados comprobados contra Gateway.
+Renovación habilitada por defecto, con opt-out VITE_AUTH_REFRESH_ENABLED=false.
+El 401 descrito en el corte siguiente está resuelto. La suscripción merchant recibe
+ack pero sigue sin eventos de estado tras PATCH; falta comercioId en ese payload.
+
 - Kanban API por defecto; alcance `session.user.comercioId` desde Login/perfil.
   Se descarta el perfil almacenado al restaurar y se recupera del permiso remoto.
   `VITE_MERCHANT_ID` retirado. Demo requiere `source="mock"` explícito.

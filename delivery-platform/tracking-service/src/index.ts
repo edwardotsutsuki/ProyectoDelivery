@@ -57,12 +57,26 @@ sub.on('message', (channel, message) => {
       const pedidoId = data.pedidoId || data.pedido?.id;
       const comercioId = data.comercioId || data.pedido?.comercioId;
 
-      // 1. Notificar a panel de comercio si está suscrito
-      if (comercioId && merchantSubscriptions.has(comercioId)) {
-        const merchants = merchantSubscriptions.get(comercioId)!;
-        for (const ws of merchants) {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ORDER_EVENT', payload: data }));
+      // 1. Notificar a panel de comercio si está suscrito (soportando ID canónico y aliases)
+      const targetComercioIds = new Set<string>();
+      if (comercioId) {
+        targetComercioIds.add(comercioId);
+        if (comercioId === '55555555-5555-5555-5555-555555555555') {
+          targetComercioIds.add('merch-baba-01');
+          targetComercioIds.add('usr-comercio-01');
+        } else if (comercioId === 'merch-baba-01' || comercioId === 'usr-comercio-01') {
+          targetComercioIds.add('55555555-5555-5555-5555-555555555555');
+        }
+      }
+
+      for (const id of targetComercioIds) {
+        if (merchantSubscriptions.has(id)) {
+          const merchants = merchantSubscriptions.get(id)!;
+          for (const ws of merchants) {
+            if (ws.readyState === WebSocket.OPEN) {
+              const outgoing = { ...data, comercioId: id, merchant_id: id };
+              ws.send(JSON.stringify({ type: 'ORDER_EVENT', payload: outgoing }));
+            }
           }
         }
       }

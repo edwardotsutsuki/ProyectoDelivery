@@ -7,6 +7,6 @@ export interface FrontendConfig {
 export const config: FrontendConfig = {
   apiBaseUrl: 'http://localhost:8080/api/v1', trackingUrl: 'ws://localhost:8080/ws/',
   trackingDirectUrl: 'ws://localhost:4001', osrmUrl: 'http://localhost:5001',
-  refreshEnabled: false, demosEnabled: false,
+  refreshEnabled: true, demosEnabled: false,
   ...(typeof __DELIVERY_CONFIG__ === 'undefined' ? {} : __DELIVERY_CONFIG__),
 };
