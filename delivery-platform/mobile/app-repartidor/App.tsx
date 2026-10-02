@@ -5,6 +5,7 @@ import { NavigationLauncher } from './src/services/navigationLauncher';
 import { initialShift, setAvailability, transition, RESTAURANT, type Action, type Status } from './src/courierModel';
 import { dailyWallet, money, type Wallet } from './src/walletModel';
 import { fetchWallet } from './src/services/walletApi';
+import { TelemetryTransmitter } from './src/services/telemetryTransmitter';
 
 const DEFAULT_API = Platform.OS === 'android' ? 'http://10.0.2.2:8080/api/v1' : 'http://localhost:8080/api/v1';
 const labels: Record<Status, string> = { READY_FOR_PICKUP: 'Listo para despacho', ACCEPTED: 'Aceptado · recoger en restaurante', ON_THE_WAY: 'En camino al cliente', DELIVERED: 'Entregado' };
@@ -22,9 +23,24 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [synced, setSynced] = useState<Date | null>(null);
+
+  const transmitter = useRef<TelemetryTransmitter | null>(null);
+
+  useEffect(() => {
+    const wsUrl = apiBaseUrl.replace(/^http/, 'ws').replace(/\/api\/v1$/, '/ws');
+    transmitter.current = new TelemetryTransmitter(wsUrl, 'usr-repartidor-01');
+    return () => {
+      transmitter.current?.stopTransmission();
+    };
+  }, [apiBaseUrl]);
+
   useEffect(() => {
     setGpsReady(false);
-    if (!shift.online) return;
+    if (!shift.online) {
+      transmitter.current?.stopTransmission();
+      return;
+    }
+    transmitter.current?.startOnlineTransmission();
     const timer = setTimeout(() => setGpsReady(true), 1000);
     return () => clearTimeout(timer);
   }, [shift.online]);

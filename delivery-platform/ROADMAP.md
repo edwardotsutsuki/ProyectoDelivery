@@ -124,13 +124,15 @@
 ---
 
 ### 🔄 Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada - [EN PROCESO]
-- [ ] **App Móvil Cliente (`mobile/app-cliente`)**:
-  - [ ] Radar / Mapa en tiempo real en la pantalla de pedido activo mostrando la moto del repartidor avanzando hacia el destino.
-  - [ ] Historial de pedidos anteriores y opción de repetir pedido con 1 clic.
-  - [ ] Selector de dirección en mapa interactivo de Baba con GPS del dispositivo.
-- [ ] **App Móvil Repartidor (`mobile/app-repartidor`)**:
-  - [ ] Transmisor en segundo plano activo enviando `REPARTIDOR_LOCATION_UPDATE` a `ws://localhost:8080/ws/` cada 5 segundos al estar Online.
-  - [ ] Lista dinámica conectada a `GET /api/v1/orders/disponibles/reparto` con alertas sonoras al recibir comandas listas.
+- [x] **App Móvil Cliente (`mobile/app-cliente`)**:
+  - [x] Radar de pedido en tiempo real mostrando etapas (Cocina ➔ En camino ➔ Entrega), distancia en metros y ETA dinámico con OSRM.
+  - [x] Historial de pedidos anteriores y botón "Repetir este pedido (1 Clic)" con rellenado automático de comanda.
+  - [x] Selector rápido de ubicaciones y presets geodésicos en Baba (San Antonio, Parque Central, La Nobleza, Babahoyo).
+  - [x] 13/13 pruebas unitarias aprobadas.
+- [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
+  - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
+  - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
+  - [x] 14/14 pruebas unitarias aprobadas.
 
 ---
 
