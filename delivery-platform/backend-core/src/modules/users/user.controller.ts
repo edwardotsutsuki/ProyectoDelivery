@@ -38,14 +38,19 @@ userRouter.get('/comercios-cercanos', async (req: Request, res: Response) => {
 userRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { rol } = req.query;
-    let query = 'SELECT id, nombre, email, telefono, rol, estado_activo, fecha_creacion FROM usuarios';
+    let query = `
+      SELECT u.id, u.nombre, u.email, u.telefono, u.rol, u.estado_activo, u.comercio_id, u.fecha_creacion,
+             COALESCE(c.nombre_comercial, '') as comercio_nombre
+      FROM usuarios u
+      LEFT JOIN comercios c ON (c.id = u.comercio_id OR c.usuario_id = u.id)
+    `;
     const params: any[] = [];
 
     if (rol) {
-      query += ' WHERE rol = $1';
+      query += ' WHERE u.rol = $1';
       params.push(rol);
     }
-    query += ' ORDER BY fecha_creacion DESC';
+    query += ' ORDER BY u.fecha_creacion DESC';
 
     const result = await pgPool.query(query, params);
     res.json({ success: true, count: result.rows.length, data: result.rows });
@@ -57,7 +62,18 @@ userRouter.get('/', async (req: Request, res: Response) => {
 // Crear nuevo usuario desde el Backoffice Admin
 userRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { nombre, email, password, rol = 'cliente', telefono = '+593900000000', estado_activo = true } = req.body;
+    const {
+      nombre,
+      email,
+      password,
+      rol = 'cliente',
+      telefono = '+593900000000',
+      estado_activo = true,
+      comercio_id = null,
+      comercioId = null,
+    } = req.body;
+
+    const targetComercioId = comercio_id || comercioId || null;
 
     if (!nombre || !email || !password) {
       return res.status(400).json({
@@ -87,9 +103,9 @@ userRouter.post('/', async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.default.hash(password, 10);
 
     const insertQuery = `
-      INSERT INTO usuarios (nombre, email, password_hash, rol, telefono, estado_activo)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, nombre, email, telefono, rol, estado_activo, fecha_creacion;
+      INSERT INTO usuarios (nombre, email, password_hash, rol, telefono, estado_activo, comercio_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, nombre, email, telefono, rol, estado_activo, comercio_id, fecha_creacion;
     `;
 
     const result = await pgPool.query(insertQuery, [
@@ -99,12 +115,20 @@ userRouter.post('/', async (req: Request, res: Response) => {
       rol,
       telefono,
       Boolean(estado_activo),
+      targetComercioId,
     ]);
+
+    const createdUser = result.rows[0];
+
+    // Si se asignó un comercio, actualizar usuario_id del comercio
+    if (targetComercioId && rol === 'comercio') {
+      await pgPool.query('UPDATE comercios SET usuario_id = $1 WHERE id = $2', [createdUser.id, targetComercioId]);
+    }
 
     res.status(201).json({
       success: true,
       message: 'Usuario creado exitosamente',
-      data: result.rows[0],
+      data: createdUser,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -115,7 +139,18 @@ userRouter.post('/', async (req: Request, res: Response) => {
 userRouter.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { nombre, email, telefono, rol, password, estado_activo } = req.body;
+    const {
+      nombre,
+      email,
+      telefono,
+      rol,
+      password,
+      estado_activo,
+      comercio_id,
+      comercioId,
+    } = req.body;
+
+    const targetComercioId = comercio_id !== undefined ? comercio_id : comercioId;
 
     let passwordHash = null;
     if (password && password.trim().length > 0) {
@@ -132,9 +167,10 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
         rol = COALESCE($4, rol),
         password_hash = COALESCE($5, password_hash),
         estado_activo = COALESCE($6, estado_activo),
+        comercio_id = COALESCE($7, comercio_id),
         fecha_actualizacion = NOW()
-      WHERE id::text = $7
-      RETURNING id, nombre, email, telefono, rol, estado_activo, fecha_creacion, fecha_actualizacion;
+      WHERE id::text = $8
+      RETURNING id, nombre, email, telefono, rol, estado_activo, comercio_id, fecha_creacion, fecha_actualizacion;
     `;
 
     const result = await pgPool.query(updateQuery, [
@@ -144,11 +180,16 @@ userRouter.put('/:id', async (req: Request, res: Response) => {
       rol || null,
       passwordHash,
       estado_activo !== undefined ? Boolean(estado_activo) : null,
+      targetComercioId !== undefined ? targetComercioId : null,
       id,
     ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    if (targetComercioId && rol === 'comercio') {
+      await pgPool.query('UPDATE comercios SET usuario_id = $1 WHERE id = $2', [id, targetComercioId]);
     }
 
     res.json({

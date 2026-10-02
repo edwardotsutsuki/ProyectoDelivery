@@ -27,6 +27,8 @@ export interface UserItem {
   telefono: string;
   rol: 'cliente' | 'repartidor' | 'comercio' | 'admin';
   estado_activo: boolean;
+  comercio_id?: string;
+  comercio_nombre?: string;
   fecha_creacion: string;
 }
 
@@ -38,6 +40,7 @@ export default function UsuariosPage({
   apiBaseUrl = 'http://localhost:8080/api/v1',
 }: UsuariosPageProps) {
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [comerciosList, setComerciosList] = useState<{ id: string; nombre_comercial: string; direccion: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'cliente' | 'repartidor' | 'comercio' | 'admin'>('all');
@@ -56,6 +59,7 @@ export default function UsuariosPage({
   const [formPassword, setFormPassword] = useState('');
   const [formTelefono, setFormTelefono] = useState('+5939');
   const [formRol, setFormRol] = useState<'cliente' | 'repartidor' | 'comercio' | 'admin'>('cliente');
+  const [formComercioId, setFormComercioId] = useState('');
   const [formActivo, setFormActivo] = useState(true);
 
   const fetchUsers = async () => {
@@ -73,8 +77,21 @@ export default function UsuariosPage({
     }
   };
 
+  const fetchComerciosList = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/catalog/comercios/admin`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setComerciosList(data.data);
+      }
+    } catch (err) {
+      console.error('Error cargando comercios para asignación:', err);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchComerciosList();
   }, []);
 
   const handleOpenCreate = () => {
@@ -84,6 +101,7 @@ export default function UsuariosPage({
     setFormPassword('');
     setFormTelefono('+5939');
     setFormRol('cliente');
+    setFormComercioId('');
     setFormActivo(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -97,6 +115,7 @@ export default function UsuariosPage({
     setFormPassword(''); // blank means don't change
     setFormTelefono(u.telefono || '+5939');
     setFormRol(u.rol);
+    setFormComercioId(u.comercio_id || '');
     setFormActivo(u.estado_activo);
     setErrorMsg('');
     setSuccessMsg('');
@@ -154,6 +173,7 @@ export default function UsuariosPage({
         telefono: formTelefono.trim(),
         rol: formRol,
         estado_activo: formActivo,
+        comercio_id: formRol === 'comercio' && formComercioId ? formComercioId : null,
       };
 
       if (formPassword.trim()) {
@@ -597,6 +617,24 @@ export default function UsuariosPage({
                       <Calendar size={15} color="#a855f7" />
                       <span>Registrado: {new Date(user.fecha_creacion).toLocaleDateString('es-EC')}</span>
                     </div>
+
+                    {user.rol === 'comercio' && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: '#1e1b4b',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #3730a3',
+                        marginTop: '4px'
+                      }}>
+                        <Store size={15} color="#818cf8" />
+                        <span style={{ color: '#c7d2fe', fontWeight: '700', fontSize: '12px' }}>
+                          {user.comercio_nombre ? `Local: ${user.comercio_nombre}` : 'Sin local asignado'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -827,6 +865,38 @@ export default function UsuariosPage({
                   />
                 </div>
               </div>
+
+              {formRol === 'comercio' && (
+                <div style={{ background: '#1e1b4b', padding: '14px', borderRadius: '12px', border: '1px solid #4338ca' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#c7d2fe' }}>
+                    🏪 Local Comercial Asignado
+                  </label>
+                  <select
+                    value={formComercioId}
+                    onChange={(e) => setFormComercioId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: '#0f172a',
+                      border: '1px solid #6366f1',
+                      borderRadius: '10px',
+                      color: '#fff',
+                      fontSize: '13px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="">-- Sin local asignado por ahora --</option>
+                    {comerciosList.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre_comercial} ({c.direccion})
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#a5b4fc' }}>
+                    Al asignar este local, el usuario podrá acceder directamente al panel del comercio y gestionar la cocina.
+                  </p>
+                </div>
+              )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <input

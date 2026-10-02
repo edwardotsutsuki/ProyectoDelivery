@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { pgPool } from '../../config/database';
 import { redisClient } from '../../config/redis';
 
@@ -76,7 +77,7 @@ function resolveMerchantId(id: string): string {
   return id;
 }
 
-// 1. Listar comercios abiertos con cálculo de distancia espacial PostGIS
+// 1. Listar comercios abiertos con cálculo de distancia espacial PostGIS (Storefront público)
 catalogRouter.get('/comercios', async (req: Request, res: Response) => {
   try {
     const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
@@ -88,14 +89,14 @@ catalogRouter.get('/comercios', async (req: Request, res: Response) => {
         c.id, c.nombre_comercial, c.descripcion, c.direccion,
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
-        c.calificacion, c.costo_base_envio,
+        c.calificacion, c.costo_base_envio, c.estado_aprobacion,
         CASE 
           WHEN $1::numeric IS NOT NULL AND $2::numeric IS NOT NULL THEN
             ROUND((ST_DistanceSphere(c.ubicacion, ST_SetSRID(ST_MakePoint($2, $1), 4326)) / 1000.0)::numeric, 2)
           ELSE NULL
         END as distancia_km
       FROM comercios c
-      WHERE c.is_abierto = true
+      WHERE c.is_abierto = true AND (c.estado_aprobacion IS NULL OR c.estado_aprobacion = 'aprobado')
       ORDER BY distancia_km ASC NULLS LAST, c.calificacion DESC;
     `;
 
@@ -113,6 +114,111 @@ catalogRouter.get('/comercios', async (req: Request, res: Response) => {
       success: true,
       count: comercios.length,
       data: comercios,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 1.b Listar todos los comercios para Backoffice (incluyendo cerrados y pendientes)
+catalogRouter.get('/comercios/admin', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        c.id, c.nombre_comercial, c.descripcion, c.direccion,
+        ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
+        c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
+        c.calificacion, c.costo_base_envio,
+        c.ruc, c.razon_social, c.banco, c.tipo_cuenta, c.numero_cuenta, c.titular_cuenta,
+        c.estado_aprobacion, c.motivo_rechazo, c.fecha_solicitud, c.fecha_aprobacion,
+        u.id as usuario_id, u.email as usuario_email, u.nombre as usuario_nombre, u.telefono as usuario_telefono
+      FROM comercios c
+      LEFT JOIN usuarios u ON c.usuario_id = u.id
+      ORDER BY c.fecha_creacion DESC;
+    `;
+    const result = await pgPool.query(query);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 1.c Listar comercios pendientes de aprobación (Bandeja de Afiliaciones)
+catalogRouter.get('/comercios/solicitudes', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        c.id, c.nombre_comercial, c.descripcion, c.direccion,
+        ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
+        c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
+        c.costo_base_envio, c.ruc, c.razon_social, c.banco, c.tipo_cuenta, c.numero_cuenta, c.titular_cuenta,
+        c.estado_aprobacion, c.motivo_rechazo, c.fecha_solicitud,
+        u.id as usuario_id, u.email as usuario_email, u.nombre as usuario_nombre, u.telefono as usuario_telefono
+      FROM comercios c
+      LEFT JOIN usuarios u ON c.usuario_id = u.id
+      WHERE c.estado_aprobacion = 'pendiente'
+      ORDER BY c.fecha_solicitud ASC;
+    `;
+    const result = await pgPool.query(query);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 1.d Aprobar solicitud de comercio
+catalogRouter.patch('/comercio/:comercioId/aprobar', async (req: Request, res: Response) => {
+  try {
+    const { comercioId } = req.params;
+    const query = `
+      UPDATE comercios
+      SET estado_aprobacion = 'aprobado', fecha_aprobacion = NOW(), is_abierto = true, fecha_actualizacion = NOW()
+      WHERE id::text = $1
+      RETURNING id, nombre_comercial, estado_aprobacion, usuario_id;
+    `;
+    const result = await pgPool.query(query, [comercioId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Comercio no encontrado' });
+    }
+
+    const comercio = result.rows[0];
+    if (comercio.usuario_id) {
+      await pgPool.query(
+        'UPDATE usuarios SET estado_activo = true, fecha_actualizacion = NOW() WHERE id = $1',
+        [comercio.usuario_id]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Comercio "${comercio.nombre_comercial}" aprobado exitosamente`,
+      data: comercio,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 1.e Rechazar solicitud de comercio
+catalogRouter.patch('/comercio/:comercioId/rechazar', async (req: Request, res: Response) => {
+  try {
+    const { comercioId } = req.params;
+    const { motivoRechazo } = req.body;
+    const query = `
+      UPDATE comercios
+      SET estado_aprobacion = 'rechazado', motivo_rechazo = $2, is_abierto = false, fecha_actualizacion = NOW()
+      WHERE id::text = $1
+      RETURNING id, nombre_comercial, estado_aprobacion, motivo_rechazo;
+    `;
+    const result = await pgPool.query(query, [comercioId, motivoRechazo || 'No cumple con los requisitos mínimos de operación']);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Comercio no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: `Solicitud del comercio rechazada`,
+      data: result.rows[0],
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -238,11 +344,16 @@ catalogRouter.patch('/producto/:productoId/toggle-disponibilidad', async (req: R
   }
 });
 
-// 5. Crear nuevo local comercial en PostgreSQL + PostGIS (Baba o Babahoyo)
+// 5. Crear nuevo local comercial en PostgreSQL + PostGIS (Baba o Babahoyo) con soporte de credenciales
 catalogRouter.post('/comercios', async (req: Request, res: Response) => {
   try {
     const {
-      usuarioId = '22222222-2222-2222-2222-222222222222',
+      usuarioId,
+      crearUsuario = false,
+      usuarioNombre,
+      usuarioEmail,
+      usuarioPassword,
+      usuarioTelefono,
       nombreComercial,
       descripcion = '',
       direccion,
@@ -253,6 +364,13 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
       tiempoEntregaPromedio = 30,
       costoBaseEnvio = 1.50,
       isAbierto = true,
+      ruc = null,
+      razonSocial = null,
+      banco = null,
+      tipoCuenta = 'ahorros',
+      numeroCuenta = null,
+      titularCuenta = null,
+      estadoAprobacion = 'aprobado',
     } = req.body;
 
     if (!nombreComercial || !direccion) {
@@ -262,21 +380,57 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
       });
     }
 
+    let finalUsuarioId = usuarioId;
+
+    // Si se solicitó crear usuario y contraseña para este comercio
+    if (crearUsuario && usuarioEmail && usuarioPassword) {
+      const emailLower = usuarioEmail.toLowerCase().trim();
+      const existingUser = await pgPool.query('SELECT id FROM usuarios WHERE LOWER(email) = $1', [emailLower]);
+      if (existingUser.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `El correo "${emailLower}" ya está registrado para otro usuario.`,
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(usuarioPassword, 10);
+      const userRes = await pgPool.query(`
+        INSERT INTO usuarios (nombre, email, password_hash, rol, telefono, estado_activo)
+        VALUES ($1, $2, $3, 'comercio', $4, true)
+        RETURNING id, nombre, email;
+      `, [
+        usuarioNombre || nombreComercial,
+        emailLower,
+        passwordHash,
+        usuarioTelefono || telefono,
+      ]);
+      finalUsuarioId = userRes.rows[0].id;
+    }
+
+    if (!finalUsuarioId) {
+      finalUsuarioId = '22222222-2222-2222-2222-222222222222';
+    }
+
     const insertQuery = `
       INSERT INTO comercios (
         usuario_id, nombre_comercial, descripcion, direccion,
         ubicacion, is_abierto, telefono, categoria,
-        tiempo_entrega_promedio, costo_base_envio
+        tiempo_entrega_promedio, costo_base_envio,
+        ruc, razon_social, banco, tipo_cuenta, numero_cuenta, titular_cuenta,
+        estado_aprobacion, fecha_aprobacion
       ) VALUES (
         $1, $2, $3, $4,
-        ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, $8, $9, $10, $11
+        ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17,
+        $18, ${estadoAprobacion === 'aprobado' ? 'NOW()' : 'NULL'}
       )
-      RETURNING id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
-                costo_base_envio, tiempo_entrega_promedio, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
+                costo_base_envio, tiempo_entrega_promedio, ruc, razon_social, banco, tipo_cuenta, numero_cuenta,
+                titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
     `;
 
     const result = await pgPool.query(insertQuery, [
-      usuarioId,
+      finalUsuarioId,
       nombreComercial,
       descripcion,
       direccion,
@@ -287,12 +441,26 @@ catalogRouter.post('/comercios', async (req: Request, res: Response) => {
       categoria,
       Number(tiempoEntregaPromedio),
       Number(costoBaseEnvio),
+      ruc || null,
+      razonSocial || null,
+      banco || null,
+      tipoCuenta || 'ahorros',
+      numeroCuenta || null,
+      titularCuenta || usuarioNombre || nombreComercial,
+      estadoAprobacion || 'aprobado',
     ]);
+
+    const createdComercio = result.rows[0];
+
+    // Enlazar comercio_id en el usuario
+    if (finalUsuarioId) {
+      await pgPool.query('UPDATE usuarios SET comercio_id = $1 WHERE id = $2', [createdComercio.id, finalUsuarioId]);
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Comercio registrado exitosamente con punto espacial PostGIS',
-      data: result.rows[0],
+      message: 'Comercio registrado exitosamente con punto espacial PostGIS y usuario asignado',
+      data: createdComercio,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -315,6 +483,14 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       tiempoEntregaPromedio,
       costoBaseEnvio,
       isAbierto,
+      ruc,
+      razonSocial,
+      banco,
+      tipoCuenta,
+      numeroCuenta,
+      titularCuenta,
+      estadoAprobacion,
+      usuarioId,
     } = req.body;
 
     const query = `
@@ -331,10 +507,19 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
         tiempo_entrega_promedio = COALESCE($8, tiempo_entrega_promedio),
         costo_base_envio = COALESCE($9, costo_base_envio),
         is_abierto = COALESCE($10, is_abierto),
+        ruc = COALESCE($11, ruc),
+        razon_social = COALESCE($12, razon_social),
+        banco = COALESCE($13, banco),
+        tipo_cuenta = COALESCE($14, tipo_cuenta),
+        numero_cuenta = COALESCE($15, numero_cuenta),
+        titular_cuenta = COALESCE($16, titular_cuenta),
+        estado_aprobacion = COALESCE($17, estado_aprobacion),
+        usuario_id = COALESCE($18, usuario_id),
         fecha_actualizacion = NOW()
-      WHERE id::text = $11 OR id::text = $12
-      RETURNING id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
-                costo_base_envio, tiempo_entrega_promedio, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+      WHERE id::text = $19 OR id::text = $20
+      RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, telefono,
+                costo_base_envio, tiempo_entrega_promedio, ruc, razon_social, banco, tipo_cuenta, numero_cuenta,
+                titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
     `;
 
     const result = await pgPool.query(query, [
@@ -348,12 +533,24 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       tiempoEntregaPromedio !== undefined ? Number(tiempoEntregaPromedio) : null,
       costoBaseEnvio !== undefined ? Number(costoBaseEnvio) : null,
       isAbierto !== undefined ? Boolean(isAbierto) : null,
+      ruc !== undefined ? ruc : null,
+      razonSocial !== undefined ? razonSocial : null,
+      banco !== undefined ? banco : null,
+      tipoCuenta !== undefined ? tipoCuenta : null,
+      numeroCuenta !== undefined ? numeroCuenta : null,
+      titularCuenta !== undefined ? titularCuenta : null,
+      estadoAprobacion !== undefined ? estadoAprobacion : null,
+      usuarioId !== undefined ? usuarioId : null,
       rawId,
       targetId,
     ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Comercio no encontrado' });
+    }
+
+    if (usuarioId) {
+      await pgPool.query('UPDATE usuarios SET comercio_id = $1 WHERE id = $2', [result.rows[0].id, usuarioId]);
     }
 
     res.json({

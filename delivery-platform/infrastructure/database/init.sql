@@ -59,13 +59,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password_hash VARCHAR(255) NOT NULL,
     telefono VARCHAR(20) NOT NULL,
     rol rol_usuario NOT NULL DEFAULT 'cliente',
+    comercio_id UUID,
     ubicacion GEOMETRY(Point, 4326),
     estado_activo BOOLEAN DEFAULT TRUE,
     fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Tabla: comercios (incluye is_abierto y coordenadas PostGIS)
+-- 4. Tabla: comercios (incluye is_abierto, coordenadas PostGIS y datos de afiliación)
 CREATE TABLE IF NOT EXISTS comercios (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -79,6 +80,16 @@ CREATE TABLE IF NOT EXISTS comercios (
     tiempo_entrega_promedio INT DEFAULT 30, -- Minutos
     calificacion NUMERIC(2,1) DEFAULT 5.0,
     costo_base_envio NUMERIC(10,2) DEFAULT 1.50,
+    ruc VARCHAR(20),
+    razon_social VARCHAR(150),
+    banco VARCHAR(100),
+    tipo_cuenta VARCHAR(20) DEFAULT 'ahorros',
+    numero_cuenta VARCHAR(50),
+    titular_cuenta VARCHAR(150),
+    estado_aprobacion VARCHAR(20) DEFAULT 'aprobado',
+    motivo_rechazo TEXT,
+    fecha_solicitud TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    fecha_aprobacion TIMESTAMPTZ,
     fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

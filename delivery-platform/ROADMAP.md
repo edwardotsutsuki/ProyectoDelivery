@@ -153,10 +153,36 @@
     - *Restaurante El Gran Chef Babahoyo*: Cazuela mixta de mariscos, encebollado mixto, corvina frita, bife de chorizo, arroz marinero, limonada imperial con menta.
     - *Burger & Wings Baba*: Alitas BBQ, hamburguesas smash, salchipapas cheddar, gaseosas.
     - *EDEM Pescados y Mariscos Baba*: Ceviche de camarón, sudado de pescado de río, arroz con camarón.
-  - [x] Regla de Aislamiento de Carrito en `landing-page`: Advertencia interactiva ("¿Empezar un nuevo pedido?") al intentar añadir platos de un restaurante diferente, protegiendo al usuario de pedidos inválidos.
-  - [x] Checkout potenciado con selector de ubicaciones guardadas y habilitación de pago con Saldo Virtual.
+- [x] **5.10 Onboarding Autónomo de Comercios, Aprobaciones KYC y Asignación de Credenciales**:
+  - [x] **Modelo de Datos y Migración PostgreSQL**:
+    - Campos tributarios y bancarios en tabla `comercios`: `ruc`, `razon_social`, `banco`, `tipo_cuenta`, `numero_cuenta`, `titular_cuenta`, `estado_aprobacion` ('pendiente' | 'aprobado' | 'rechazado'), `motivo_rechazo`, `fecha_solicitud`, `fecha_aprobacion`.
+    - Vinculación bidireccional entre usuarios y comercios: columna `usuarios.comercio_id UUID REFERENCES comercios(id)` y `comercios.usuario_id UUID REFERENCES usuarios(id)`.
+    - Actualizado `infrastructure/database/init.sql` para nuevas instalaciones limpias.
+  - [x] **Backend Core (`backend-core`)**:
+    - Endpoint público de autoafiliación de restaurantes: `POST /api/v1/auth/afiliar-comercio` con validación de RUC, cantón, datos de encargado (crea usuario con rol 'comercio' desactivado temporalmente) y cuenta bancaria de liquidación.
+    - Endpoints administrativos en `catalog.controller.ts`:
+      - `GET /comercios/admin`: Listado maestro de comercios con datos fiscales, bancarios y usuario vinculado.
+      - `GET /comercios/solicitudes`: Cola exclusiva de comercios pendientes de aprobación.
+      - `PATCH /comercio/:id/aprobar`: Aprobación en 1-clic que activa la cuenta de usuario del comerciante, marca el local como aprobado y lo abre en la plataforma.
+      - `PATCH /comercio/:id/rechazar`: Rechazo con motivo registrado para retroalimentación al comerciante.
+    - Aislamiento en catálogo público (`GET /comercios`): Filtra de forma estricta comercios en estado `'aprobado'` o abiertos, protegiendo el escaparate de tiendas no verificadas.
+    - Sincronización en creación y edición de locales (`POST /comercios`, `PUT /comercios/:id`): Posibilidad de crear usuario y contraseña al instante o asociar un usuario existente, y asignar `comercio_id` en administración de usuarios (`user.controller.ts`).
+    - Login inteligente (`auth.controller.ts` y `auth.service.ts`): Retorna automáticamente `comercioId`, `nombreComercial` y valida `estadoAprobacion` al iniciar sesión.
+  - [x] **Panel de Administración Backoffice (`frontend/backoffice` en http://localhost:3004)**:
+    - Pestaña "Solicitudes de Afiliación" en `ComerciosPage.tsx` con badge dinámico de conteo de pendientes, fichas completas de verificación KYC (RUC, Banco, Tipo/Número de cuenta, Titular) y modales de aprobación/rechazo.
+    - Modal de creación/edición de locales con opción para aprovisionar credenciales de acceso directo (`usuarioEmail`, `usuarioPassword`) y datos bancarios.
+    - Asignación de local en `UsuariosPage.tsx` al registrar o editar usuarios con rol `comercio`.
+    - Gestor de carta y platos en `ProductosPage.tsx`: Vista por restaurante con catálogo interactivo, alternancia de disponibilidad en tiempo real y formulario modal para añadir nuevos platos.
+  - [x] **Portal Web Storefront (`frontend/landing-page` en http://localhost:3002)**:
+    - Enlace destacado en cabecera: "¿Tienes un restaurante? **Afíliate**".
+    - Modal guiado de auto-registro en 3 pasos:
+      1. *Negocio & Ubicación* (Nombre, RUC, Categoría, Cantón Baba/Babahoyo, Dirección, Teléfono).
+      2. *Encargado & Credenciales* (Nombre de contacto, WhatsApp, Correo y Contraseña de acceso).
+      3. *Datos Bancarios para Liquidaciones* (Banco, Tipo de cuenta, Número, Titular).
+    - Pantalla de confirmación con aviso de verificación en 24h y credenciales listas para ingresar al panel de comercio tras aprobación.
 
 ---
+
 
 ### 🔄 Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada - [EN PROCESO]
 - [x] **Storefront Web Cliente (`frontend/landing-page` en http://localhost:3002)**:

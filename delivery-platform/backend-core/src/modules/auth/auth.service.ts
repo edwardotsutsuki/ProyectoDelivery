@@ -63,9 +63,10 @@ export class AuthService {
   static async findUserByEmail(email: string) {
     try {
       const res = await pool.query(`
-        SELECT u.id, u.nombre, u.email, u.password_hash, u.rol, u.telefono, c.id as comercio_id
+        SELECT u.id, u.nombre, u.email, u.password_hash, u.rol, u.telefono, u.estado_activo,
+               COALESCE(u.comercio_id, c.id) as comercio_id, c.nombre_comercial, c.estado_aprobacion
         FROM usuarios u
-        LEFT JOIN comercios c ON c.usuario_id = u.id
+        LEFT JOIN comercios c ON (c.id = u.comercio_id OR c.usuario_id = u.id)
         WHERE LOWER(u.email) = LOWER($1) LIMIT 1
       `, [email]);
       if (res.rows && res.rows.length > 0) {
@@ -77,7 +78,10 @@ export class AuthService {
           passwordHash: u.password_hash,
           role: u.rol as UserRole,
           phone: u.telefono,
+          estadoActivo: u.estado_activo,
           comercioId: u.comercio_id,
+          nombreComercial: u.nombre_comercial,
+          estadoAprobacion: u.estado_aprobacion || 'aprobado',
         };
       }
     } catch (err) {

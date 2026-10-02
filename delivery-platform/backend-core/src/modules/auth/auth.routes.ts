@@ -8,6 +8,7 @@ const router = Router();
 router.post('/register', AuthController.register);
 router.post('/login', AuthController.login);
 router.post('/refresh', AuthController.refreshToken);
+router.post('/afiliar-comercio', AuthController.afiliarComercio);
 
 // Rutas protegidas
 router.get('/me', requireAuth, AuthController.getProfile);

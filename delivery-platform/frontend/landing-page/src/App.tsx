@@ -262,6 +262,79 @@ export default function App() {
     setShowProfileModal(false);
   };
 
+  // Estado para Solicitud de Afiliación de Comercio (Rappi/PedidosYa Partner Onboarding)
+  const [showAfiliacionModal, setShowAfiliacionModal] = useState(false);
+  const [afiliacionPaso, setAfiliacionPaso] = useState<1 | 2 | 3>(1);
+  const [afilNombreComercial, setAfilNombreComercial] = useState('');
+  const [afilCategoria, setAfilCategoria] = useState('Restaurante');
+  const [afilRuc, setAfilRuc] = useState('');
+  const [afilRazonSocial, setAfilRazonSocial] = useState('');
+  const [afilCanton, setAfilCanton] = useState<'baba' | 'babahoyo'>('baba');
+  const [afilDireccion, setAfilDireccion] = useState('');
+  const [afilTelefonoComercio, setAfilTelefonoComercio] = useState('+5939');
+  const [afilDescripcion, setAfilDescripcion] = useState('');
+
+  const [afilNombreEncargado, setAfilNombreEncargado] = useState('');
+  const [afilEmail, setAfilEmail] = useState('');
+  const [afilPassword, setAfilPassword] = useState('');
+  const [afilTelefonoEncargado, setAfilTelefonoEncargado] = useState('+5939');
+
+  const [afilBanco, setAfilBanco] = useState('Banco Pichincha');
+  const [afilTipoCuenta, setAfilTipoCuenta] = useState<'ahorros' | 'corriente'>('ahorros');
+  const [afilNumeroCuenta, setAfilNumeroCuenta] = useState('');
+  const [afilTitularCuenta, setAfilTitularCuenta] = useState('');
+
+  const [afiliacionLoading, setAfiliacionLoading] = useState(false);
+  const [afiliacionError, setAfiliacionError] = useState('');
+  const [afiliacionSuccess, setAfiliacionSuccess] = useState(false);
+
+  const handleSubmitAfiliacion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!afilNombreComercial.trim() || !afilDireccion.trim() || !afilEmail.trim() || !afilPassword.trim() || !afilNombreEncargado.trim()) {
+      setAfiliacionError('Por favor completa todos los campos obligatorios.');
+      return;
+    }
+
+    setAfiliacionLoading(true);
+    setAfiliacionError('');
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/afiliar-comercio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombreComercial: afilNombreComercial.trim(),
+          categoria: afilCategoria,
+          descripcion: afilDescripcion.trim(),
+          direccion: afilDireccion.trim(),
+          canton: afilCanton,
+          telefonoComercio: afilTelefonoComercio.trim(),
+          ruc: afilRuc.trim() || null,
+          razonSocial: afilRazonSocial.trim() || null,
+          banco: afilBanco,
+          tipoCuenta: afilTipoCuenta,
+          numeroCuenta: afilNumeroCuenta.trim() || null,
+          titularCuenta: afilTitularCuenta.trim() || afilNombreEncargado.trim(),
+          nombreEncargado: afilNombreEncargado.trim(),
+          email: afilEmail.trim().toLowerCase(),
+          password: afilPassword.trim(),
+          telefonoEncargado: afilTelefonoEncargado.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Error al procesar la solicitud de afiliación.');
+      }
+
+      setAfiliacionSuccess(true);
+    } catch (err: any) {
+      setAfiliacionError(err.message || 'Error de comunicación.');
+    } finally {
+      setAfiliacionLoading(false);
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -787,6 +860,32 @@ export default function App() {
 
         {/* Acciones & Enlaces a Otros Paneles del Proyecto */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button
+            onClick={() => {
+              setAfiliacionSuccess(false);
+              setAfiliacionError('');
+              setAfiliacionPaso(1);
+              setShowAfiliacionModal(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#fff',
+              color: '#0f172a',
+              border: '1px solid #cbd5e1',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              fontWeight: '700',
+              fontSize: '13px',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            <Store size={15} color="#e11d48" />
+            <span>¿Tienes un restaurante? <strong style={{ color: '#e11d48' }}>Afíliate</strong></span>
+          </button>
+
           <button
             onClick={() => setDrawerCarritoAbierto(true)}
             style={{
@@ -2685,6 +2784,710 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Afiliar Mi Restaurante / Onboarding de Comercios */}
+      {showAfiliacionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          zIndex: 9999,
+          backdropFilter: 'blur(5px)',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '24px',
+            width: '100%',
+            maxWidth: '620px',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+            border: '1px solid #e2e8f0',
+            color: '#0f172a',
+          }}>
+            {/* Header del Modal */}
+            <div style={{
+              padding: '24px 28px',
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #fff1f2 0%, #ffffff 100%)',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+            }}>
+              <div>
+                <span style={{ background: '#ffe4e6', color: '#e11d48', fontSize: '11px', fontWeight: '800', padding: '4px 10px', borderRadius: '6px' }}>
+                  PROGRAMA PARTNERS · BABA & BABAHOYO
+                </span>
+                <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', margin: '6px 0 2px 0' }}>
+                  Afiliar mi Restaurante a DeliveryYa
+                </h3>
+                <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>
+                  Vende más y digitaliza tus comandas con nuestra flota motorizada.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowAfiliacionModal(false)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '10px',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {afiliacionSuccess ? (
+              <div style={{ padding: '40px 28px', textAlign: 'center' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  background: '#ecfdf5',
+                  color: '#059669',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 20px auto',
+                  border: '2px solid #a7f3d0'
+                }}>
+                  <CheckCircle2 size={36} />
+                </div>
+
+                <h3 style={{ fontSize: '22px', fontWeight: '900', color: '#065f46', margin: '0 0 10px 0' }}>
+                  ¡Solicitud Recibida con Éxito!
+                </h3>
+
+                <p style={{ color: '#334155', fontSize: '14px', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 24px auto' }}>
+                  El restaurante <strong>{afilNombreComercial}</strong> ha sido registrado en nuestra plataforma y está en proceso de revisión por el equipo administrativo.
+                  <br /><br />
+                  Se han creado tus credenciales de acceso bajo el correo <strong>{afilEmail}</strong>. En cuanto tu tienda sea aprobada, podrás ingresar al panel de comercio y activar tu menú para comenzar a recibir pedidos.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAfiliacionModal(false)}
+                  style={{
+                    background: '#e11d48',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '12px 32px',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(225, 29, 72, 0.3)',
+                  }}
+                >
+                  Entendido, volver a la tienda 🚀
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitAfiliacion} style={{ padding: '24px 28px' }}>
+                {/* Indicador de Pasos */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                  <div
+                    onClick={() => setAfiliacionPaso(1)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: afiliacionPaso === 1 ? '#ffe4e6' : '#f8fafc',
+                      border: `1px solid ${afiliacionPaso === 1 ? '#fecdd3' : '#e2e8f0'}`,
+                      color: afiliacionPaso === 1 ? '#e11d48' : '#64748b',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    1. Tu Negocio
+                  </div>
+
+                  <div
+                    onClick={() => setAfiliacionPaso(2)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: afiliacionPaso === 2 ? '#ffe4e6' : '#f8fafc',
+                      border: `1px solid ${afiliacionPaso === 2 ? '#fecdd3' : '#e2e8f0'}`,
+                      color: afiliacionPaso === 2 ? '#e11d48' : '#64748b',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    2. Encargado
+                  </div>
+
+                  <div
+                    onClick={() => setAfiliacionPaso(3)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: afiliacionPaso === 3 ? '#ffe4e6' : '#f8fafc',
+                      border: `1px solid ${afiliacionPaso === 3 ? '#fecdd3' : '#e2e8f0'}`,
+                      color: afiliacionPaso === 3 ? '#e11d48' : '#64748b',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    3. Pagos & Banco
+                  </div>
+                </div>
+
+                {afiliacionError && (
+                  <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#b91c1c',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    marginBottom: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}>
+                    <AlertCircle size={16} />
+                    <span>{afiliacionError}</span>
+                  </div>
+                )}
+
+                {/* PASO 1: DATOS DEL NEGOCIO */}
+                {afiliacionPaso === 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                        Nombre Comercial del Restaurante / Local *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={afilNombreComercial}
+                        onChange={(e) => setAfilNombreComercial(e.target.value)}
+                        placeholder="Ej: Picantería Los Almendros"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Categoría
+                        </label>
+                        <select
+                          value={afilCategoria}
+                          onChange={(e) => setAfilCategoria(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            background: '#fff',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="Restaurante">Comida Criolla / Típica</option>
+                          <option value="Comida Rápida">Comida Rápida & Burgers</option>
+                          <option value="Pizzería">Pizzas & Pastas</option>
+                          <option value="Mariscos">Pescados & Mariscos</option>
+                          <option value="Parrilladas">Parrilladas & Asados</option>
+                          <option value="Bebidas">Jugos & Cafetería</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Cantón *
+                        </label>
+                        <select
+                          value={afilCanton}
+                          onChange={(e: any) => setAfilCanton(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            background: '#fff',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="baba">📍 Baba (Sede)</option>
+                          <option value="babahoyo">📍 Babahoyo</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          RUC o Cédula (SRI)
+                        </label>
+                        <input
+                          type="text"
+                          value={afilRuc}
+                          onChange={(e) => setAfilRuc(e.target.value)}
+                          placeholder="1203456789001"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Razón Social (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={afilRazonSocial}
+                          onChange={(e) => setAfilRazonSocial(e.target.value)}
+                          placeholder="Ej: ALMENDROS FOOD S.A.S."
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                        Dirección del Local *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={afilDireccion}
+                        onChange={(e) => setAfilDireccion(e.target.value)}
+                        placeholder="Calle principal, número o referencia..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '13px',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Teléfono del Local *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={afilTelefonoComercio}
+                          onChange={(e) => setAfilTelefonoComercio(e.target.value)}
+                          placeholder="+5939..."
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Plato Estrella / Descripción
+                        </label>
+                        <input
+                          type="text"
+                          value={afilDescripcion}
+                          onChange={(e) => setAfilDescripcion(e.target.value)}
+                          placeholder="Ej: Secos criollos al leño"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!afilNombreComercial.trim() || !afilDireccion.trim()) {
+                          setAfiliacionError('Ingresa el nombre comercial y la dirección del local.');
+                          return;
+                        }
+                        setAfiliacionError('');
+                        setAfiliacionPaso(2);
+                      }}
+                      style={{
+                        marginTop: '10px',
+                        background: '#0f172a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '12px',
+                        fontWeight: '800',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Continuar a Datos del Encargado ➔
+                    </button>
+                  </div>
+                )}
+
+                {/* PASO 2: DATOS DEL ENCARGADO / CREDENCIALES */}
+                {afiliacionPaso === 2 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569' }}>
+                      ℹ️ Estos datos se utilizarán para crear tu cuenta de acceso al <strong>Panel del Comercio</strong> (Kanban y administración de platos).
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                        Nombre y Apellido del Encargado / Dueño *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={afilNombreEncargado}
+                        onChange={(e) => setAfilNombreEncargado(e.target.value)}
+                        placeholder="Ej: Darwin Vargas"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '13px',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Correo Electrónico (Tu Usuario) *
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={afilEmail}
+                          onChange={(e) => setAfilEmail(e.target.value)}
+                          placeholder="admin@tu-restaurante.com"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Contraseña de Acceso *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={afilPassword}
+                          onChange={(e) => setAfilPassword(e.target.value)}
+                          placeholder="Mínimo 6 caracteres"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                        Teléfono / WhatsApp de Contacto Personal
+                      </label>
+                      <input
+                        type="text"
+                        value={afilTelefonoEncargado}
+                        onChange={(e) => setAfilTelefonoEncargado(e.target.value)}
+                        placeholder="+5939..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '13px',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setAfiliacionPaso(1)}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          borderRadius: '12px',
+                          border: '1px solid #cbd5e1',
+                          background: '#fff',
+                          color: '#475569',
+                          fontWeight: '700',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ⬅ Volver
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!afilNombreEncargado.trim() || !afilEmail.trim() || !afilPassword.trim()) {
+                            setAfiliacionError('Ingresa el nombre, correo y contraseña del encargado.');
+                            return;
+                          }
+                          setAfiliacionError('');
+                          setAfiliacionPaso(3);
+                        }}
+                        style={{
+                          flex: 2,
+                          background: '#0f172a',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '12px',
+                          fontWeight: '800',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Continuar a Datos de Cobro ➔
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* PASO 3: DATOS BANCARIOS & ENVÍO */}
+                {afiliacionPaso === 3 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ background: '#ecfdf5', padding: '12px 16px', borderRadius: '12px', border: '1px solid #a7f3d0', fontSize: '13px', color: '#065f46' }}>
+                      💰 <strong>Liquidaciones de Ventas:</strong> En esta cuenta bancaria acreditaremos semanalmente los pagos por los pedidos entregados en Baba y Babahoyo.
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Banco en Ecuador
+                        </label>
+                        <select
+                          value={afilBanco}
+                          onChange={(e) => setAfilBanco(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            background: '#fff',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="Banco Pichincha">Banco Pichincha</option>
+                          <option value="Banco Guayaquil">Banco Guayaquil</option>
+                          <option value="Banco Bolivariano">Banco Bolivariano</option>
+                          <option value="Banco del Pacífico">Banco del Pacífico</option>
+                          <option value="Produbanco">Produbanco</option>
+                          <option value="Cooperativa JEP">Cooperativa JEP</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Tipo de Cuenta
+                        </label>
+                        <select
+                          value={afilTipoCuenta}
+                          onChange={(e: any) => setAfilTipoCuenta(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            background: '#fff',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="ahorros">Cuenta de Ahorros</option>
+                          <option value="corriente">Cuenta Corriente</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Número de Cuenta
+                        </label>
+                        <input
+                          type="text"
+                          value={afilNumeroCuenta}
+                          onChange={(e) => setAfilNumeroCuenta(e.target.value)}
+                          placeholder="Ej: 2200334455"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#334155' }}>
+                          Titular de la Cuenta
+                        </label>
+                        <input
+                          type="text"
+                          value={afilTitularCuenta}
+                          onChange={(e) => setAfilTitularCuenta(e.target.value)}
+                          placeholder="Nombre o Razón Social"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setAfiliacionPaso(2)}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          borderRadius: '12px',
+                          border: '1px solid #cbd5e1',
+                          background: '#fff',
+                          color: '#475569',
+                          fontWeight: '700',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ⬅ Volver
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={afiliacionLoading}
+                        style={{
+                          flex: 2,
+                          background: 'linear-gradient(135deg, #e11d48, #be123c)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '12px',
+                          fontWeight: '800',
+                          fontSize: '14px',
+                          cursor: afiliacionLoading ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          boxShadow: '0 4px 14px rgba(225, 29, 72, 0.3)',
+                          opacity: afiliacionLoading ? 0.7 : 1,
+                        }}
+                      >
+                        {afiliacionLoading && <Loader2 size={16} className="animate-spin" />}
+                        {afiliacionLoading ? 'Enviando Solicitud...' : 'Enviar Solicitud de Afiliación 🚀'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </form>
+            )}
           </div>
         </div>
       )}
