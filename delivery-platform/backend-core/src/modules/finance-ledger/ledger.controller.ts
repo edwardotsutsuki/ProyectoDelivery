@@ -145,3 +145,100 @@ ledgerRouter.get('/resumen-global', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
+
+// 4. Liquidar caja de repartidor (Asentar depósito de efectivo en Backoffice)
+ledgerRouter.post('/liquidar-caja', async (req: Request, res: Response) => {
+  let client;
+  try {
+    const { repartidorId, monto, comprobante, notas } = req.body;
+    if (!repartidorId || monto === undefined || parseFloat(monto) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'repartidorId y monto mayor a 0 son obligatorios',
+      });
+    }
+
+    const targetUserId = resolveUserId(repartidorId);
+    client = await pgPool.connect();
+    await client.query('BEGIN');
+
+    const currentBalanceQuery = `
+      SELECT COALESCE(SUM(monto), 0.00) as saldo_actual
+      FROM transacciones_ledger
+      WHERE usuario_id::text = $1;
+    `;
+    const currentBalanceRes = await client.query(currentBalanceQuery, [targetUserId]);
+    const saldoPrevio = parseFloat(currentBalanceRes.rows[0]?.saldo_actual || '0.00');
+    const valorMonto = parseFloat(monto);
+    const nuevoSaldo = saldoPrevio + valorMonto;
+
+    const insertQuery = `
+      INSERT INTO transacciones_ledger (
+        usuario_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+      ) VALUES ($1, 'liquidacion', $2, $3, $4, $5)
+      RETURNING *;
+    `;
+    const result = await client.query(insertQuery, [
+      targetUserId,
+      valorMonto,
+      nuevoSaldo,
+      `Liquidación de caja física - Comprobante: ${comprobante || 'S/N'}`,
+      { comprobante, notas, liquidadoPor: 'admin-backoffice' },
+    ]);
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      success: true,
+      message: 'Liquidación de caja asentada exitosamente en el ledger',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK');
+    res.status(500).json({ success: false, error: (error as Error).message });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// 5. Listar estado de flota y saldos de repartidores (Torre de Control Backoffice)
+ledgerRouter.get('/repartidores-flota', async (_req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        u.id, u.nombre, u.email, u.telefono, u.estado_activo,
+        ST_Y(u.ubicacion) as lat,
+        ST_X(u.ubicacion) as lon,
+        COALESCE(SUM(t.monto), 0.00) as saldo_ledger
+      FROM usuarios u
+      LEFT JOIN transacciones_ledger t ON t.usuario_id = u.id
+      WHERE u.rol = 'repartidor'
+      GROUP BY u.id, u.nombre, u.email, u.telefono, u.estado_activo, u.ubicacion
+      ORDER BY u.nombre ASC;
+    `;
+    const result = await pgPool.query(query);
+
+    const repartidores = result.rows.map((row: any) => ({
+      id: row.id,
+      nombre: row.nombre,
+      email: row.email,
+      telefono: row.telefono,
+      activo: row.estado_activo,
+      ubicacion: {
+        lat: row.lat ? parseFloat(row.lat) : -1.7925,
+        lon: row.lon ? parseFloat(row.lon) : -79.6790,
+      },
+      saldoLedger: parseFloat(row.saldo_ledger),
+      deudaEfectivo: Math.max(0, -parseFloat(row.saldo_ledger)),
+    }));
+
+    res.json({
+      success: true,
+      total: repartidores.length,
+      data: repartidores,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+

@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage';
 import ComerciosPage from './pages/ComerciosPage';
 import ProductosPage from './pages/ProductosPage';
 import ZonasTarifasPage from './pages/ZonasTarifasPage';
+import FlotaCajaPage from './pages/FlotaCajaPage';
 import TrackingPage from './pages/TrackingPage';
 import {
   LayoutDashboard,
@@ -43,7 +44,7 @@ interface MovementItem {
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-type NavSection = 'dashboard' | 'comercios' | 'productos' | 'zonas' | 'tracker' | 'finanzas';
+type NavSection = 'dashboard' | 'comercios' | 'productos' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
 
 export default function App() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -238,6 +239,26 @@ export default function App() {
             }}
           >
             <Layers size={18} /> Zonas y Tarifas PostGIS
+          </button>
+
+          <button
+            onClick={() => setSeccion('flota')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '14px',
+              background: seccion === 'flota' ? '#e11d48' : 'transparent',
+              color: seccion === 'flota' ? '#fff' : '#94a3b8',
+              textAlign: 'left',
+            }}
+          >
+            <Bike size={18} /> Torre de Flota & Caja
           </button>
 
           <button
@@ -454,7 +475,7 @@ export default function App() {
         {seccion === 'productos' && <ProductosPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'zonas' && <ZonasTarifasPage />}
-
+        {seccion === 'flota' && <FlotaCajaPage />}
         {seccion === 'tracker' && <TrackingPage />}
 
         {seccion === 'finanzas' && (

@@ -93,37 +93,37 @@
 
 ---
 
-### 🔄 Fase 5: Portal Maestro de Administración y Gestión Comercial (Backoffice Enterprise) - [EN PROCESO]
+### ✅ Fase 5: Portal Maestro de Administración y Gestión Comercial (Backoffice Enterprise) - [COMPLETADA]
 > **Propósito:** Dotar a la plataforma de las herramientas de gestión de negocios equivalentes a PedidosYa Partner / Rappi Backoffice para administrar restaurantes, menús, tarifas y zonas de cobertura sin depender de semillas hardcodeadas.
 
-- [ ] **5.1 Autenticación Administrativa & Guard de Rutas**:
-  - [ ] Pantalla de Login en Backoffice (`/login`) para `admin@delivery.com`.
-  - [ ] Almacenamiento seguro del token JWT y persistencia de sesión del operador.
-  - [ ] Protección de rutas: redirigir a `/login` si el usuario no tiene rol `admin`.
-  - [ ] Barra superior con perfil del administrador activo y botón de Cerrar Sesión.
-- [ ] **5.2 Onboarding y Administración de Locales (Comercios CRUD)**:
-  - [ ] Endpoints backend: `POST /api/v1/catalog/comercios` (creación con punto espacial PostGIS), `PUT /:id` (edición) y `PATCH /:id/estado` (abierto/cerrado, activo/inactivo).
-  - [ ] Pantalla de Gestión de Locales en Backoffice con tabla filtrable por ciudad (Baba vs Babahoyo).
-  - [ ] Modal de registro/edición de comercio: RUC, Razón Social, Nombre Comercial, Categoría gastronómica, Dirección, Coordenadas GPS (Lat/Lon), Teléfono, Comisión (%) y Tiempo promedio.
-- [ ] **5.3 Creador de Menús y Gestión de Productos**:
-  - [ ] Endpoints backend: `POST /api/v1/catalog/comercios/:id/productos`, `PUT /productos/:id`, `PATCH /productos/:id/disponibilidad` y `DELETE /productos/:id`.
-  - [ ] Pantalla en Backoffice con selector de local comercial y visor de catálogo por categorías.
-  - [ ] Modal de creación y edición de productos: Nombre, Descripción, Precio ($), Categoría, Imagen y Switch de Disponibilidad en cocina.
-- [ ] **5.4 Zonas de Cobertura Geofencing y Tarifas Dinámicas**:
-  - [ ] Tabla en PostgreSQL `zonas_cobertura` con polígonos PostGIS `GEOMETRY(Polygon, 4326)`:
-    - Zona 1: Casco Urbano Baba (Tarifa base $1.50).
-    - Zona 2: Periferia y Recintos Baba (Tarifa $2.00 - $2.50).
-    - Zona 3: Babahoyo Centro (Tarifa $1.50).
-    - Zona 4: Corredor E484 Baba-Babahoyo (Tarifa intercantonal $4.50).
-  - [ ] Endpoint de cotización dinámica de flete según punto de recogida y entrega: `POST /api/v1/tracking/calcular-tarifa`.
-  - [ ] Pantalla en Backoffice para visualizar polígonos de zonas y editar reglas de tarifación (tarifa base + costo por km excedente).
-- [ ] **5.5 Torre de Control de Flota y Cuadre de Caja**:
-  - [ ] Vista consolidada de repartidores registrados, vehículo, estado Online/Offline y saldo deudor.
-  - [ ] Endpoint y formulario modal: `POST /api/v1/ledger/liquidar-caja` para asentar depósitos de efectivo de los repartidores.
+- [x] **5.1 Autenticación Administrativa & Guard de Rutas**:
+  - [x] Pantalla de Login en Backoffice (`/login`) para `admin@delivery.com` con token JWT persistente y botón Demo.
+  - [x] Almacenamiento seguro del token JWT y persistencia de sesión del operador.
+  - [x] Protección de rutas: redirigir a `/login` si el usuario no tiene rol `admin`.
+  - [x] Barra superior con perfil del administrador activo y botón de Cerrar Sesión.
+- [x] **5.2 Onboarding y Administración de Locales (Comercios CRUD)**:
+  - [x] Endpoints backend: `POST /api/v1/catalog/comercios` (creación con punto espacial PostGIS `ST_SetSRID(ST_MakePoint(lon, lat), 4326)`), `PUT /:id` (edición) y `PATCH /:id/estado` (abierto/cerrado en Postgres + Redis).
+  - [x] Pantalla de Gestión de Locales en Backoffice con tabla filtrable por ciudad (Baba vs Babahoyo).
+  - [x] Modal de registro/edición de comercio con presets de coordenadas en Baba Centro y Babahoyo.
+- [x] **5.3 Creador de Menús y Gestión de Productos**:
+  - [x] Endpoints backend: `POST /api/v1/catalog/comercios/:id/productos`, `PUT /productos/:id`, `PATCH /productos/:id/toggle-disponibilidad` y `DELETE /productos/:id`.
+  - [x] Pantalla en Backoffice con selector de local comercial y visor de catálogo por categorías.
+  - [x] Modal de creación de platos/productos y switch de disponibilidad ultra rápida en cocina vía Redis + Postgres.
+- [x] **5.4 Zonas de Cobertura Geofencing y Tarifas Dinámicas**:
+  - [x] Tabla en PostgreSQL `zonas_cobertura` con polígonos PostGIS `GEOMETRY(Polygon, 4326)`:
+    - Zona 1: Casco Urbano Baba (Tarifa base $1.25, km extra $0.35).
+    - Zona 2: Periferia y Recintos Baba (Tarifa $2.00, km extra $0.50).
+    - Zona 3: Babahoyo Centro (Tarifa $1.50, km extra $0.40).
+    - Zona 4: Corredor E484 Baba-Babahoyo (Tarifa intercantonal $3.50, km extra $0.60).
+  - [x] Endpoint de cotización dinámica de flete con validación PostGIS `ST_Contains`: `POST /api/v1/tracking/calcular-tarifa`.
+  - [x] Pantalla en Backoffice para sincronizar polígonos de zonas y simulación dinámica con recargos nocturnos ($0.50) y lluvia ($0.75).
+- [x] **5.5 Torre de Control de Flota y Cuadre de Caja**:
+  - [x] Endpoints backend: `GET /api/v1/ledger/repartidores-flota` y `POST /api/v1/ledger/liquidar-caja`.
+  - [x] Pantalla `FlotaCajaPage` con monitoreo de repartidores, alerta de límite de deuda en efectivo ($25+) y modal de liquidación inmutable en el ledger.
 
 ---
 
-### ⏳ Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada
+### 🔄 Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada - [EN PROCESO]
 - [ ] **App Móvil Cliente (`mobile/app-cliente`)**:
   - [ ] Radar / Mapa en tiempo real en la pantalla de pedido activo mostrando la moto del repartidor avanzando hacia el destino.
   - [ ] Historial de pedidos anteriores y opción de repetir pedido con 1 clic.
