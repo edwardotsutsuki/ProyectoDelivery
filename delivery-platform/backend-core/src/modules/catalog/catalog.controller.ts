@@ -193,6 +193,12 @@ catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: R
       // Ignorar si Redis no responde para el interruptor
     }
 
+    // Normalizar precio numérico para evitar errores en frontend
+    productos = productos.map((p) => ({
+      ...p,
+      precio: parseFloat(p.precio) || 0,
+    }));
+
     res.json({ success: true, count: productos.length, data: productos });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });

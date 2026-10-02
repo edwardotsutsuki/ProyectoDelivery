@@ -405,8 +405,14 @@ export default function App() {
       const res = await fetch(`${API_BASE}/catalog/comercio/${comercio.id}/productos`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.data) {
-          setProductos(data.data);
+        if (data.success && Array.isArray(data.data)) {
+          const parsedProducts = data.data.map((p: any) => ({
+            ...p,
+            precio: parseFloat(p.precio) || 0,
+            categoria: p.categoria || 'Especialidades',
+            is_disponible: p.is_disponible !== false,
+          }));
+          setProductos(parsedProducts);
           setVista('menu');
           window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
@@ -488,7 +494,7 @@ export default function App() {
 
   const storeActivoParaPedido = comercioCarrito || comercioActivo;
   const totalItemsCount = carrito.reduce((acc, item) => acc + item.cantidad, 0);
-  const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(item.producto.precio * 100) * item.cantidad, 0);
+  const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(Number(item.producto.precio || 0) * 100) * item.cantidad, 0);
   const subtotal = subtotalCents / 100;
   const costoEnvio = storeActivoParaPedido?.canton === 'Babahoyo' ? 1.50 : 1.25;
   const total = subtotal + (carrito.length > 0 ? costoEnvio : 0);
@@ -1091,18 +1097,18 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span style={{ background: '#ffe4e6', color: '#e11d48', fontSize: '11px', fontWeight: '800', padding: '4px 10px', borderRadius: '6px' }}>
-                  {comercioActivo.categoria} · {comercioActivo.canton}
+                  {comercioActivo.categoria || 'Restaurante'} · {comercioActivo.canton || 'Baba'}
                 </span>
                 <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', margin: '10px 0 6px 0' }}>
                   {comercioActivo.nombre_comercial}
                 </h1>
                 <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 12px 0' }}>
-                  {comercioActivo.descripcion}
+                  {comercioActivo.descripcion || ''}
                 </p>
                 <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#475569' }}>
-                  <span>📍 {comercioActivo.direccion}</span>
-                  <span>🕒 ~{comercioActivo.tiempo_entrega_promedio} min</span>
-                  <span>🛵 Flete base: ${Number(comercioActivo.costo_base_envio).toFixed(2)}</span>
+                  <span>📍 {comercioActivo.direccion || 'Baba'}</span>
+                  <span>🕒 ~{comercioActivo.tiempo_entrega_promedio || 30} min</span>
+                  <span>🛵 Flete base: ${Number(comercioActivo.costo_base_envio || 1.25).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1164,7 +1170,7 @@ export default function App() {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
                     <span style={{ fontSize: '18px', fontWeight: '900', color: '#e11d48' }}>
-                      ${prod.precio.toFixed(2)}
+                      ${Number(prod.precio || 0).toFixed(2)}
                     </span>
 
                     {cantidad > 0 ? (
@@ -1539,7 +1545,7 @@ export default function App() {
                 {carrito.map(it => (
                   <div key={it.producto.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                     <span style={{ color: '#334155' }}>{it.cantidad}x {it.producto.nombre}</span>
-                    <strong style={{ color: '#0f172a' }}>${(it.producto.precio * it.cantidad).toFixed(2)}</strong>
+                    <strong style={{ color: '#0f172a' }}>${(Number(it.producto.precio || 0) * it.cantidad).toFixed(2)}</strong>
                   </div>
                 ))}
               </div>
@@ -1756,7 +1762,7 @@ export default function App() {
                     <div key={it.producto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f8fafc', paddingBottom: '10px' }}>
                       <div>
                         <strong style={{ fontSize: '13px', color: '#0f172a' }}>{it.producto.nombre}</strong>
-                        <div style={{ fontSize: '12px', color: '#e11d48', fontWeight: '700' }}>${it.producto.precio.toFixed(2)} c/u</div>
+                        <div style={{ fontSize: '12px', color: '#e11d48', fontWeight: '700' }}>${Number(it.producto.precio || 0).toFixed(2)} c/u</div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button onClick={() => modificarCantidad(it.producto.id, -1)} style={{ width: '26px', height: '26px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>-</button>
