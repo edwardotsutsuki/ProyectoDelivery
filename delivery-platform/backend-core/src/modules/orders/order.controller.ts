@@ -88,6 +88,30 @@ function resolveMerchantId(merchantId: string): string {
   return merchantId;
 }
 
+function resolveClientId(id?: string): string {
+  if (!id || id === 'usr-cliente-01' || id === 'cliente-01') {
+    return '44444444-4444-4444-4444-444444444444';
+  }
+  return id;
+}
+
+const PRODUCT_SLUG_MAP: Record<string, string> = {
+  'seco-gallina': '66666666-6666-6666-6666-666666666601',
+  'bolon-mixto': '66666666-6666-6666-6666-666666666602',
+  'seco-pollo': '66666666-6666-6666-6666-666666666603',
+  'menestra': '66666666-6666-6666-6666-666666666604',
+  'maracuya': '66666666-6666-6666-6666-666666666605',
+  'cafe': '66666666-6666-6666-6666-666666666606',
+  'patacones': '66666666-6666-6666-6666-666666666606',
+};
+
+function resolveProductId(id?: string): string {
+  if (id && PRODUCT_SLUG_MAP[id]) return PRODUCT_SLUG_MAP[id];
+  if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return id;
+  return '66666666-6666-6666-6666-666666666601';
+}
+
+
 // Helper para normalizar estado a formato estándar
 function normalizeStatus(status: string): string {
   const map: Record<string, string> = {
@@ -170,11 +194,12 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
     } = req.body;
 
     const targetMerchantId = resolveMerchantId(comercioId);
+    const targetClientId = resolveClientId(clienteId);
 
     // Obtener ítems: del carrito en Redis o directamente del body
     let cartItems = directItems;
     if (!cartItems || cartItems.length === 0) {
-      const cartRaw = await redisClient.get(`cart:${clienteId}`);
+      const cartRaw = await redisClient.get(`cart:${clienteId || targetClientId}`);
       if (cartRaw) {
         const cart = JSON.parse(cartRaw);
         cartItems = cart.items;
@@ -203,7 +228,7 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       ) RETURNING id, estado, total, fecha_creacion;
     `;
     const orderResult = await client.query(orderInsertQuery, [
-      clienteId,
+      targetClientId,
       targetMerchantId,
       metodoPago,
       subtotal,
@@ -217,12 +242,13 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
     const pedidoCreado = orderResult.rows[0];
 
     for (const item of cartItems) {
+      const targetProductId = resolveProductId(item.productoId || item.id);
       await client.query(
         `INSERT INTO pedidos_items (pedido_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)`,
         [
           pedidoCreado.id,
-          item.productoId || item.id || '66666666-6666-6666-6666-666666666666',
+          targetProductId,
           item.cantidad || item.quantity || 1,
           item.precio || item.unitPrice || 0,
         ]

@@ -8,7 +8,7 @@
 > **Geografía Piloto:** Baba es el piloto operativo primario `(-1.7917, -79.6783)` y Babahoyo la expansión inmediata `(-1.8022, -79.5344)`, Provincia de Los Ríos, Ecuador.  
 > **Estado de la Plataforma:**  
 > 1. **Panel Comercio Web (3003):** Kanban interactivo con 3 columnas en Baba, WebSocket `SUBSCRIBE_MERCHANT` y polling 5s, autenticación por comercio verificado. 49/49 pruebas aprobadas.  
-> 2. **Mobile Cliente (`mobile/app-cliente`):** Catálogo Baba (Picantería El Buen Sabor), carrito de compras con importes en centavos y checkout local. 5/5 pruebas aprobadas.  
+> 2. **Mobile Cliente (`mobile/app-cliente`):** Catálogo Baba (Picantería El Buen Sabor), carrito de compras con importes en centavos y Checkout conectado en vivo al API Gateway (`POST /api/v1/orders/checkout`) con confirmación de cocina y ID de PostgreSQL. 10/10 pruebas aprobadas.  
 > 3. **Mobile Repartidor (`mobile/app-repartidor`):** Turno Online/Offline, gestión de comandas en Baba, botones giro a giro con Waze y Google Maps con coordenadas del piloto, y Billetera Digital conectada en vivo al Gateway (`/ledger/billetera/usr-repartidor-01`). 12/12 pruebas aprobadas.  
 > 4. **Backoffice Directivo (3004):** Conectado en tiempo real al API Gateway (`8080`) consumiendo métricas de Ledger global (`/ledger/resumen-global`), catálogo espacial PostGIS de comercios en Baba y Babahoyo (`/catalog/comercios`), pedidos listos para despacho (`/orders/disponibles/reparto`) y seguimiento en mapa Leaflet interactivo. Build TypeScript + Vite 100% aprobado.  
 > 5. **Backend Core & PostGIS (3001, 5433, 4001):** Endpoints espaciales y de pedidos verificados, enrutador geodésico y OSRM (`/api/v1/tracking/route`), despacho y entrega (`/tomar`, `/entregar`), y Ledger inmutable protegido por trigger PL/pgSQL.
@@ -85,8 +85,9 @@
 - [x] **Mobile Cliente (`mobile/app-cliente`)**:
   - Catálogo de productos Baba (Picantería El Buen Sabor).
   - Carrito con cálculo de subtotales y envío único ($1.50).
-  - Checkout con selección de método de pago (Efectivo / Transferencia).
-  - 5/5 pruebas unitarias aprobadas.
+  - Checkout conectado en vivo a `POST /api/v1/orders/checkout` con método de pago (Efectivo / Transferencia).
+  - Feedback visual de orden confirmada con ID generado por PostgreSQL y estado en cocina.
+  - Batería de pruebas unitarias ampliada: **10/10 pruebas aprobadas**.
 
 ---
 
