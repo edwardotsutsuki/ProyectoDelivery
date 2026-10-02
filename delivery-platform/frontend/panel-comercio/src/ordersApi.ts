@@ -55,6 +55,9 @@ export function parseOrders(value: unknown, merchantId: string): Order[] {
       address: text(row.delivery_address ?? row.direccion_entrega),
       note: typeof (row.note ?? row.notas) === 'string' ? String(row.note ?? row.notas) : undefined,
       total: row.total === undefined ? undefined : amount(row.total),
+      tipoLayout: row.tipo_layout === 'grid_ecommerce' ? 'grid_ecommerce' : 'restaurante',
+      politicaSustitucion: typeof row.politica_sustitucion === 'string' ? row.politica_sustitucion : undefined,
+      recetaAdjunta: typeof row.receta_adjunta === 'string' ? row.receta_adjunta : undefined,
     });
   }
   return orders;

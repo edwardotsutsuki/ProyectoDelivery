@@ -68,6 +68,7 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 | **Fase 4** | Geodesia y Tracking en Vivo | **Web implementada ✅ / Mobile y recorrido real pendientes** | Antigravity (OSRM/Gateway) + Codex (Mapas) |
 | **Fase 5** | Billetera Virtual y Ledger Inmutable | **Completada ✅** | Antigravity (Ledger SQL + UI Billetera) |
 | **Fase 5.11** | Arquitectura Multi-Vertical, Categorías y Stock Opcional | **Completada ✅** | Antigravity |
+| **Fase 5.12** | Experiencia Especializada Retail & Modo Picking Operativo | **Completada ✅** | Antigravity |
 
 ---
 
@@ -192,6 +193,22 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] Layout adaptativo para retail (`grid_ecommerce`): tarjetas compactas tipo estantería, selector de cantidad directo en tarjeta, precio con unidad de medida (`$1.50 / kg`) y badges de stock / agotado.
   - [x] Layout adaptativo para comida (`restaurante`): experiencia gastronómica con platos, descripciones y pedidos a cocina.
   - [x] Buscador instantáneo de productos y filtro por categorías dentro de cada local.
+
+---
+
+### ✅ Fase 5.12: Experiencia Especializada Retail / Supermercados / Farmacias & Modo Picking Operativo (Completada)
+- [x] **Storefront Retail Cliente (`frontend/landing-page` - Puerto 3002)**:
+  - [x] **Barra Flotante Sticky de Canasta**: Bottom bar persistente que muestra total acumulado, conteo de ítems, acceso al drawer y botón directo a checkout para compras rápidas de supermercado y farmacia.
+  - [x] **Preferencias de Sustitución en Tienda**: Sección en el checkout con 3 alternativas claras ante falta de stock (`Reemplazar similar`, `Llamar por teléfono / WhatsApp`, `No reemplazar / cancelar ítem`).
+  - [x] **Validación de Receta Médica (ARCSA)**: Carga y verificación obligatoria de comprobante médico para fármacos con prescripción.
+  - [x] **Control de Mayoría de Edad (+18 Años)**: Declaración legal juramentada para compras en licoreras con presentación de cédula física obligatoria al motorizado.
+- [x] **Panel Comercio Operativo (`frontend/panel-comercio` - Puerto 3003)**:
+  - [x] **Selector Dual de Modo Operativo**: Switch en cabecera entre `🍳 Modo Cocina (Restaurante)` y `🛒 Modo Picking Despensa (Retail / Supermercado / Farmacia)`.
+  - [x] **Tablero Kanban de Picking**: Columnas adaptadas (`Nuevas Canastas` ➔ `En Recolección / Picking` ➔ `Canastas Listas para Retiro`).
+  - [x] **Checklist Interactivo de Recolección en Percha**: Permite marcar cada ítem recolectado con checkbox y barra visual de progreso (`X/Y ítems recolectados - %`).
+  - [x] **Contador de Bultos / Fundas**: Control operativo de número de paquetes (`📦 Fundas / Bultos: [- 1 +]`) para despacho seguro al repartidor.
+  - [x] **Badges de Sustitución y Receta**: Visualización directa en cada comanda de la política elegida por el cliente y el archivo de receta médica adjunta.
+  - [x] **Carga Masiva de Catálogo (CSV / JSON)**: Botón de descarga de plantilla CSV oficial y modal de importación masiva con previsualización para comercios con catálogos extensos.
 
 ---
 

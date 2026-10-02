@@ -138,6 +138,11 @@ export default function App() {
   const [menuCategoriaFiltro, setMenuCategoriaFiltro] = useState<string>('todas');
   const [menuSearch, setMenuSearch] = useState<string>('');
 
+  // Preferencias Retail, Farmacia y Licorera
+  const [politicaSustitucion, setPoliticaSustitucion] = useState<'similar' | 'llamar' | 'no_reemplazar'>('similar');
+  const [recetaAdjunta, setRecetaAdjunta] = useState<string | null>(null);
+  const [confirmaMayorEdad, setConfirmaMayorEdad] = useState<boolean>(false);
+
   // Datos del backend
   const [comercios, setComercios] = useState<Comercio[]>([]);
   const [comercioActivo, setComercioActivo] = useState<Comercio | null>(null);
@@ -792,7 +797,7 @@ export default function App() {
     }
   };
 
-  // Enviar Pedido a Cocina en Vivo
+  // Enviar Pedido a Cocina o Picking en Vivo
   const handleConfirmarPedido = async (e: React.FormEvent) => {
     e.preventDefault();
     if (carrito.length === 0) return;
@@ -802,11 +807,24 @@ export default function App() {
       return;
     }
 
+    const targetComercio = comercioCarrito || comercioActivo;
+    const esLicorera = targetComercio?.tipo_comercio_id === 'licorera';
+    const tieneProductosReceta = carrito.some(it => it.producto.requiere_receta);
+
+    if (esLicorera && !confirmaMayorEdad) {
+      setOrderError('Debes certificar que eres mayor de 18 años para comprar bebidas alcohólicas.');
+      return;
+    }
+
+    if (tieneProductosReceta && !recetaAdjunta) {
+      setOrderError('Tu pedido contiene medicamentos que requieren receta médica obligatoria. Por favor adjunta la prescripción.');
+      return;
+    }
+
     try {
       setSubmittingOrder(true);
       setOrderError('');
 
-      const targetComercio = comercioCarrito || comercioActivo;
       const payload = {
         clienteId: customerUser.id,
         comercioId: targetComercio?.id || '55555555-5555-5555-5555-555555555555',
@@ -820,6 +838,8 @@ export default function App() {
         latEntrega: coordsEntrega.lat,
         lonEntrega: coordsEntrega.lon,
         costoEnvio,
+        politicaSustitucion: targetComercio?.tipo_layout === 'grid_ecommerce' ? politicaSustitucion : undefined,
+        recetaAdjunta: tieneProductosReceta ? recetaAdjunta : undefined,
       };
 
       const res = await fetch(`${API_BASE}/orders/checkout`, {
@@ -1677,6 +1697,93 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* Barra Flotante Sticky de Canasta / Carrito (Especial para Retail y Móvil) */}
+          {carrito.length > 0 && (
+            <div style={{
+              position: 'fixed',
+              bottom: '24px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 'calc(100% - 48px)',
+              maxWidth: '680px',
+              background: '#0f172a',
+              color: '#fff',
+              borderRadius: '18px',
+              padding: '14px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+              zIndex: 900,
+              backdropFilter: 'blur(10px)',
+              boxSizing: 'border-box'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  background: '#e11d48',
+                  color: '#fff',
+                  borderRadius: '12px',
+                  padding: '8px 14px',
+                  fontWeight: '900',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}>
+                  <ShoppingBag size={18} />
+                  <span>{totalItemsCount}</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Canasta {comercioActivo?.nombre_comercial}
+                  </div>
+                  <div style={{ fontSize: '17px', fontWeight: '900', color: '#fff' }}>
+                    ${total.toFixed(2)} USD
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setDrawerCarritoAbierto(true)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Ver Ítems
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVista('checkout')}
+                  style={{
+                    background: '#10b981',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '10px 18px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                  }}
+                >
+                  Ir a Pagar ➔
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       )}
 
@@ -1973,6 +2080,222 @@ export default function App() {
                   </label>
                 </div>
               </div>
+
+              {/* 3. Preferencias de Sustitución en Tienda (Modo Retail / Supermercado / Farmacia) */}
+              {(comercioCarrito || comercioActivo)?.tipo_layout === 'grid_ecommerce' && (
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '18px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>🔄</span>
+                    <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
+                      3. Preferencias si se agota algún producto
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 14px 0' }}>
+                    El encargado de picking en tienda seguirá tus instrucciones si un artículo no está disponible en la percha:
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid',
+                      borderColor: politicaSustitucion === 'similar' ? '#10b981' : '#e2e8f0',
+                      background: politicaSustitucion === 'similar' ? '#ecfdf5' : '#fff',
+                      cursor: 'pointer'
+                    }}>
+                      <input
+                        type="radio"
+                        name="politicaSustitucion"
+                        checked={politicaSustitucion === 'similar'}
+                        onChange={() => setPoliticaSustitucion('similar')}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                          Reemplazar por producto similar (Recomendado)
+                        </strong>
+                        <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                          El picker escogerá la mejor alternativa de igual o menor precio sin retrasar tu orden.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid',
+                      borderColor: politicaSustitucion === 'llamar' ? '#2563eb' : '#e2e8f0',
+                      background: politicaSustitucion === 'llamar' ? '#eff6ff' : '#fff',
+                      cursor: 'pointer'
+                    }}>
+                      <input
+                        type="radio"
+                        name="politicaSustitucion"
+                        checked={politicaSustitucion === 'llamar'}
+                        onChange={() => setPoliticaSustitucion('llamar')}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                          Llamarme o escribirme por WhatsApp
+                        </strong>
+                        <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                          El recolector te contactará antes de realizar cualquier cambio en tu canasta.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid',
+                      borderColor: politicaSustitucion === 'no_reemplazar' ? '#ef4444' : '#e2e8f0',
+                      background: politicaSustitucion === 'no_reemplazar' ? '#fef2f2' : '#fff',
+                      cursor: 'pointer'
+                    }}>
+                      <input
+                        type="radio"
+                        name="politicaSustitucion"
+                        checked={politicaSustitucion === 'no_reemplazar'}
+                        onChange={() => setPoliticaSustitucion('no_reemplazar')}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                          No reemplazar (Cancelar ítem)
+                        </strong>
+                        <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                          Se omitirá el ítem de la canasta y no se cobrará el valor de ese producto.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Validaciones Especiales: Farmacia (Receta Médica) y Licorera (+18 Años) */}
+              {carrito.some(it => it.producto.requiere_receta) && (
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '18px', border: '2px solid #f87171' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '20px' }}>💊</span>
+                    <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#991b1b' }}>
+                      Receta Médica Obligatoria (ARCSA Ecuador)
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 14px 0' }}>
+                    Tu orden incluye medicamentos bajo prescripción médica. Debes adjuntar una foto legible o comprobante de tu receta médica:
+                  </p>
+
+                  {recetaAdjunta ? (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#f0fdf4',
+                      border: '1px solid #86efac',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '20px' }}>📄</span>
+                        <div>
+                          <strong style={{ fontSize: '13px', color: '#166534' }}>Receta médica cargada</strong>
+                          <div style={{ fontSize: '11px', color: '#15803d' }}>{recetaAdjunta}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRecetaAdjunta(null)}
+                        style={{
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: 'none',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Quitar / Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '20px',
+                        cursor: 'pointer',
+                        background: '#f8fafc',
+                        transition: 'border-color 0.2s',
+                      }}>
+                        <span style={{ fontSize: '28px', marginBottom: '6px' }}>📎</span>
+                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                          Subir foto o documento de la receta médica
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                          PNG, JPG o PDF legible (Máx. 5MB)
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setRecetaAdjunta(file.name);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(comercioCarrito || comercioActivo)?.tipo_comercio_id === 'licorera' && (
+                <div style={{ background: '#fff', padding: '20px', borderRadius: '18px', border: '2px solid #fbbf24' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '20px' }}>🔞</span>
+                    <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#92400e' }}>
+                      Control de Mayoría de Edad (+18 Años)
+                    </h3>
+                  </div>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: '#451a03',
+                    fontWeight: '600',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmaMayorEdad}
+                      onChange={(e) => setConfirmaMayorEdad(e.target.checked)}
+                      style={{ marginTop: '3px', width: '16px', height: '16px' }}
+                    />
+                    <span>
+                      Certifico bajo juramento que soy mayor de 18 años y presentaré mi cédula física de identidad original al repartidor al momento de recibir mis bebidas alcohólicas.
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Columna Derecha: Resumen de Comanda */}

@@ -12,7 +12,10 @@ import {
   DollarSign,
   Tag,
   Search,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet,
+  Download,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../AuthProvider';
 import { config } from '../config';
@@ -89,6 +92,135 @@ export default function MenuManagement() {
   const [formRequiereReceta, setFormRequiereReceta] = useState(false);
   const [formImagenUrl, setFormImagenUrl] = useState('');
   const [formDisponible, setFormDisponible] = useState(true);
+
+  // Bulk Import State
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkData, setBulkData] = useState('');
+  const [bulkItems, setBulkItems] = useState<any[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState('');
+  const [bulkError, setBulkError] = useState('');
+
+  const handleDownloadTemplate = () => {
+    const csvContent =
+      'nombre,descripcion,precio,categoria,unidad_medida,maneja_stock,stock_disponible,requiere_receta\n' +
+      'Arroz Extra 1kg,Grano largo enriquecido calidad superior,1.40,Víveres y Abarrotes,kg,true,100,false\n' +
+      'Aceite Palma 1L,Aceite vegetal comestible puro,2.25,Víveres y Abarrotes,litro,true,50,false\n' +
+      'Paracetamol 500mg,Caja con 20 tabletas analgésico y antipirético,1.80,Farmacia y Salud,caja,true,40,false\n' +
+      'Amoxicilina 500mg,Antibiótico bajo receta médica,4.50,Farmacia y Salud,caja,true,25,true\n' +
+      'Cerveza Pilsener 330ml,Lata de cerveza fría nacional,1.25,Licores y Vinos,lata,true,150,false\n' +
+      'Seco de Gallina Baba,Plato criollo tradicional de Los Ríos,4.50,Platos Fuertes,unidad,false,,false\n';
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'plantilla_catalogo_deliveryya.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleParseBulk = (rawText: string) => {
+    setBulkError('');
+    try {
+      const trimmed = rawText.trim();
+      if (!trimmed) {
+        setBulkItems([]);
+        return;
+      }
+
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          setBulkItems(parsed);
+          return;
+        }
+      }
+
+      const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        throw new Error('El archivo CSV debe tener una fila de encabezados y al menos una fila de datos.');
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const items = lines.slice(1).map(line => {
+        const cols = line.split(',').map(c => c.trim());
+        const row: any = {};
+        headers.forEach((h, idx) => {
+          row[h] = cols[idx] || '';
+        });
+
+        return {
+          nombre: row.nombre,
+          descripcion: row.descripcion || '',
+          precio: parseFloat(row.precio) || 0,
+          categoria: row.categoria || 'Víveres y Abarrotes',
+          unidad_medida: row.unidad_medida || 'unidad',
+          maneja_stock: row.maneja_stock === 'true' || row.maneja_stock === '1',
+          stock_disponible: row.stock_disponible ? parseInt(row.stock_disponible, 10) : null,
+          requiere_receta: row.requiere_receta === 'true' || row.requiere_receta === '1',
+        };
+      }).filter(it => it.nombre && it.precio > 0);
+
+      if (items.length === 0) {
+        throw new Error('No se encontraron filas válidas con nombre y precio > 0.');
+      }
+
+      setBulkItems(items);
+    } catch (err: any) {
+      setBulkError(err.message || 'Error al procesar el archivo CSV/JSON.');
+      setBulkItems([]);
+    }
+  };
+
+  const handleExecuteBulkImport = async () => {
+    if (bulkItems.length === 0) return;
+    setBulkLoading(true);
+    setBulkError('');
+    setBulkProgress(`Iniciando importación de ${bulkItems.length} productos...`);
+
+    let creados = 0;
+    let errores = 0;
+
+    for (let i = 0; i < bulkItems.length; i++) {
+      const item = bulkItems[i];
+      setBulkProgress(`Importando (${i + 1}/${bulkItems.length}): ${item.nombre}...`);
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/catalog/comercio/${comercioId}/productos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: item.nombre,
+            descripcion: item.descripcion,
+            precio: item.precio,
+            categoria: item.categoria,
+            unidadMedida: item.unidad_medida || 'unidad',
+            manejaStock: Boolean(item.maneja_stock),
+            stockDisponible: item.maneja_stock && item.stock_disponible != null ? item.stock_disponible : null,
+            requiereReceta: Boolean(item.requiere_receta),
+            isDisponible: true,
+          }),
+        });
+        if (res.ok) {
+          creados++;
+        } else {
+          errores++;
+        }
+      } catch {
+        errores++;
+      }
+    }
+
+    setBulkLoading(false);
+    setBulkProgress('');
+    setShowBulkModal(false);
+    setBulkData('');
+    setBulkItems([]);
+    setSuccessMsg(`¡Carga masiva completada! ${creados} productos importados exitosamente.${errores > 0 ? ` (${errores} fallaron)` : ''}`);
+    fetchProductos();
+    fetchCategorias();
+  };
 
   const fetchCategorias = async () => {
     try {
@@ -295,12 +427,36 @@ export default function MenuManagement() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-900/30 hover:from-rose-500 hover:to-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500"
-        >
-          <Plus size={18} /> Agregar Nuevo Plato
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white"
+            title="Descargar plantilla CSV para retail / supermercados / farmacias"
+          >
+            <Download size={16} /> Plantilla CSV
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setBulkData('');
+              setBulkItems([]);
+              setBulkError('');
+              setShowBulkModal(true);
+            }}
+            className="flex items-center gap-2 rounded-xl border border-sky-600/50 bg-sky-950/40 px-4 py-3 text-xs font-bold text-sky-300 hover:bg-sky-900/50"
+          >
+            <FileSpreadsheet size={16} /> Carga Masiva (CSV / JSON)
+          </button>
+
+          <button
+            onClick={handleOpenCreate}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-900/30 hover:from-rose-500 hover:to-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500"
+          >
+            <Plus size={18} /> Agregar Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Alertas */}
@@ -739,6 +895,167 @@ export default function MenuManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Carga Masiva de Productos */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">
+                  <FileSpreadsheet size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    Carga Masiva de Catálogo (Supermercados, Farmacias, Licoreras)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Importa decenas o cientos de artículos pegando datos CSV o cargando un archivo.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBulkModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-800/60 p-3 text-xs text-slate-300">
+                <span>
+                  Formato esperado: <code className="text-sky-300">nombre, descripcion, precio, categoria, unidad_medida, maneja_stock, stock_disponible, requiere_receta</code>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center gap-1 font-bold text-sky-400 hover:underline"
+                >
+                  <Download size={13} /> Descargar plantilla ejemplo
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-300">
+                  Subir archivo CSV / JSON o pegar contenido
+                </label>
+                <div className="mb-2">
+                  <input
+                    type="file"
+                    accept=".csv, .json, text/csv, application/json"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const content = event.target?.result as string;
+                          if (content) {
+                            setBulkData(content);
+                            handleParseBulk(content);
+                          }
+                        };
+                        reader.readAsText(file);
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                  />
+                </div>
+
+                <textarea
+                  rows={6}
+                  value={bulkData}
+                  onChange={(e) => {
+                    setBulkData(e.target.value);
+                    handleParseBulk(e.target.value);
+                  }}
+                  placeholder="Pega aquí las filas de tu archivo CSV o array JSON..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+
+              {bulkError && (
+                <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-300">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{bulkError}</span>
+                </div>
+              )}
+
+              {/* Vista previa de productos a importar */}
+              {bulkItems.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-300">
+                      Vista Previa ({bulkItems.length} productos detectados)
+                    </span>
+                    <span className="text-emerald-400">✓ Formato validado</span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-800/80 sticky top-0 text-slate-400">
+                        <tr>
+                          <th className="p-2">Nombre</th>
+                          <th className="p-2">Categoría</th>
+                          <th className="p-2">Precio</th>
+                          <th className="p-2">Unidad</th>
+                          <th className="p-2">Stock</th>
+                          <th className="p-2">Receta</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {bulkItems.slice(0, 10).map((it, idx) => (
+                          <tr key={idx} className="text-slate-300">
+                            <td className="p-2 font-medium">{it.nombre}</td>
+                            <td className="p-2 text-slate-400">{it.categoria}</td>
+                            <td className="p-2 font-bold text-emerald-400">${Number(it.precio).toFixed(2)}</td>
+                            <td className="p-2">{it.unidad_medida || 'unidad'}</td>
+                            <td className="p-2">{it.maneja_stock ? (it.stock_disponible ?? 'Inf') : 'No'}</td>
+                            <td className="p-2">{it.requiere_receta ? '💊 Sí' : 'No'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {bulkItems.length > 10 && (
+                      <p className="p-2 text-center text-xs text-slate-500">
+                        ...y {bulkItems.length - 10} productos más
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {bulkProgress && (
+                <div className="flex items-center gap-2 rounded-xl bg-sky-950/40 p-3 text-xs text-sky-300 border border-sky-800">
+                  <Loader2 size={16} className="animate-spin shrink-0" />
+                  <span>{bulkProgress}</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkModal(false)}
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkLoading || bulkItems.length === 0}
+                  onClick={handleExecuteBulkImport}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-sky-600 to-sky-700 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-900/30 hover:from-sky-500 hover:to-sky-600 disabled:opacity-50"
+                >
+                  {bulkLoading ? (
+                    <Loader2 size={16} className="mx-auto animate-spin" />
+                  ) : (
+                    `Importar ${bulkItems.length} Productos al Catálogo`
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

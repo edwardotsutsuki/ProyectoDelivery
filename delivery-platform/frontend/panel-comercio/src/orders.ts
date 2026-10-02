@@ -1,9 +1,19 @@
 export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY_FOR_PICKUP';
 export const BABA_RESTAURANT = 'Picantería El Buen Sabor - Baba Centro';
+export interface OrderItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  unit?: string;
+}
 export interface Order {
   id: string; customer: string; restaurant: string; address: string;
-  items: { name: string; quantity: number; unitPrice: number }[];
+  items: OrderItem[];
   createdAt: number; status: OrderStatus; note?: string; total?: number;
+  tipoLayout?: 'restaurante' | 'grid_ecommerce';
+  politicaSustitucion?: string;
+  bultos?: number;
+  recetaAdjunta?: string;
 }
 export function selectOrders(orders: Order[], query: string, overdueOnly: boolean, now: number): Order[] {
   const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
