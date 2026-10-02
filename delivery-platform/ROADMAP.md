@@ -124,6 +124,13 @@
 ---
 
 ### 🔄 Fase 6: Telemetría Móvil en Vivo y Experiencia de Usuario Avanzada - [EN PROCESO]
+- [x] **Storefront Web Cliente (`frontend/landing-page` en http://localhost:3002)**:
+  - [x] Portal web completo para realizar pedidos directamente desde el navegador (PC, Tablet o Celular) sin necesidad de descargar app móvil.
+  - [x] Explorador de restaurantes abiertos en Baba y Babahoyo con tiempos de entrega y fletes base.
+  - [x] Visor de carta/menú con selector de cantidades (+/-) y bandeja de carrito flotante.
+  - [x] Checkout web con selector de direcciones geodésicas en Baba (San Antonio, Parque Central, La Nobleza) y método de pago (Efectivo vs Transferencia).
+  - [x] Emisión directa de comandas a PostgreSQL y Redis Pub/Sub, activando al instante el sonido de comanda en el Panel de Comercio (Kanban en puerto 3003).
+  - [x] Radar de seguimiento web con stepper de preparación y datos de telemetría vial.
 - [x] **App Móvil Cliente (`mobile/app-cliente`)**:
   - [x] Radar de pedido en tiempo real mostrando etapas (Cocina ➔ En camino ➔ Entrega), distancia en metros y ETA dinámico con OSRM.
   - [x] Historial de pedidos anteriores y botón "Repetir este pedido (1 Clic)" con rellenado automático de comanda.
