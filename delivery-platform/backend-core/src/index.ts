@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './modules/auth/auth.routes';
 import { orderRouter } from './modules/orders/order.controller';
+import { catalogRouter } from './modules/catalog/catalog.controller';
+import { ledgerRouter } from './modules/finance-ledger/ledger.controller';
 import { pool } from './config/database';
 import { redisClient } from './config/redis';
 
@@ -60,6 +62,10 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/orders', orderRouter);
 app.use('/api/orders', orderRouter);
+app.use('/api/v1/catalog', catalogRouter);
+app.use('/api/catalog', catalogRouter);
+app.use('/api/v1/ledger', ledgerRouter);
+app.use('/api/ledger', ledgerRouter);
 
 // Manejador de 404
 app.use((req: Request, res: Response) => {

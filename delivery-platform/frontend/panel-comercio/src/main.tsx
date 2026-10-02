@@ -19,7 +19,7 @@ function ProtectedOrders() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><ThemeProvider><AuthProvider><BrowserRouter><Routes>
     <Route path="/login" element={<Login />} />
-    {config.demosEnabled && <Route path="/demo/pedidos" element={<KanbanOrders />} />}
+    {config.demosEnabled && <Route path="/demo/pedidos" element={<KanbanOrders source="mock" />} />}
     {config.demosEnabled && <Route path="/demo/tracking" element={<TrackingDemo />} />}
     <Route path="/pedidos" element={<ProtectedOrders />} />
     <Route path="*" element={<Navigate to="/pedidos" replace />} />

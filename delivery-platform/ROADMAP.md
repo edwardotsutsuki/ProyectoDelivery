@@ -122,10 +122,12 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
     3. *Listos para Entrega* (`READY_FOR_PICKUP`).
   - [x] Codex: alerta Web Audio por nueva llegada, activación inicial y deduplicación.
   - [x] Codex: cliente Gateway con polling, listado y cambios confirmados, probado con fixtures.
-  - [ ] Habilitar endpoints y validar persistencia real con comercio autorizado.
+  - [x] Antigravity: Endpoints de pedidos montados y verificados en `/api/v1/orders`.
+  - [x] Antigravity: Catálogo espacial `/api/v1/catalog/comercios` y `/productos` con cálculo PostGIS `ST_DistanceSphere` para Baba y Babahoyo.
+  - [x] Antigravity: Interruptor On/Off de disponibilidad en tiempo real con Redis pipeline y Postgres.
   - [ ] Transición de estados con actualización en tiempo real por WebSocket.
-- [ ] **Backend Core & Tracking**:
-  - [ ] Eventos Redis Pub/Sub: `order:created`, `order:status_updated`.
+- [x] **Backend Core & Tracking**:
+  - [x] Eventos Redis Pub/Sub: `order:created`, `order:status_updated` emitidos en canal `orders:events` y escuchados por WebSocket en `tracking-service`.
 
 ---
 
@@ -144,10 +146,14 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 ---
 
 ### ⏳ Fase 5: Billetera Virtual y Ledger Inmutable
-- [ ] **Ledger Contable Inmutable (PostgreSQL)**:
-  - [ ] Tabla de transacciones de doble entrada (Debe / Haber).
-  - [ ] Regla de efectivo: Si el cliente paga en efectivo, el repartidor acumula saldo deudor ante la plataforma.
-  - [ ] Regla digital: Pagos digitales acreditan saldo a favor del comercio y comisión al repartidor.
+- [x] **Ledger Contable Inmutable (PostgreSQL & Backend Core)**:
+  - [x] Tabla `transacciones_ledger` de doble entrada con saldo resultante verificado.
+  - [x] Regla de efectivo implementada: si el cliente paga en efectivo, el repartidor acumula saldo deudor ante la plataforma (`pago_efectivo`).
+  - [x] Regla de inmutabilidad blindada con Trigger PL/pgSQL `rechazar_modificacion_ledger` (impide UPDATE y DELETE).
+  - [x] Endpoints del ledger montados en `/api/v1/ledger`:
+    - `GET /billetera/:usuarioId`: Saldo neto en USD y extracto de movimientos.
+    - `POST /movimiento`: Asiento contable transaccional con bloqueo de concurrencia.
+    - `GET /resumen-global`: Auditoría consolidada por tipo de movimiento.
 - [ ] **App Repartidor**:
   - [ ] Pantalla de Billetera Digital con saldo neto diario, historial de entregas y botón de retiro.
 - [ ] **Backoffice Web**:

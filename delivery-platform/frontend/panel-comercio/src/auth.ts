@@ -1,7 +1,15 @@
 import { config } from './config';
 import { ApiError, apiRequest } from './http';
 export const SESSION_KEY = 'delivery.comercio.session';
-export interface Session { accessToken: string; refreshToken: string }
+export interface SessionUser { id: string; name: string; role: string; comercioId?: string }
+export interface Session { accessToken: string; refreshToken: string; user?: SessionUser }
+function readUser(value: unknown): SessionUser | undefined {
+  if (!value || typeof value !== 'object') return;
+  const user = value as Record<string, unknown>;
+  if (typeof user.id !== 'string' || typeof user.role !== 'string') return;
+  return { id: user.id, role: user.role, name: typeof user.name === 'string' ? user.name : '',
+    ...(typeof user.comercioId === 'string' && user.comercioId.trim() ? { comercioId: user.comercioId.trim() } : {}) };
+}
 export interface AuthSnapshot { status: 'checking' | 'anonymous' | 'authenticated' | 'unavailable'; message: string; session: Session | null }
 // Expiry hint only. The API must verify signature and permissions.
 export function tokenExpiresAt(token: string): number {
@@ -18,7 +26,8 @@ async function decodeSession(response: Response): Promise<Session> {
     const data = body?.data?.tokens ?? body?.data ?? body;
     if (typeof data?.accessToken !== 'string' || typeof data?.refreshToken !== 'string'
       || !data.refreshToken.trim() || tokenExpiresAt(data.accessToken) <= Date.now()) throw new Error();
-    return { accessToken: data.accessToken, refreshToken: data.refreshToken };
+    const user = readUser(body?.data?.user ?? body?.user);
+    return { accessToken: data.accessToken, refreshToken: data.refreshToken, ...(user ? { user } : {}) };
   } catch { throw new ApiError('El servidor no devolvió una sesión válida.'); }
 }
 export function createAuthClient(settings = { apiBaseUrl: config.apiBaseUrl, refreshEnabled: config.refreshEnabled }) {
@@ -55,7 +64,11 @@ export function createAuthClient(settings = { apiBaseUrl: config.apiBaseUrl, ref
   }
   const request = (path: string, options?: RequestInit) => apiRequest(path, options, settings.apiBaseUrl);
   async function checkAccess(session: Session, signal?: AbortSignal) {
-    await request('/auth/comercio/check', { headers: { Authorization: `Bearer ${session.accessToken}` }, signal });
+    const response = await request('/auth/comercio/check', { headers: { Authorization: `Bearer ${session.accessToken}` }, signal });
+    const body = await response.json();
+    if (body?.success === false) throw new ApiError('Tu cuenta no tiene acceso al comercio.', 403);
+    const user = readUser(body?.user ?? body?.data?.user ?? body?.data);
+    if (user) session.user = user;
   }
   async function signIn(email: string, password: string, remember: boolean, signal: AbortSignal) {
     const version = ++generation;

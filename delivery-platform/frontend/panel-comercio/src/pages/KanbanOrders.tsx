@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Bell, CheckCircle2, ChefHat, Clock3, MapPin, Plus, ShoppingBag, Volume2, VolumeX } from 'lucide-react';
 import { BABA_RESTAURANT, elapsedTime, orderTotal, selectOrders, type Order, type OrderStatus } from '../orders';
 import { useOrdersBoard } from '../useOrdersBoard';
-import { config } from '../config';
+import { useAuth } from '../AuthProvider';
 import type { OrdersApi } from '../ordersApi';
 
 const currency = new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' });
@@ -13,8 +13,9 @@ const columns = [
 ] satisfies { status: OrderStatus; title: string; subtitle: string; icon: typeof Bell; color: string; border: string; badge: string; action: string; button: string }[];
 
 export interface KanbanOrdersProps { source?: 'mock' | 'api'; merchantId?: string; api?: OrdersApi }
-export default function KanbanOrders({ source = 'mock', merchantId = config.merchantId, api }: KanbanOrdersProps) {
-  const board = useOrdersBoard(source, merchantId, api);
+export default function KanbanOrders({ source = 'api', merchantId, api }: KanbanOrdersProps) {
+  const { session } = useAuth();
+  const board = useOrdersBoard(source, merchantId ?? session?.user?.comercioId ?? '', api);
   const { orders } = board;
   const [now, setNow] = useState(Date.now);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -100,6 +101,7 @@ export default function KanbanOrders({ source = 'mock', merchantId = config.merc
         </div>
       </header>
       <main className="mx-auto max-w-screen-2xl px-5 py-8 sm:px-8">
+        {source === 'api' && <p className="mb-3 text-sm text-slate-400" role="status">{board.realtime === 'connected' ? 'Eventos en vivo conectados · respaldo cada 5 s' : 'Actualización cada 5 s · reconectando eventos en vivo'}</p>}
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mb-2 flex items-center gap-3"><h2 className="text-2xl font-bold">Tablero de comandas</h2><span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">{source === 'mock' ? 'DEMO BABA' : 'API'}</span></div><p className="max-w-2xl text-sm text-slate-400">{source === 'mock' ? 'Pedidos ficticios de Baba. Simula una llegada y avanza cada comanda con un clic.' : 'Pedidos del comercio sincronizados cada 5 segundos. Los cambios se confirman con el servidor.'}</p></div><div className="text-sm text-slate-400"><strong className="text-xl text-white">{orders.length}</strong> comandas en el tablero</div></div>
         {source === 'api' && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400"><span role="status">{board.loading ? 'Cargando pedidos…' : board.lastSynced ? (board.error ? 'Sin conexión. Se conserva la última lista recibida.' : 'Pedidos sincronizados') : 'Sin datos del servidor'}</span><button type="button" onClick={board.refresh} disabled={board.loading} className="rounded-lg border border-solid border-slate-600 bg-slate-900 px-4 py-2 text-slate-200 disabled:opacity-50">Actualizar pedidos</button></div>}
         {board.error && <p role="alert" className="mb-5 rounded-xl border border-solid border-red-900 bg-red-950 p-4 text-sm text-red-200">{board.error}</p>}
