@@ -38,7 +38,9 @@ export function useOrdersBoard(source: 'mock' | 'api', merchantId: string, api: 
         if (controller.signal.aborted || version !== revision.current) return;
         const arrivals = initialized ? next.filter(order => order.status === 'PENDING' && !seen.has(order.id)).map(order => order.id) : [];
         next.forEach(order => seen.add(order.id)); initialized = true;
-        setOrders(next); setError(''); setLastSynced(Date.now());
+        setOrders(next);
+        setError(previous => (previous && previous !== 'Servidor no disponible' && previous !== 'No pudimos actualizar los pedidos.' ? previous : ''));
+        setLastSynced(Date.now());
         if (arrivals.length) setArrival(previous => ({ sequence: previous.sequence + 1, ids: arrivals }));
       } catch (cause) {
         if (!controller.signal.aborted && version === revision.current) setError(cause instanceof Error ? cause.message : 'No pudimos actualizar los pedidos.');

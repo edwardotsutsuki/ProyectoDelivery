@@ -26,7 +26,15 @@ function mount() {
     h(Route, { path: '/login', element: h(Login) }), h(Route, { path: '/pedidos', element: h('h1', null, 'Panel autorizado') }),
   )))));
 }
-beforeEach(() => { localStorage.clear(); window.sessionStorage.clear(); authClient.signOut(); });
+const sockets = [];
+beforeEach(() => {
+  localStorage.clear(); window.sessionStorage.clear(); authClient.signOut(); sockets.length = 0;
+  global.WebSocket = class {
+    constructor(url) { this.url = url; this.sent = []; sockets.push(this); }
+    send(raw) { this.sent.push(JSON.parse(raw)); }
+    close() { this.closed = true; this.onclose?.(); }
+  };
+});
 afterEach(() => { cleanup(); });
 test('empty form focuses invalid email and never calls the network', async () => {
   let calls = 0; global.fetch = async () => { calls++; throw new Error(); };
@@ -69,7 +77,7 @@ test('successful login redirects only after server permission check, without sav
   assert.ok(!localStorage.getItem('delivery.comercio.session').includes('test password'));
 });
 test('Kanban filters do not lose orders and advancing a card preserves keyboard focus', async () => {
-  render(h(KanbanOrders)); const user = userEvent.setup();
+  render(h(KanbanOrders, { source: 'mock' })); const user = userEvent.setup();
   await user.type(screen.getByLabelText('Buscar pedido o cliente'), 'maria');
   assert.equal(screen.getAllByRole('article').length, 1);
   await user.click(screen.getByRole('button', { name: 'Empezar preparación, pedido ORD-BABA-004' }));
@@ -87,7 +95,7 @@ test('sound triggers for arrivals, not initial data, filters or state transition
     createOscillator() { return { frequency: {}, connect() {}, disconnect() {}, start() { tones++; }, stop() {} }; }
     createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
   };
-  render(h(React.StrictMode, null, h(KanbanOrders))); const user = userEvent.setup();
+  render(h(React.StrictMode, null, h(KanbanOrders, { source: 'mock' }))); const user = userEvent.setup();
   assert.equal(tones, 0);
   await user.click(screen.getByRole('button', { name: 'Activar sonido' }));
   assert.equal(tones, 2);

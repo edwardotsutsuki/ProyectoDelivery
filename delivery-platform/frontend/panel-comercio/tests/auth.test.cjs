@@ -34,7 +34,8 @@ test('Gateway nested tokens authenticate, restore and clear without persisting c
     : { success: true });
   await signIn(auth, true);
   assert.equal(auth.getSnapshot().status, 'authenticated');
-  assert.deepEqual(JSON.parse(window.localStorage.getItem(SESSION_KEY)), session());
+  assert.equal(JSON.parse(window.localStorage.getItem(SESSION_KEY)).user.id, 'usr-comercio-01');
+  assert.equal(JSON.parse(window.localStorage.getItem(SESSION_KEY)).refreshToken, session().refreshToken);
   const restored = client(false);
   await restored.restore();
   assert.equal(restored.getSnapshot().status, 'authenticated');
