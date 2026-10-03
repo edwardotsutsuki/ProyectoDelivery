@@ -317,8 +317,22 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] Input de cupón en vista de checkout web con validación instantánea y botón para quitar.
   - [x] Desglose transparente en el resumen de orden mostrando el descuento del cupón en verde.
   - [x] Envío del código de cupón en el payload de confirmación del pedido.
-- [x] **Backoffice Admin (`delivery-frontend-backoffice`)**:
-  - [x] Nueva sección y página `Cupones & Promociones` (`CuponesPage.tsx`) con métricas de cupones activos, canjes realizados y panel de creación/edición de campañas con control de financiamiento.
+### Fase 6: Telemetría Móvil en Vivo, Catálogo Real y Compatibilidad Expo SDK 57 ✅
+- [x] **App Móvil Cliente (`mobile/app-cliente`)**:
+  - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`, `react@19.2.3`), compatible con Expo Go en dispositivos físicos.
+  - [x] Conexión en vivo con el Backend Core (`192.168.68.123:8080/api/v1`): descarga dinámica de comercios (`/catalog/comercios`), productos (`/productos`), zonas de entrega (`/config/tarifas`) y validación de cupones (`/promotions/validate`).
+  - [x] Selector geográfico Baba vs Babahoyo y filtro por verticales (Restaurantes, Supermercados, Farmacias, Express).
+  - [x] Renderizado de fotografías reales de productos, categorías del local y soporte para tamaños/variantes multi-precio.
+  - [x] Checkout interactivo con cálculo dinámico de flete, subsidio por el comercio, cupón de descuento y notas al repartidor.
+  - [x] Radar de pedido en tiempo real mostrando etapas (Cocina ➔ En camino ➔ Entrega), distancia en metros y ETA dinámico con OSRM.
+  - [x] Historial de pedidos anteriores y botón "Repetir este pedido (1 Clic)".
+  - [x] 13/13 pruebas unitarias aprobadas y bundle Android compilado sin errores.
+- [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
+  - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`), compatible con Expo Go.
+  - [x] Conexión al API Gateway y WebSocket en red local.
+  - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
+  - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
+  - [x] 14/14 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 
 ---
 

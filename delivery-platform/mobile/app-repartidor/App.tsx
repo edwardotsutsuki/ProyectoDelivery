@@ -7,7 +7,7 @@ import { dailyWallet, money, type Wallet } from './src/walletModel';
 import { fetchWallet } from './src/services/walletApi';
 import { TelemetryTransmitter } from './src/services/telemetryTransmitter';
 
-const DEFAULT_API = Platform.OS === 'android' ? 'http://10.0.2.2:8080/api/v1' : 'http://localhost:8080/api/v1';
+const DEFAULT_API = 'http://192.168.68.123:8080/api/v1'; // IP local del PC en la red WiFi
 const labels: Record<Status, string> = { READY_FOR_PICKUP: 'Listo para despacho', ACCEPTED: 'Aceptado · recoger en restaurante', ON_THE_WAY: 'En camino al cliente', DELIVERED: 'Entregado' };
 const actions: Partial<Record<Status, { action: Action; label: string }>> = { READY_FOR_PICKUP: { action: 'ACCEPT', label: 'Aceptar' }, ACCEPTED: { action: 'START', label: 'En Camino' }, ON_THE_WAY: { action: 'DELIVER', label: 'Entregado' } };
 

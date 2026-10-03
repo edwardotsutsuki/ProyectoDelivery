@@ -15,6 +15,9 @@ export interface OrderSubmissionPayload {
   lonEntrega: number;
   costoEnvio: number;
   notas?: string;
+  cuponCodigo?: string;
+  descuentoCupon?: number;
+  zonaTarifaId?: string;
 }
 
 export interface CreatedOrder {
@@ -30,12 +33,23 @@ export interface CheckoutResult {
   pedido: CreatedOrder;
 }
 
+export interface BuildOrderOptions {
+  costoEnvio?: number;
+  lat?: number;
+  lon?: number;
+  cuponCodigo?: string;
+  descuentoCupon?: number;
+  zonaTarifaId?: string;
+  notas?: string;
+}
+
 export function buildOrderPayload(
   items: CheckoutItem[],
   address: string,
   payment: 'efectivo' | 'transferencia',
   comercioId = '55555555-5555-5555-5555-555555555555',
-  clienteId = 'usr-cliente-01'
+  clienteId = 'usr-cliente-01',
+  options?: BuildOrderOptions
 ): OrderSubmissionPayload {
   if (!items || items.length === 0) {
     throw new Error('El carrito no puede estar vacío para realizar el checkout.');
@@ -54,10 +68,13 @@ export function buildOrderPayload(
     })),
     direccionEntrega: address.trim(),
     metodoPago: payment,
-    latEntrega: -1.7940,
-    lonEntrega: -79.6810,
-    costoEnvio: 1.50,
-    notas: 'Pedido enviado desde App Móvil Cliente (Piloto Baba)',
+    latEntrega: options?.lat ?? -1.7940,
+    lonEntrega: options?.lon ?? -79.6810,
+    costoEnvio: options?.costoEnvio ?? 1.50,
+    notas: options?.notas ?? 'Pedido enviado desde App Móvil Cliente (Piloto Baba)',
+    cuponCodigo: options?.cuponCodigo,
+    descuentoCupon: options?.descuentoCupon,
+    zonaTarifaId: options?.zonaTarifaId,
   };
 }
 
