@@ -419,7 +419,12 @@ export async function fetchComercios(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.data && json.data.length > 0) {
-      return json.data;
+      return json.data.map((c: any) => ({
+        ...c,
+        costo_base_envio: Number(c.costo_base_envio) || 1.0,
+        tarifa_fija_local: c.tarifa_fija_local != null ? Number(c.tarifa_fija_local) : undefined,
+        calificacion: Number(c.calificacion) || 4.5,
+      }));
     }
     throw new Error('Lista vacía');
   } catch (err) {
@@ -455,7 +460,13 @@ export async function fetchProductosComercio(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.data && json.data.length > 0) {
-      return json.data;
+      return json.data.map((p: any) => ({
+        ...p,
+        precio: Number(p.precio) || 0,
+        tamanos: Array.isArray(p.tamanos)
+          ? p.tamanos.map((s: any) => ({ ...s, precio: Number(s.precio) || 0 }))
+          : [],
+      }));
     }
     throw new Error('Sin productos');
   } catch {
@@ -485,7 +496,13 @@ export async function fetchTarifas(
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    if (json.data && json.data.length > 0) return json.data;
+    if (json.data && json.data.length > 0) {
+      return json.data.map((t: any) => ({
+        ...t,
+        tarifa_envio: Number(t.tarifa_envio) || 0,
+        tiempo_estimado_min: Number(t.tiempo_estimado_min) || 20,
+      }));
+    }
     throw new Error('Sin tarifas');
   } catch {
     clearTimeout(timer);

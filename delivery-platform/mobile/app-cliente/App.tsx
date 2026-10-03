@@ -185,7 +185,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
   // Operaciones de Carrito
   const addToCart = (product: ProductoItem, sizeName?: string, customPrice?: number) => {
-    const finalPrice = customPrice ?? product.precio;
+    const finalPrice = Number(customPrice ?? product.precio) || 0;
     const lineKey = sizeName ? `${product.id}__${sizeName}` : product.id;
     const displayName = sizeName ? `${product.nombre} (${sizeName})` : product.nombre;
 
@@ -224,14 +224,15 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
   // Cálculos Financieros
   const cartLinesArray = Object.values(cart);
-  const cartCount = cartLinesArray.reduce((acc, it) => acc + it.quantity, 0);
-  const subtotal = cartLinesArray.reduce((acc, it) => acc + it.price * it.quantity, 0);
+  const cartCount = cartLinesArray.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+  const subtotal = cartLinesArray.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
 
-  const deliveryFee = selectedComercio?.subsidia_envio
+  const rawDeliveryFee = selectedComercio?.subsidia_envio
     ? 0
     : (selectedComercio?.tarifa_fija_local ?? selectedTarifa?.tarifa_envio ?? 1.50);
+  const deliveryFee = Number(rawDeliveryFee) || 0;
 
-  const discount = couponResult?.valid ? couponResult.descuento : 0;
+  const discount = Number(couponResult?.valid ? couponResult.descuento : 0) || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
 
   // Cupones
@@ -651,7 +652,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                   style={styles.floatingCartBar}
                 >
                   <Text style={styles.floatingCartText}>
-                    Ver Canasta ({cartCount} ítems) · ${total.toFixed(2)}
+                    Ver Canasta ({cartCount} ítems) · ${Number(total).toFixed(2)}
                   </Text>
                 </Pressable>
               )}
@@ -680,7 +681,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     <View key={item.id + (item.sizeName || '')} style={styles.cartItemCard}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cartItemTitle}>{item.name}</Text>
-                        <Text style={styles.cartItemSub}>${item.price.toFixed(2)} c/u</Text>
+                        <Text style={styles.cartItemSub}>${Number(item.price).toFixed(2)} c/u</Text>
                       </View>
                       <View style={styles.qtyControlRow}>
                         <Pressable onPress={() => updateQuantity(item.id + (item.sizeName ? `__${item.sizeName}` : ''), -1)} style={styles.qtyBtnSmall}>
@@ -691,7 +692,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                           <Text style={styles.qtyBtnText}>+</Text>
                         </Pressable>
                       </View>
-                      <Text style={styles.cartItemSubtotal}>${(item.price * item.quantity).toFixed(2)}</Text>
+                      <Text style={styles.cartItemSubtotal}>${(Number(item.price) * Number(item.quantity)).toFixed(2)}</Text>
                     </View>
                   ))}
 
@@ -808,7 +809,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                   <View style={styles.summaryCard}>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Subtotal</Text>
-                      <Text style={styles.summaryVal}>${subtotal.toFixed(2)}</Text>
+                      <Text style={styles.summaryVal}>${Number(subtotal).toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.summaryRow}>
@@ -816,14 +817,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         Envío ({selectedTarifa?.zona_nombre || 'Estándar'})
                       </Text>
                       <Text style={styles.summaryVal}>
-                        {deliveryFee === 0 ? '¡GRATIS!' : `$${deliveryFee.toFixed(2)}`}
+                        {Number(deliveryFee) === 0 ? '¡GRATIS!' : `$${Number(deliveryFee).toFixed(2)}`}
                       </Text>
                     </View>
 
-                    {discount > 0 && (
+                    {Number(discount) > 0 && (
                       <View style={styles.summaryRow}>
                         <Text style={styles.discountLabel}>Descuento Cupón ({couponResult?.codigo})</Text>
-                        <Text style={styles.discountVal}>-${discount.toFixed(2)}</Text>
+                        <Text style={styles.discountVal}>-${Number(discount).toFixed(2)}</Text>
                       </View>
                     )}
 
@@ -831,7 +832,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
                     <View style={styles.summaryRow}>
                       <Text style={styles.totalLabel}>Total a pagar</Text>
-                      <Text style={styles.totalVal}>${total.toFixed(2)}</Text>
+                      <Text style={styles.totalVal}>${Number(total).toFixed(2)}</Text>
                     </View>
                   </View>
 
@@ -845,7 +846,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     {submitting ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.submitOrderText}>🚀 Confirmar Pedido (${total.toFixed(2)})</Text>
+                      <Text style={styles.submitOrderText}>🚀 Confirmar Pedido (${Number(total).toFixed(2)})</Text>
                     )}
                   </Pressable>
                 </>
