@@ -99,6 +99,7 @@ export async function submitOrder(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        'Bypass-Tunnel-Reminder': 'true',
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

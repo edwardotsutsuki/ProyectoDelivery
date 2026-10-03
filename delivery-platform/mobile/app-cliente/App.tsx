@@ -40,7 +40,7 @@ import {
   type OrderTrackingEta,
 } from './src/services/trackingClientApi';
 
-const DEFAULT_API = 'http://192.168.68.123:8080/api/v1';
+const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1';
 
 type Screen = 'stores' | 'catalog' | 'cart' | 'checkout' | 'tracking';
 type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual';

@@ -16,6 +16,11 @@ export interface AuthResponse {
   token?: string;
 }
 
+const COMMON_AUTH_HEADERS = {
+  'Content-Type': 'application/json',
+  'Bypass-Tunnel-Reminder': 'true',
+};
+
 export async function loginClient(
   apiBaseUrl: string,
   email: string,
@@ -29,7 +34,7 @@ export async function loginClient(
     const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/auth/login`;
     const res = await fetchFn(cleanUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: COMMON_AUTH_HEADERS,
       body: JSON.stringify({ email: email.trim(), password }),
       signal: controller.signal,
     });
@@ -97,7 +102,7 @@ export async function registerClient(
     const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/auth/register`;
     const res = await fetchFn(cleanUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: COMMON_AUTH_HEADERS,
       body: JSON.stringify({
         name: data.name.trim(),
         email: data.email.trim(),
@@ -162,7 +167,10 @@ export async function fetchWalletBalance(
 
   try {
     const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/ledger/billetera/${userId}`;
-    const res = await fetchFn(cleanUrl, { signal: controller.signal });
+    const res = await fetchFn(cleanUrl, {
+      headers: COMMON_AUTH_HEADERS,
+      signal: controller.signal,
+    });
     clearTimeout(timer);
     if (!res.ok) return 15.00;
     const json = await res.json();

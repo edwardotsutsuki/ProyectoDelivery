@@ -35,7 +35,9 @@ export async function fetchOrderEta(
   fetchFn = fetch
 ): Promise<OrderTrackingEta> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/pedido/${pedidoId}/eta`;
-  const res = await fetchFn(url);
+  const res = await fetchFn(url, {
+    headers: { 'Bypass-Tunnel-Reminder': 'true' },
+  });
   if (!res.ok) {
     throw new Error(`Error ${res.status} al consultar ETA del pedido`);
   }
@@ -60,7 +62,9 @@ export async function fetchDriverPosition(
   fetchFn = fetch
 ): Promise<DriverLivePos> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/driver-pos/${repartidorId}`;
-  const res = await fetchFn(url);
+  const res = await fetchFn(url, {
+    headers: { 'Bypass-Tunnel-Reminder': 'true' },
+  });
   if (!res.ok) {
     throw new Error(`Error ${res.status} al consultar posición del conductor`);
   }
@@ -82,7 +86,10 @@ export async function calculateLiveFee(
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/calcular-tarifa`;
   const res = await fetchFn(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
+    },
     body: JSON.stringify({ originLat, originLon, destLat, destLon }),
   });
   const data = await res.json();
