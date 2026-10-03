@@ -2,15 +2,18 @@
   "name": "app-repartidor",
   "version": "1.0.0",
   "description": "App Android para Repartidores - DeliveryYa",
-  "main": "App.tsx",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "test": "node --test tests/*.test.cjs",
     "typecheck": "tsc --noEmit"
   },
-  "engines": { "node": ">=22.18.0" },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "dependencies": {
+    "expo": "^51.0.0",
     "expo-location": "~17.0.1",
     "expo-task-manager": "~11.8.2",
     "lucide-react-native": "^0.395.0",

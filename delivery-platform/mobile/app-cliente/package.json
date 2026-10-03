@@ -2,17 +2,20 @@
   "name": "app-cliente",
   "version": "1.0.0",
   "description": "App Android para Clientes - DeliveryYa",
-  "main": "App.tsx",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "test": "node --test tests/*.test.cjs",
     "typecheck": "tsc --noEmit"
   },
-  "engines": { "node": ">=22.18.0" },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "dependencies": {
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/native-stack": "^6.9.26",
+    "expo": "^51.0.0",
     "lucide-react-native": "^0.395.0",
     "react": "18.2.0",
     "react-native": "0.74.2",
