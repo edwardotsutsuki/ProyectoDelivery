@@ -7,6 +7,7 @@ import ZonasTarifasPage from './pages/ZonasTarifasPage';
 import FlotaCajaPage from './pages/FlotaCajaPage';
 import TrackingPage from './pages/TrackingPage';
 import UsuariosPage from './pages/UsuariosPage';
+import CuponesPage from './pages/CuponesPage';
 import {
   LayoutDashboard,
   Navigation,
@@ -28,7 +29,8 @@ import {
   LogOut,
   UserCheck,
   Users,
-  FolderTree
+  FolderTree,
+  Ticket
 } from 'lucide-react';
 
 interface LedgerSummaryItem {
@@ -48,7 +50,7 @@ interface MovementItem {
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-type NavSection = 'dashboard' | 'comercios' | 'categorias' | 'productos' | 'usuarios' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
+type NavSection = 'dashboard' | 'comercios' | 'categorias' | 'productos' | 'usuarios' | 'cupones' | 'zonas' | 'flota' | 'tracker' | 'finanzas';
 
 export default function App() {
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -263,6 +265,26 @@ export default function App() {
             }}
           >
             <Users size={18} /> Directorio de Usuarios
+          </button>
+
+          <button
+            onClick={() => setSeccion('cupones')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '14px',
+              background: seccion === 'cupones' ? '#e11d48' : 'transparent',
+              color: seccion === 'cupones' ? '#fff' : '#94a3b8',
+              textAlign: 'left',
+            }}
+          >
+            <Ticket size={18} /> Cupones & Promociones
           </button>
 
           <button
@@ -521,6 +543,7 @@ export default function App() {
         {seccion === 'productos' && <ProductosPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'usuarios' && <UsuariosPage apiBaseUrl={API_BASE} />}
+        {seccion === 'cupones' && <CuponesPage apiBaseUrl={API_BASE} />}
 
         {seccion === 'zonas' && <ZonasTarifasPage />}
         {seccion === 'flota' && <FlotaCajaPage />}

@@ -303,6 +303,23 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] **Página de Configuración del Local (`LocalSettings.tsx`)**:
     - Switch en vivo de estado Abierto/Cerrado, ajuste de tiempos de preparación y políticas de subsidio de flete para el cliente.
 
+### Fase 5.17: Sistema Integral de Promociones, Cupones y Descuentos (DeliveryYa Promos)
+- [x] **Base de Datos PostgreSQL PostGIS (`delivery-db-postgis`)**:
+  - [x] Migración `05_promociones_cupones.sql` creando la tabla `promociones_cupones` (`id`, `codigo`, `titulo`, `tipo`, `valor`, `tope_descuento_maximo`, `compra_minima`, `limite_usos_total`, `usos_actuales`, `comercio_id`, `financiado_por`, `fecha_inicio`, `fecha_fin`, `is_activo`).
+  - [x] Alteración de tabla `pedidos` con columnas `cupon_codigo` y `descuento_cupon`.
+  - [x] Semillas operativas iniciales: `BIENVENIDO` ($1.50 OFF), `BABA10` (10% OFF), `ENVIOGRATIS` (Flete $0.00).
+- [x] **Backend Core (`delivery-backend-core`)**:
+  - [x] Módulo `promotions.controller.ts` montado en `/api/v1/promotions` y `/api/promotions`.
+  - [x] Endpoint `POST /promotions/validate`: Valida vigencia, montos mínimos, topes máximos, límites de usos y calcula el descuento exacto.
+  - [x] Endpoints CRUD completos para Backoffice (`GET`, `POST`, `PUT`, `PATCH /toggle`, `DELETE`).
+  - [x] Actualización transaccional de `/orders/checkout` en `order.controller.ts`: Registra cupón, incrementa `usos_actuales`, deduce del total y distribuye la absorción económica (plataforma vs comercio) manteniendo **100% protegida la ganancia del repartidor**.
+- [x] **Storefront Cliente (`delivery-frontend-landing`)**:
+  - [x] Input de cupón en vista de checkout web con validación instantánea y botón para quitar.
+  - [x] Desglose transparente en el resumen de orden mostrando el descuento del cupón en verde.
+  - [x] Envío del código de cupón en el payload de confirmación del pedido.
+- [x] **Backoffice Admin (`delivery-frontend-backoffice`)**:
+  - [x] Nueva sección y página `Cupones & Promociones` (`CuponesPage.tsx`) con métricas de cupones activos, canjes realizados y panel de creación/edición de campañas con control de financiamiento.
+
 ---
 
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)

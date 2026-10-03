@@ -192,6 +192,7 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       latEntrega = -1.7917,
       costoEnvio = 1.00,
       zonaTarifaId,
+      cuponCodigo = null,
       notas = '',
       items: directItems,
     } = req.body;
@@ -260,7 +261,39 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       0
     );
 
-    // 4. Cálculo de comisiones
+    // 4. Validación de Cupón Promocional si se proporcionó
+    let descuentoCupon = 0.00;
+    let cuponAplicado: any = null;
+    if (cuponCodigo && typeof cuponCodigo === 'string' && cuponCodigo.trim()) {
+      const cleanCupCode = cuponCodigo.trim().toUpperCase();
+      const cupRes = await client.query(
+        'SELECT * FROM promociones_cupones WHERE UPPER(codigo) = $1 AND is_activo = true AND NOW() BETWEEN fecha_inicio AND fecha_fin',
+        [cleanCupCode]
+      );
+      if (cupRes.rows.length > 0) {
+        const c = cupRes.rows[0];
+        const minCompra = Number(c.compra_minima || 0);
+        if (subtotal >= minCompra && (!c.comercio_id || c.comercio_id === targetMerchantId)) {
+          cuponAplicado = c;
+          const val = Number(c.valor || 0);
+          const tope = c.tope_descuento_maximo ? Number(c.tope_descuento_maximo) : null;
+          if (c.tipo === 'monto_fijo') {
+            descuentoCupon = Math.min(val, subtotal);
+          } else if (c.tipo === 'porcentaje') {
+            const d = (subtotal * val) / 100.0;
+            descuentoCupon = tope ? Math.min(d, tope) : d;
+            descuentoCupon = Math.min(descuentoCupon, subtotal);
+          } else if (c.tipo === 'envio_gratis') {
+            descuentoCupon = tarifaEnvioCalculada;
+          }
+          descuentoCupon = Number(descuentoCupon.toFixed(2));
+          // Incrementar uso del cupón
+          await client.query('UPDATE promociones_cupones SET usos_actuales = usos_actuales + 1 WHERE id = $1', [c.id]);
+        }
+      }
+    }
+
+    // 5. Cálculo de comisiones y splits financieros
     let comisionComercio = 0.00;
     const tipoComision = merchantConfig.tipo_comision || 'porcentaje';
     const valorComision = Number(merchantConfig.valor_comision ?? 10.00);
@@ -280,20 +313,36 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
 
     const gananciaRepartidor = Number(((tarifaEnvioCalculada * riderSplitPct) / 100.0).toFixed(2));
     const gananciaFletePlataforma = Number(((tarifaEnvioCalculada * platformSplitPct) / 100.0).toFixed(2));
-    const gananciaPlataforma = Number((comisionComercio + gananciaFletePlataforma + tarifaServicioCliente).toFixed(2));
-    const pagoNetoComercio = Number((subtotal - comisionComercio).toFixed(2));
+    
+    // Absorción del descuento según financiado_por
+    let impactoPlataformaDesc = 0.00;
+    let impactoComercioDesc = 0.00;
+    if (descuentoCupon > 0 && cuponAplicado) {
+      if (cuponAplicado.financiado_por === 'plataforma') {
+        impactoPlataformaDesc = descuentoCupon;
+      } else if (cuponAplicado.financiado_por === 'comercio') {
+        impactoComercioDesc = descuentoCupon;
+      } else { // compartido 50/50
+        impactoPlataformaDesc = Number((descuentoCupon / 2).toFixed(2));
+        impactoComercioDesc = Number((descuentoCupon - impactoPlataformaDesc).toFixed(2));
+      }
+    }
 
-    const total = Number((subtotal + tarifaEnvioCalculada + tarifaServicioCliente).toFixed(2));
+    const gananciaPlataforma = Number((comisionComercio + gananciaFletePlataforma + tarifaServicioCliente - impactoPlataformaDesc).toFixed(2));
+    const pagoNetoComercio = Number((subtotal - comisionComercio - impactoComercioDesc).toFixed(2));
+
+    const total = Math.max(0, Number((subtotal - descuentoCupon + tarifaEnvioCalculada + tarifaServicioCliente).toFixed(2)));
 
     const orderInsertQuery = `
       INSERT INTO pedidos (
         cliente_id, comercio_id, estado, metodo_pago, subtotal, costo_envio, total, 
         direccion_entrega, ubicacion_entrega, notas,
-        tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, zona_tarifa_id
+        tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, zona_tarifa_id,
+        cupon_codigo, descuento_cupon
       ) VALUES (
         $1, $2, 'creado', $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($8, $9), 4326), $10,
-        $11, $12, $13, $14, $15, $16
-      ) RETURNING id, estado, total, subtotal, costo_envio, tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, fecha_creacion;
+        $11, $12, $13, $14, $15, $16, $17, $18
+      ) RETURNING id, estado, total, subtotal, costo_envio, tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, cupon_codigo, descuento_cupon, fecha_creacion;
     `;
     const orderResult = await client.query(orderInsertQuery, [
       targetClientId,
@@ -312,6 +361,8 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       gananciaPlataforma,
       pagoNetoComercio,
       tariffRow?.id || null,
+      cuponAplicado?.codigo || null,
+      descuentoCupon,
     ]);
     const pedidoCreado = orderResult.rows[0];
 

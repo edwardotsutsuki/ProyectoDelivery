@@ -8,6 +8,7 @@ import { ledgerRouter } from './modules/finance-ledger/ledger.controller';
 import { trackingRouter } from './modules/tracking/tracking.controller';
 import { userRouter } from './modules/users/user.controller';
 import { ratesRouter } from './modules/rates/rates.controller';
+import { promotionsRouter } from './modules/promotions/promotions.controller';
 import { pool } from './config/database';
 import { redisClient } from './config/redis';
 
@@ -75,6 +76,8 @@ app.use('/api/v1/users', userRouter);
 app.use('/api/users', userRouter);
 app.use('/api/v1/config', ratesRouter);
 app.use('/api/config', ratesRouter);
+app.use('/api/v1/promotions', promotionsRouter);
+app.use('/api/promotions', promotionsRouter);
 
 // Manejador de 404
 app.use((req: Request, res: Response) => {

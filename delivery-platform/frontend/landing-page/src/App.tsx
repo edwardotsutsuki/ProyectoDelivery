@@ -174,6 +174,12 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Promociones y Cupones de Descuento
+  const [cuponInput, setCuponInput] = useState('');
+  const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; titulo: string; tipo: string; descuento: number } | null>(null);
+  const [cuponError, setCuponError] = useState('');
+  const [validandoCupon, setValidandoCupon] = useState(false);
+
   // Aislamiento de Carrito Multitienda
   const [comercioCarrito, setComercioCarrito] = useState<Comercio | null>(null);
   const [showSwitchStoreModal, setShowSwitchStoreModal] = useState(false);
@@ -715,6 +721,8 @@ export default function App() {
   const totalItemsCount = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(Number(item.producto.precio || 0) * 100) * item.cantidad, 0);
   const subtotal = subtotalCents / 100;
+  // Cálculo de descuento por cupón promocional
+  const descuentoCupon = cuponAplicado ? cuponAplicado.descuento : 0;
   // Cálculo dinámico de flete zonal y políticas de comercio
   let costoEnvioCalculado = 1.00;
   if (storeActivoParaPedido?.subsidia_envio) {
@@ -728,7 +736,49 @@ export default function App() {
   }
   const costoEnvio = costoEnvioCalculado;
   const tarifaServicio = zonaSeleccionada ? Number(zonaSeleccionada.tarifa_servicio_cliente || 0) : 0;
-  const total = subtotal + (carrito.length > 0 ? costoEnvio + tarifaServicio : 0);
+  const total = Math.max(0, subtotal - descuentoCupon + (carrito.length > 0 ? costoEnvio + tarifaServicio : 0));
+
+  const handleAplicarCupon = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!cuponInput.trim()) {
+      setCuponError('Escribe un código de cupón');
+      return;
+    }
+    setValidandoCupon(true);
+    setCuponError('');
+    try {
+      const res = await fetch(`${API_BASE}/promotions/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo: cuponInput.trim(),
+          subtotal,
+          costoEnvio,
+          comercioId: storeActivoParaPedido?.id
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        throw new Error(data.message || 'Cupón no válido');
+      }
+      setCuponAplicado({
+        codigo: data.cupon.codigo,
+        titulo: data.cupon.titulo,
+        tipo: data.tipo,
+        descuento: data.descuento
+      });
+      setCuponInput('');
+    } catch (err: any) {
+      setCuponError(err.message || 'Error al validar cupón');
+    } finally {
+      setValidandoCupon(false);
+    }
+  };
+
+  const handleRemoverCupon = () => {
+    setCuponAplicado(null);
+    setCuponError('');
+  };
 
   // Gestión de Perfil de Usuario
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -902,6 +952,7 @@ export default function App() {
         lonEntrega: coordsEntrega.lon,
         costoEnvio,
         zonaTarifaId: zonaSeleccionada?.id,
+        cuponCodigo: cuponAplicado?.codigo || undefined,
         politicaSustitucion: targetComercio?.tipo_layout === 'grid_ecommerce' ? politicaSustitucion : undefined,
         recetaAdjunta: tieneProductosReceta ? recetaAdjunta : undefined,
       };
@@ -923,6 +974,8 @@ export default function App() {
         });
         setCarrito([]);
         setComercioCarrito(null);
+        setCuponAplicado(null);
+        setCuponError('');
         if (customerUser?.id) {
           fetchWallet(customerUser.id);
           fetchCustomerOrders(customerUser.id);
@@ -2698,11 +2751,105 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Sección de Cupón de Descuento */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', marginBottom: '14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🎟️ ¿Tienes un cupón de descuento?</span>
+                </div>
+
+                {cuponAplicado ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#f0fdf4',
+                    border: '1px solid #86efac',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    fontSize: '12px'
+                  }}>
+                    <div>
+                      <strong style={{ color: '#166534', display: 'block' }}>
+                        ¡Cupón {cuponAplicado.codigo} aplicado!
+                      </strong>
+                      <span style={{ color: '#15803d', fontSize: '11px' }}>
+                        Ahorras -${cuponAplicado.descuento.toFixed(2)} USD ({cuponAplicado.titulo})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoverCupon}
+                      style={{
+                        background: '#fee2e2',
+                        color: '#b91c1c',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        fontWeight: '700',
+                        fontSize: '11px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕ Quitar
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="text"
+                        placeholder="Ej: BABA10 o BIENVENIDO"
+                        value={cuponInput}
+                        onChange={(e) => setCuponInput(e.target.value.toUpperCase())}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          outline: 'none',
+                          textTransform: 'uppercase'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAplicarCupon}
+                        disabled={validandoCupon || !cuponInput.trim()}
+                        style={{
+                          background: '#0f172a',
+                          color: '#fff',
+                          border: 'none',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: (validandoCupon || !cuponInput.trim()) ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {validandoCupon ? 'Validando...' : 'Aplicar'}
+                      </button>
+                    </div>
+                    {cuponError && (
+                      <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: '600' }}>
+                        ⚠️ {cuponError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#64748b' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Subtotal comida:</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
+                {cuponAplicado && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a', fontWeight: '700' }}>
+                    <span>Descuento cupón ({cuponAplicado.codigo}):</span>
+                    <span>-${descuentoCupon.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>
                     Flete fijo ({zonaSeleccionada ? zonaSeleccionada.zona_nombre.split('(')[0] : 'Baba Urbano'}):
