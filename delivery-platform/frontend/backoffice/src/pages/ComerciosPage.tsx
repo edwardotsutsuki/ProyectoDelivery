@@ -845,12 +845,13 @@ export default function ComerciosPage({
               <p style={{ fontSize: '14px', margin: 0 }}>Intenta ajustar los filtros de búsqueda o registra un nuevo local.</p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
               {filteredComercios.map((comercio) => {
                 const status = comercio.estado_aprobacion || 'aprobado';
                 return (
                   <div
                     key={comercio.id}
+                    className="interactive-card"
                     style={{
                       background: '#0f172a',
                       borderRadius: '18px',
@@ -1079,46 +1080,116 @@ export default function ComerciosPage({
           <div style={{
             background: '#0f172a',
             border: '1px solid #334155',
-            borderRadius: '20px',
+            borderRadius: '24px',
             width: '100%',
-            maxWidth: '620px',
+            maxWidth: 'min(95vw, 1180px)',
             maxHeight: '92vh',
-            overflowY: 'auto',
-            padding: '28px',
+            display: 'flex',
+            flexDirection: 'column',
             color: '#fff',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 40px -10px rgba(225, 29, 72, 0.15)',
+            overflow: 'hidden',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>
-                {editingComercioId ? 'Editar Local Comercial' : 'Registrar Nuevo Local Comercial'}
-              </h3>
+            {/* Header Sticky */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '20px 28px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(8px)',
+              borderBottom: '1px solid #1e293b',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+            }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Store size={22} color="#e11d48" />
+                  {editingComercioId ? 'Editar Local Comercial' : 'Registrar Nuevo Local Comercial'}
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>
+                  Configuración integral de identidad, ubicación, credenciales y modelo de comisiones
+                </p>
+              </div>
               <button
                 onClick={() => setShowModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {errorMsg && (
+            <form onSubmit={handleSaveComercio} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {/* Body con Scroll Interior */}
               <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid #ef4444',
-                color: '#fca5a5',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                marginBottom: '16px',
-                fontSize: '13px',
+                overflowY: 'auto',
+                padding: '24px 28px',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
               }}>
-                {errorMsg}
-              </div>
-            )}
+                {errorMsg && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#fca5a5',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}>
+                    <AlertCircle size={18} color="#ef4444" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
 
-            <form onSubmit={handleSaveComercio} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Sección 1: Datos del Establecimiento */}
-              <div style={{ fontSize: '13px', fontWeight: '800', color: '#e11d48', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                1. Información del Local Comercial
-              </div>
+                {/* Grid Responsivo de 2 Columnas Panorámicas */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))',
+                  gap: '24px',
+                  alignItems: 'start',
+                }}>
+                  {/* COLUMNA IZQUIERDA: IDENTIDAD & UBICACIÓN */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Panel 1: Información del Local */}
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        color: '#e11d48',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <Store size={15} /> 1. Información del Local Comercial
+                      </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
@@ -1259,122 +1330,221 @@ export default function ComerciosPage({
                     boxSizing: 'border-box',
                   }}
                 />
-              </div>
+                  </div>
+                    </div>
 
-              {/* Botones de Selección Rápida de Ciudad */}
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Cantón / Zona Operativa *
-                </label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={setCoordinatesBaba}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      borderRadius: '10px',
-                      border: `1px solid ${formCity === 'baba' ? '#e11d48' : '#334155'}`,
-                      background: formCity === 'baba' ? '#881337' : '#1e293b',
-                      color: '#fff',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    📍 Baba Centro (-1.7917, -79.6783)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={setCoordinatesBabahoyo}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      borderRadius: '10px',
-                      border: `1px solid ${formCity === 'babahoyo' ? '#e11d48' : '#334155'}`,
-                      background: formCity === 'babahoyo' ? '#881337' : '#1e293b',
-                      color: '#fff',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    📍 Babahoyo (-1.8022, -79.5344)
-                  </button>
-                </div>
-              </div>
+                    {/* Panel 2: Ubicación & Flete */}
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        color: '#38bdf8',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <MapPin size={15} /> 2. Ubicación Geográfica & Flete Base
+                      </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Dirección Detallada *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formAddress}
-                  onChange={(e) => setFormAddress(e.target.value)}
-                  placeholder="Calle principal e intersección..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+                      {/* Botones de Selección Rápida de Ciudad */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Cantón / Zona Operativa *
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={setCoordinatesBaba}
+                            style={{
+                              padding: '10px',
+                              borderRadius: '10px',
+                              border: `1px solid ${formCity === 'baba' ? '#e11d48' : '#334155'}`,
+                              background: formCity === 'baba' ? '#881337' : '#1e293b',
+                              color: '#fff',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            📍 Baba Centro
+                          </button>
+                          <button
+                            type="button"
+                            onClick={setCoordinatesBabahoyo}
+                            style={{
+                              padding: '10px',
+                              borderRadius: '10px',
+                              border: `1px solid ${formCity === 'babahoyo' ? '#e11d48' : '#334155'}`,
+                              background: formCity === 'babahoyo' ? '#881337' : '#1e293b',
+                              color: '#fff',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            📍 Babahoyo
+                          </button>
+                        </div>
+                      </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Flete Base de Envío ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0"
-                    value={formBaseFee}
-                    onChange={(e) => setFormBaseFee(parseFloat(e.target.value) || 0)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Dirección Detallada *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formAddress}
+                          onChange={(e) => setFormAddress(e.target.value)}
+                          placeholder="Calle principal e intersección..."
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Tiempo Promedio (min)
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="120"
-                    value={formPrepTime}
-                    onChange={(e) => setFormPrepTime(parseInt(e.target.value, 10) || 30)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                            Flete Base de Envío ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            value={formBaseFee}
+                            onChange={(e) => setFormBaseFee(parseFloat(e.target.value) || 0)}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '10px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
 
-              {/* Sección 2: Cuenta de Acceso y Credenciales */}
-              <div style={{ marginTop: '12px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
-                <div style={{ fontSize: '13px', fontWeight: '800', color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-                  2. Credenciales de Acceso para el Dueño/Encargado
-                </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                            Tiempo Promedio (min)
+                          </label>
+                          <input
+                            type="number"
+                            min="5"
+                            max="120"
+                            value={formPrepTime}
+                            onChange={(e) => setFormPrepTime(parseInt(e.target.value, 10) || 30)}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '10px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Coordenadas GPS Calibradas */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#090d16', padding: '12px', borderRadius: '10px', border: '1px solid #1e293b' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Latitud GPS
+                          </label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={formLat}
+                            onChange={(e) => setFormLat(parseFloat(e.target.value) || 0)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#38bdf8',
+                              fontFamily: 'monospace',
+                              fontSize: '12px',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Longitud GPS
+                          </label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={formLon}
+                            onChange={(e) => setFormLon(parseFloat(e.target.value) || 0)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#38bdf8',
+                              fontFamily: 'monospace',
+                              fontSize: '12px',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* COLUMNA DERECHA: ACCESO, SRI & COMISIONES */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Panel 3: Credenciales de Acceso */}
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        color: '#818cf8',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <User size={15} /> 3. Credenciales de Acceso para el Dueño
+                      </div>
 
                 {!editingComercioId && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', background: '#1e1b4b', padding: '10px 14px', borderRadius: '10px', border: '1px solid #4338ca' }}>
@@ -1516,324 +1686,379 @@ export default function ComerciosPage({
                 )}
               </div>
 
-              {/* Sección 3: Datos Fiscales y Liquidación Bancaria */}
-              <div style={{ marginTop: '12px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
-                <div style={{ fontSize: '13px', fontWeight: '800', color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-                  3. Datos Fiscales y Liquidaciones (Rappi/PedidosYa Model)
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      RUC o Cédula (SRI Ecuador)
-                    </label>
-                    <input
-                      type="text"
-                      value={formRuc}
-                      onChange={(e) => setFormRuc(e.target.value)}
-                      placeholder="1203456789001"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
+                    {/* Panel 4: Datos Fiscales y Liquidación Bancaria */}
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
                         fontSize: '13px',
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Razón Social Registrada
-                    </label>
-                    <input
-                      type="text"
-                      value={formRazonSocial}
-                      onChange={(e) => setFormRazonSocial(e.target.value)}
-                      placeholder="Ej: RESTAURANTE S.A."
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Banco de Liquidación
-                    </label>
-                    <select
-                      value={formBanco}
-                      onChange={(e) => setFormBanco(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <option value="Banco Pichincha">Banco Pichincha</option>
-                      <option value="Banco Guayaquil">Banco Guayaquil</option>
-                      <option value="Banco Bolivariano">Banco Bolivariano</option>
-                      <option value="Banco del Pacífico">Banco del Pacífico</option>
-                      <option value="Produbanco">Produbanco</option>
-                      <option value="Cooperativa JEP">Cooperativa JEP</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Tipo de Cuenta
-                    </label>
-                    <select
-                      value={formTipoCuenta}
-                      onChange={(e) => setFormTipoCuenta(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <option value="ahorros">Cuenta de Ahorros</option>
-                      <option value="corriente">Cuenta Corriente</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Número de Cuenta
-                    </label>
-                    <input
-                      type="text"
-                      value={formNumeroCuenta}
-                      onChange={(e) => setFormNumeroCuenta(e.target.value)}
-                      placeholder="Ej: 2100456789"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Titular de la Cuenta
-                    </label>
-                    <input
-                      type="text"
-                      value={formTitularCuenta}
-                      onChange={(e) => setFormTitularCuenta(e.target.value)}
-                      placeholder="Nombre del beneficiario"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Sección 4: Plan de Comisiones y Políticas de Flete (Modelo Versátil Baba/Babahoyo) */}
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    4. Modelo de Comisión y Políticas de Flete (Baba & Babahoyo)
-                  </div>
-                  <span style={{ fontSize: '11px', color: '#94a3b8', background: '#1e293b', padding: '3px 8px', borderRadius: '6px' }}>
-                    100% Editable y Versátil
-                  </span>
-                </div>
-
-                <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 12px 0', lineHeight: 1.4 }}>
-                  Personaliza cómo genera ingresos este local: Porcentaje sobre ventas (8-10%), tarifa fija por pedido ($0.40), o membresía mensual fija ($15/mes sin comisión por orden).
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Modelo de Comisión
-                    </label>
-                    <select
-                      value={formTipoComision}
-                      onChange={(e: any) => {
-                        const val = e.target.value;
-                        setFormTipoComision(val);
-                        if (val === 'porcentaje' && formValorComision < 1) setFormValorComision(10.00);
-                        if (val === 'fijo_por_orden' && formValorComision > 5) setFormValorComision(0.40);
-                        if (val === 'suscripcion_mensual' && formCuotaMensual < 5) setFormCuotaMensual(15.00);
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <option value="porcentaje">% Porcentaje sobre Ventas</option>
-                      <option value="fijo_por_orden">$ Tarifa Fija por Cada Pedido</option>
-                      <option value="suscripcion_mensual">💎 Membresía Mensual VIP (0% por orden)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      {formTipoComision === 'porcentaje' ? 'Comisión (%)' : formTipoComision === 'fijo_por_orden' ? 'Valor por Orden ($)' : 'Comisión por Orden'}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      disabled={formTipoComision === 'suscripcion_mensual'}
-                      value={formTipoComision === 'suscripcion_mensual' ? 0 : formValorComision}
-                      onChange={(e) => setFormValorComision(parseFloat(e.target.value) || 0)}
-                      placeholder={formTipoComision === 'porcentaje' ? '10.00' : '0.40'}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: formTipoComision === 'suscripcion_mensual' ? '#0f172a' : '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: formTipoComision === 'suscripcion_mensual' ? '#64748b' : '#34d399',
-                        fontWeight: '700',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Cuota Mensual Fija ($/mes)
-                    </label>
-                    <input
-                      type="number"
-                      step="1.00"
-                      value={formCuotaMensual}
-                      onChange={(e) => setFormCuotaMensual(parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#38bdf8',
-                        fontWeight: '700',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
-                      Tarifa Fija de Envío Especial para este Local ($)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.25"
-                      value={formTarifaFijaLocal}
-                      onChange={(e) => setFormTarifaFijaLocal(e.target.value)}
-                      placeholder="Vacío = Tarifa Zonal Estándar ($1.00)"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        boxSizing: 'border-box',
-                        fontSize: '13px',
-                      }}
-                    />
-                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
-                      Si defines un valor (ej. $1.00), anula el flete zonal para clientes de este local.
-                    </span>
-                  </div>
-
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: formSubsidiaEnvio ? 'rgba(236, 72, 153, 0.15)' : '#1e293b',
-                    border: formSubsidiaEnvio ? '1px solid #f472b6' : '1px solid #334155',
-                    borderRadius: '10px',
-                    padding: '12px',
-                    cursor: 'pointer',
-                    marginTop: '20px'
-                  }}
-                  onClick={() => setFormSubsidiaEnvio(!formSubsidiaEnvio)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formSubsidiaEnvio}
-                      onChange={(e) => setFormSubsidiaEnvio(e.target.checked)}
-                      style={{ width: '18px', height: '18px', marginRight: '10px', cursor: 'pointer' }}
-                    />
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: formSubsidiaEnvio ? '#f472b6' : '#cbd5e1' }}>
-                        Local Subsidia el Flete (Envío Gratis)
+                        fontWeight: '800',
+                        color: '#34d399',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <CreditCard size={15} /> 4. Datos Fiscales y Liquidaciones (SRI)
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                        El cliente no paga envío; el costo del flete se cobra al comercio.
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            RUC o Cédula (SRI Ecuador)
+                          </label>
+                          <input
+                            type="text"
+                            value={formRuc}
+                            onChange={(e) => setFormRuc(e.target.value)}
+                            placeholder="1203456789001"
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Razón Social Registrada
+                          </label>
+                          <input
+                            type="text"
+                            value={formRazonSocial}
+                            onChange={(e) => setFormRazonSocial(e.target.value)}
+                            placeholder="Ej: RESTAURANTE S.A."
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Banco de Liquidación
+                          </label>
+                          <select
+                            value={formBanco}
+                            onChange={(e) => setFormBanco(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          >
+                            <option value="Banco Pichincha">Banco Pichincha</option>
+                            <option value="Banco Guayaquil">Banco Guayaquil</option>
+                            <option value="Banco Bolivariano">Banco Bolivariano</option>
+                            <option value="Banco del Pacífico">Banco del Pacífico</option>
+                            <option value="Produbanco">Produbanco</option>
+                            <option value="Cooperativa JEP">Cooperativa JEP</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Tipo de Cuenta
+                          </label>
+                          <select
+                            value={formTipoCuenta}
+                            onChange={(e) => setFormTipoCuenta(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          >
+                            <option value="ahorros">Cuenta de Ahorros</option>
+                            <option value="corriente">Cuenta Corriente</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Número de Cuenta
+                          </label>
+                          <input
+                            type="text"
+                            value={formNumeroCuenta}
+                            onChange={(e) => setFormNumeroCuenta(e.target.value)}
+                            placeholder="Ej: 2100456789"
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Titular de la Cuenta
+                          </label>
+                          <input
+                            type="text"
+                            value={formTitularCuenta}
+                            onChange={(e) => setFormTitularCuenta(e.target.value)}
+                            placeholder="Nombre del beneficiario"
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Panel 5: Plan de Comisiones & Políticas Versátiles */}
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <div style={{
+                          fontSize: '13px',
+                          fontWeight: '800',
+                          color: '#f59e0b',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}>
+                          <DollarSign size={15} /> 5. Modelo de Comisión y Políticas
+                        </div>
+                        <span style={{ fontSize: '11px', color: '#34d399', background: '#064e3b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                          Versátil
+                        </span>
+                      </div>
+
+                      <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 4px 0', lineHeight: 1.4 }}>
+                        Personaliza cómo genera ingresos este local: Porcentaje sobre ventas (8-10%), tarifa fija por pedido ($0.40), o membresía mensual fija ($15/mes sin comisión por orden).
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Modelo de Comisión
+                          </label>
+                          <select
+                            value={formTipoComision}
+                            onChange={(e: any) => {
+                              const val = e.target.value;
+                              setFormTipoComision(val);
+                              if (val === 'porcentaje' && formValorComision < 1) setFormValorComision(10.00);
+                              if (val === 'fijo_por_orden' && formValorComision > 5) setFormValorComision(0.40);
+                              if (val === 'suscripcion_mensual' && formCuotaMensual < 5) setFormCuotaMensual(15.00);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          >
+                            <option value="porcentaje">% Porcentaje sobre Ventas</option>
+                            <option value="fijo_por_orden">$ Fijo por Cada Pedido</option>
+                            <option value="suscripcion_mensual">💎 Membresía VIP</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            {formTipoComision === 'porcentaje' ? 'Comisión (%)' : formTipoComision === 'fijo_por_orden' ? 'Valor por Orden ($)' : 'Comisión por Orden'}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            disabled={formTipoComision === 'suscripcion_mensual'}
+                            value={formTipoComision === 'suscripcion_mensual' ? 0 : formValorComision}
+                            onChange={(e) => setFormValorComision(parseFloat(e.target.value) || 0)}
+                            placeholder={formTipoComision === 'porcentaje' ? '10.00' : '0.40'}
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: formTipoComision === 'suscripcion_mensual' ? '#0f172a' : '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: formTipoComision === 'suscripcion_mensual' ? '#64748b' : '#34d399',
+                              fontWeight: '700',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Cuota Mensual ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="1.00"
+                            value={formCuotaMensual}
+                            onChange={(e) => setFormCuotaMensual(parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#38bdf8',
+                              fontWeight: '700',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                            Tarifa Fija Exclusiva del Local ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.25"
+                            value={formTarifaFijaLocal}
+                            onChange={(e) => setFormTarifaFijaLocal(e.target.value)}
+                            placeholder="Vacío = Flete Zonal ($1.00)"
+                            style={{
+                              width: '100%',
+                              padding: '9px 12px',
+                              background: '#1e293b',
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              boxSizing: 'border-box',
+                              fontSize: '13px',
+                            }}
+                          />
+                          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                            Si defines un valor (ej. $1.00), anula el flete zonal para clientes de este local.
+                          </span>
+                        </div>
+
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          background: formSubsidiaEnvio ? 'rgba(236, 72, 153, 0.15)' : '#1e293b',
+                          border: formSubsidiaEnvio ? '1px solid #f472b6' : '1px solid #334155',
+                          borderRadius: '10px',
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setFormSubsidiaEnvio(!formSubsidiaEnvio)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formSubsidiaEnvio}
+                            onChange={(e) => setFormSubsidiaEnvio(e.target.checked)}
+                            style={{ width: '18px', height: '18px', marginRight: '10px', cursor: 'pointer' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: formSubsidiaEnvio ? '#f472b6' : '#cbd5e1' }}>
+                              Local Subsidia el Flete
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                              Envío gratis para clientes
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Botones de Acción */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              {/* Footer Sticky */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                padding: '16px 28px',
+                background: 'rgba(15, 23, 42, 0.95)',
+                backdropFilter: 'blur(8px)',
+                borderTop: '1px solid #1e293b',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 10,
+              }}>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   style={{
-                    flex: 1,
-                    padding: '12px',
+                    padding: '10px 20px',
                     borderRadius: '12px',
                     border: '1px solid #334155',
                     background: '#1e293b',
                     color: '#94a3b8',
                     fontWeight: '700',
                     cursor: 'pointer',
+                    fontSize: '13px',
                   }}
                 >
                   Cancelar
@@ -1841,9 +2066,9 @@ export default function ComerciosPage({
                 <button
                   type="submit"
                   disabled={saving}
+                  className="interactive-btn"
                   style={{
-                    flex: 1,
-                    padding: '12px',
+                    padding: '10px 24px',
                     borderRadius: '12px',
                     border: 'none',
                     background: 'linear-gradient(135deg, #e11d48, #be123c)',
@@ -1855,6 +2080,8 @@ export default function ComerciosPage({
                     justifyContent: 'center',
                     gap: '8px',
                     opacity: saving ? 0.7 : 1,
+                    fontSize: '13px',
+                    boxShadow: '0 4px 14px rgba(225, 29, 72, 0.35)',
                   }}
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}

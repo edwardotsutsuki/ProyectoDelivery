@@ -445,10 +445,11 @@ export default function ProductosPage({
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '18px' }}>
           {filteredProductos.map((prod) => (
             <div
               key={prod.id}
+              className="interactive-card"
               style={{
                 background: '#0f172a',
                 border: '1px solid #1e293b',
@@ -468,7 +469,7 @@ export default function ProductosPage({
                     <img
                       src={prod.imagen_url}
                       alt={prod.nombre}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                       onError={(e: any) => { e.target.style.display = 'none'; }}
                     />
                   </div>
@@ -605,322 +606,462 @@ export default function ProductosPage({
       {/* MODAL: CREAR / EDITAR PRODUCTO */}
       {/* ========================================================================= */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '16px', maxWidth: '560px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UtensilsCrossed size={20} color="#e11d48" /> {editingProduct ? 'Editar Producto' : 'Nuevo Producto / Plato'}
-              </h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={20} />
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+          <div style={{
+            background: '#0f172a',
+            border: '1px solid #334155',
+            borderRadius: '24px',
+            maxWidth: 'min(94vw, 1080px)',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 40px -10px rgba(225, 29, 72, 0.15)',
+          }}>
+            {/* Header Sticky */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '18px 24px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(8px)',
+              borderBottom: '1px solid #1e293b',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '19px', fontWeight: '800', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <UtensilsCrossed size={20} color="#e11d48" /> {editingProduct ? 'Editar Producto del Menú' : 'Nuevo Producto / Plato'}
+                </h3>
+                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                  Gestiona detalles, ingredientes, presentaciones, control de stock y fotografía
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '7px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProducto} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                  Nombre del Producto *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Encebollado Mixto, Arroz Súper Extra 1Kg, Paracetamol 500mg"
-                  value={formNombre}
-                  onChange={(e) => setFormNombre(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
-                />
-              </div>
+            <form onSubmit={handleSaveProducto} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              {/* Body con Scroll Interior */}
+              <div style={{
+                overflowY: 'auto',
+                padding: '24px',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 450px), 1fr))',
+                  gap: '24px',
+                  alignItems: 'start',
+                }}>
+                  {/* ============================================================== */}
+                  {/* COLUMNA IZQUIERDA: IDENTIDAD & ESPECIFICACIONES                */}
+                  {/* ============================================================== */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{
+                      background: '#111827',
+                      border: '1px solid #1e293b',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '14px',
+                    }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        color: '#e11d48',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        <UtensilsCrossed size={14} /> Información Básica del Producto
+                      </div>
 
-              {/* Categoría con botón de agregar al instante */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1' }}>
-                    Categoría de Catálogo *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickNewCat(!showQuickNewCat)}
-                    style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                  >
-                    {showQuickNewCat ? '✕ Cancelar nueva' : '+ Crear Nueva Categoría'}
-                  </button>
-                </div>
-
-                {showQuickNewCat ? (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      placeholder="Nombre de la nueva categoría (Ej: Postres, Lácteos)..."
-                      value={formNuevaCategoriaNombre}
-                      onChange={(e) => setFormNuevaCategoriaNombre(e.target.value)}
-                      style={{ flex: 1, background: '#1e293b', border: '1px solid #38bdf8', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '13px' }}
-                    />
-                  </div>
-                ) : (
-                  <select
-                    value={formCategoriaId}
-                    onChange={(e) => setFormCategoriaId(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
-                  >
-                    {categorias.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.icono || '🏷️'} {cat.nombre}
-                      </option>
-                    ))}
-                    {categorias.length === 0 && <option value="">General</option>}
-                  </select>
-                )}
-              </div>
-
-              {/* Precio y Unidad de Medida */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                    Precio Venta ($ USD) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={formPrecio}
-                    onChange={(e) => setFormPrecio(parseFloat(e.target.value) || 0)}
-                    style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                    Unidad de Medida
-                  </label>
-                  <select
-                    value={formUnidadMedida}
-                    onChange={(e) => setFormUnidadMedida(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
-                  >
-                    <option value="unidad">Unidad / Plato</option>
-                    <option value="kg">Kilogramo (Kg)</option>
-                    <option value="libra">Libra (lb)</option>
-                    <option value="gramos">Gramos (g)</option>
-                    <option value="litro">Litro (L)</option>
-                    <option value="six_pack">Six Pack (6 un.)</option>
-                    <option value="caja">Caja</option>
-                    <option value="blister">Blíster (Farmacia)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Control de Inventario Opcional */}
-              <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: formManejaStock ? '10px' : 0 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={formManejaStock}
-                      onChange={(e) => setFormManejaStock(e.target.checked)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    📦 ¿Controlar inventario numérico de este producto?
-                  </label>
-                  {!formManejaStock && (
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Stock ilimitado</span>
-                  )}
-                </div>
-
-                {formManejaStock && (
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                      Cantidad disponible en percha / almacén:
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formStockDisponible}
-                      onChange={(e) => setFormStockDisponible(parseInt(e.target.value) || 0)}
-                      style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '14px' }}
-                    />
-                    <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px' }}>
-                      ⚠️ Al llegar a 0 unidades se mostrará automáticamente como agotado.
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                  Descripción o Ingredientes
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Detalles de preparación, marca o ingredientes..."
-                  value={formDescripcion}
-                  onChange={(e) => setFormDescripcion(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '13px', resize: 'none' }}
-                />
-              </div>
-
-              {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
-              <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: formTieneTamanos ? '10px' : 0 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={formTieneTamanos}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFormTieneTamanos(checked);
-                        if (checked && formTamanos.length === 0) {
-                          setFormTamanos([
-                            { nombre: '1/2 Libra / Pequeño', precio: Math.round(Number(formPrecio) * 0.6 * 100) / 100 },
-                            { nombre: '1 Libra / Estándar', precio: Number(formPrecio) },
-                          ]);
-                        }
-                      }}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    📐 ¿Ofrecer diferentes tamaños o porciones?
-                  </label>
-                  {formTieneTamanos && (
-                    <button
-                      type="button"
-                      onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: Number(formPrecio) || 1.50 }])}
-                      style={{ background: '#334155', color: '#f43f5e', border: '1px solid #475569', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                      + Añadir Tamaño
-                    </button>
-                  )}
-                </div>
-
-                {formTieneTamanos && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
-                    {formTamanos.map((tam, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                          Nombre del Producto / Plato *
+                        </label>
                         <input
                           type="text"
-                          required={formTieneTamanos}
-                          value={tam.nombre}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
-                          }}
-                          placeholder="Nombre (ej: 1 Libra, Personal)"
-                          style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 10px', color: '#fff', fontSize: '13px' }}
+                          required
+                          placeholder="Ej: Seco de Pollo Criollo, Encebollado Mixto, Arroz 1Kg"
+                          value={formNombre}
+                          onChange={(e) => setFormNombre(e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
                         />
-                        <div style={{ position: 'relative', width: '110px' }}>
-                          <span style={{ position: 'absolute', left: '8px', top: '7px', color: '#94a3b8', fontSize: '12px' }}>$</span>
+                      </div>
+
+                      {/* Categoría con botón de agregar al instante */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1' }}>
+                            Categoría de Catálogo *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickNewCat(!showQuickNewCat)}
+                            style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                          >
+                            {showQuickNewCat ? '✕ Cancelar' : '+ Crear Nueva'}
+                          </button>
+                        </div>
+
+                        {showQuickNewCat ? (
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                              type="text"
+                              placeholder="Nombre de la nueva categoría (Ej: Postres, Bebidas)..."
+                              value={formNuevaCategoriaNombre}
+                              onChange={(e) => setFormNuevaCategoriaNombre(e.target.value)}
+                              style={{ flex: 1, background: '#1e293b', border: '1px solid #38bdf8', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '13px' }}
+                            />
+                          </div>
+                        ) : (
+                          <select
+                            value={formCategoriaId}
+                            onChange={(e) => setFormCategoriaId(e.target.value)}
+                            style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
+                          >
+                            {categorias.map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.icono || '🏷️'} {cat.nombre}
+                              </option>
+                            ))}
+                            {categorias.length === 0 && <option value="">General</option>}
+                          </select>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                          Descripción o Ingredientes
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Acompañado de arroz con choclo, maduro frito, ensalada fresca..."
+                          value={formDescripcion}
+                          onChange={(e) => setFormDescripcion(e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '13px', resize: 'none' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                          Unidad de Medida
+                        </label>
+                        <select
+                          value={formUnidadMedida}
+                          onChange={(e) => setFormUnidadMedida(e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '14px' }}
+                        >
+                          <option value="unidad">Unidad / Porción de Plato</option>
+                          <option value="kg">Kilogramo (Kg)</option>
+                          <option value="libra">Libra (lb)</option>
+                          <option value="gramos">Gramos (g)</option>
+                          <option value="litro">Litro (L)</option>
+                          <option value="six_pack">Six Pack (6 unidades)</option>
+                          <option value="caja">Caja</option>
+                          <option value="blister">Blíster (Farmacia)</option>
+                        </select>
+                      </div>
+
+                      <div style={{ background: '#1e293b', padding: '12px', borderRadius: '10px', border: '1px solid #334155' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer' }}>
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0.05"
-                            required={formTieneTamanos}
-                            value={tam.precio}
+                            type="checkbox"
+                            checked={formRequiereReceta}
+                            onChange={(e) => setFormRequiereReceta(e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                          <span>💊 Requiere receta médica para su despacho (Farmacias)</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ============================================================== */}
+                  {/* COLUMNA DERECHA: FOTO, PRECIO, STOCK & TAMAÑOS                 */}
+                  {/* ============================================================== */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* FOTOGRAFÍA CON SUBIDA Y PREVISUALIZACIÓN */}
+                    <div style={{ background: '#111827', padding: '20px', borderRadius: '16px', border: '1px solid #1e293b' }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        color: '#38bdf8',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                        marginBottom: '14px',
+                      }}>
+                        📸 Fotografía del Plato o Producto
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '10px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                            📁 Subir desde archivo:
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
                             onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 5 * 1024 * 1024) {
+                                  alert('La imagen no debe superar los 5MB.');
+                                  return;
+                                }
+                                const reader = new FileReader();
+                                reader.onload = (uploadEvt) => {
+                                  setFormImagenUrl(uploadEvt.target?.result as string);
+                                };
+                                reader.readAsDataURL(file);
+                              }
                             }}
-                            placeholder="Precio"
-                            style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 8px 6px 20px', color: '#fff', fontSize: '13px' }}
+                            style={{ fontSize: '11px', color: '#cbd5e1' }}
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
-                          style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: '4px' }}
-                          title="Eliminar este tamaño"
-                        >
-                          <X size={16} />
-                        </button>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                            🌐 O enlace URL directo:
+                          </label>
+                          <input
+                            type="url"
+                            placeholder="https://images.unsplash.com/..."
+                            value={formImagenUrl}
+                            onChange={(e) => setFormImagenUrl(e.target.value)}
+                            style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+                          />
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* FOTOGRAFÍA CON SUBIDA Y PREVISUALIZACIÓN */}
-              <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-                  Fotografía del Producto
-                </label>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                      📁 Subir desde archivo:
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert('La imagen no debe superar los 5MB.');
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvt) => {
-                            setFormImagenUrl(uploadEvt.target?.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      style={{ fontSize: '11px', color: '#cbd5e1' }}
-                    />
-                  </div>
+                      {/* Previsualización en vivo */}
+                      {formImagenUrl ? (
+                        <div style={{ position: 'relative', marginTop: '12px', height: '140px', width: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid #334155' }}>
+                          <img src={formImagenUrl} alt="Vista previa" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() => setFormImagenUrl('')}
+                            style={{ position: 'absolute', top: '8px', right: '8px', background: '#e11d48', border: 'none', color: '#fff', borderRadius: '6px', padding: '5px', cursor: 'pointer' }}
+                            title="Eliminar imagen"
+                          >
+                            <X size={14} />
+                          </button>
+                          <span style={{ position: 'absolute', bottom: '6px', left: '8px', background: 'rgba(0,0,0,0.75)', color: '#34d399', fontSize: '10px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
+                            ✓ Previsualización activa
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: '12px', height: '90px', width: '100%', borderRadius: '12px', border: '2px dashed #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '12px' }}>
+                          Sin fotografía asignada
+                        </div>
+                      )}
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
-                      🌐 O pegar URL directa:
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={formImagenUrl}
-                      onChange={(e) => setFormImagenUrl(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 10px', color: '#fff', fontSize: '12px' }}
-                    />
+                    {/* Precios & Control de Stock */}
+                    <div style={{ background: '#111827', padding: '20px', borderRadius: '16px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        color: '#22c55e',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        borderBottom: '1px solid #1e293b',
+                        paddingBottom: '8px',
+                      }}>
+                        💰 Precio Base & Inventario
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                          Precio de Venta ($ USD) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          required
+                          value={formPrecio}
+                          onChange={(e) => setFormPrecio(parseFloat(e.target.value) || 0)}
+                          style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '10px 12px', color: '#22c55e', fontWeight: '800', fontSize: '16px' }}
+                        />
+                      </div>
+
+                      <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: formManejaStock ? '10px' : 0 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={formManejaStock}
+                              onChange={(e) => setFormManejaStock(e.target.checked)}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                            />
+                            📦 Control de Inventario Numérico
+                          </label>
+                          {!formManejaStock && (
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Stock ilimitado</span>
+                          )}
+                        </div>
+
+                        {formManejaStock && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                              Cantidad en stock actualmente:
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={formStockDisponible}
+                              onChange={(e) => setFormStockDisponible(parseInt(e.target.value) || 0)}
+                              style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', fontSize: '14px' }}
+                            />
+                            <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px' }}>
+                              ⚠️ Al llegar a 0 unidades se marcará automáticamente como agotado.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
+                    <div style={{ background: '#111827', padding: '20px', borderRadius: '16px', border: '1px solid #1e293b' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: formTieneTamanos ? '10px' : 0 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={formTieneTamanos}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFormTieneTamanos(checked);
+                              if (checked && formTamanos.length === 0) {
+                                setFormTamanos([
+                                  { nombre: '1/2 Libra / Pequeño', precio: Math.round(Number(formPrecio) * 0.6 * 100) / 100 },
+                                  { nombre: '1 Libra / Estándar', precio: Number(formPrecio) },
+                                ]);
+                              }
+                            }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                          📐 Diferentes Tamaños / Presentaciones
+                        </label>
+                        {formTieneTamanos && (
+                          <button
+                            type="button"
+                            onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: Number(formPrecio) || 1.50 }])}
+                            style={{ background: '#1e293b', color: '#f43f5e', border: '1px solid #334155', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                          >
+                            + Añadir Tamaño
+                          </button>
+                        )}
+                      </div>
+
+                      {formTieneTamanos && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid #1e293b' }}>
+                          {formTamanos.map((tam, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                type="text"
+                                required={formTieneTamanos}
+                                value={tam.nombre}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
+                                }}
+                                placeholder="Nombre (ej: Personal, Familiar)"
+                                style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '7px 10px', color: '#fff', fontSize: '13px' }}
+                              />
+                              <div style={{ position: 'relative', width: '110px' }}>
+                                <span style={{ position: 'absolute', left: '8px', top: '7px', color: '#94a3b8', fontSize: '12px' }}>$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.05"
+                                  required={formTieneTamanos}
+                                  value={tam.precio}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                                  }}
+                                  placeholder="Precio"
+                                  style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '7px 8px 7px 20px', color: '#fff', fontSize: '13px' }}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
+                                style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: '4px' }}
+                                title="Eliminar este tamaño"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* Previsualización */}
-                {formImagenUrl && (
-                  <div style={{ position: 'relative', marginTop: '10px', height: '140px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155' }}>
-                    <img src={formImagenUrl} alt="Vista previa" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <button
-                      type="button"
-                      onClick={() => setFormImagenUrl('')}
-                      style={{ position: 'absolute', top: '8px', right: '8px', background: '#e11d48', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px', cursor: 'pointer' }}
-                      title="Eliminar imagen"
-                    >
-                      <X size={14} />
-                    </button>
-                    <span style={{ position: 'absolute', bottom: '6px', left: '8px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px' }}>
-                      ✓ Vista previa lista
-                    </span>
-                  </div>
-                )}
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formRequiereReceta}
-                  onChange={(e) => setFormRequiereReceta(e.target.checked)}
-                />
-                Requiere receta médica para su despacho (Farmacias)
-              </label>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              {/* Footer Sticky */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                padding: '16px 24px',
+                background: 'rgba(15, 23, 42, 0.95)',
+                backdropFilter: 'blur(8px)',
+                borderTop: '1px solid #1e293b',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 10,
+              }}>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  style={{ flex: 1, padding: '12px', background: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ padding: '10px 20px', background: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  style={{ flex: 2, padding: '12px', background: '#e11d48', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  className="interactive-btn"
+                  style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #e11d48, #be123c)', border: 'none', color: '#fff', borderRadius: '10px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', boxShadow: '0 4px 14px rgba(225, 29, 72, 0.35)' }}
                 >
                   {saving && <Loader2 className="animate-spin" size={16} />}
                   {editingProduct ? 'Guardar Cambios' : 'Añadir al Catálogo'}

@@ -453,10 +453,11 @@ export default function CuponesPage({
           <p style={{ fontSize: '14px', margin: 0 }}>Crea tu primera promoción para empezar a atraer compradores.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: '18px' }}>
           {filteredCupones.map(cup => (
             <div
               key={cup.id}
+              className="interactive-card"
               style={{
                 background: '#0f172a',
                 border: `1px solid ${cup.is_activo ? '#1e293b' : '#7f1d1d'}`,
@@ -554,6 +555,7 @@ export default function CuponesPage({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
+                    transition: 'all 0.2s',
                   }}
                 >
                   <Power size={12} /> {cup.is_activo ? 'Desactivar' : 'Activar'}
@@ -574,6 +576,7 @@ export default function CuponesPage({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
+                      transition: 'all 0.2s',
                     }}
                   >
                     <Edit2 size={12} /> Editar
@@ -592,6 +595,7 @@ export default function CuponesPage({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
+                      transition: 'all 0.2s',
                     }}
                   >
                     <Trash2 size={12} />
@@ -603,7 +607,7 @@ export default function CuponesPage({
         </div>
       )}
 
-      {/* Modal Crear / Editar Cupón */}
+      {/* Modal Crear / Editar Cupón - Diseño Panorámico Responsivo 2 Columnas */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -611,269 +615,437 @@ export default function CuponesPage({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(0, 0, 0, 0.8)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px',
+          padding: '16px',
           zIndex: 9999,
-          backdropFilter: 'blur(4px)',
+          backdropFilter: 'blur(6px)',
         }}>
           <div style={{
             background: '#0f172a',
             border: '1px solid #334155',
-            borderRadius: '20px',
+            borderRadius: '24px',
             width: '100%',
-            maxWidth: '520px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '28px',
+            maxWidth: 'min(94vw, 980px)',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             color: '#fff',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+            boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.85)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>
-                {editingCupon ? `Editar Cupón "${formCodigo}"` : 'Crear Nuevo Cupón de Descuento'}
-              </h3>
+            {/* Header Fijo */}
+            <div style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(10px)',
+              padding: '20px 28px',
+              borderBottom: '1px solid #1e293b',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'rgba(225, 29, 72, 0.15)',
+                  color: '#fb7185',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Ticket size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#fff' }}>
+                    {editingCupon ? `Editar Cupón "${formCodigo}"` : 'Crear Nueva Campaña o Cupón de Descuento'}
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                    Configura incentivos de venta, cupones fijos, envíos subsidiados o promociones de locales
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  borderRadius: '10px',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {errorMsg && (
+            {/* Contenido Scrollable con 2 Columnas */}
+            <form id="cuponForm" onSubmit={handleSaveCupon} style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '24px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+            }}>
+              {errorMsg && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid #ef4444',
+                  color: '#fca5a5',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                }}>
+                  {errorMsg}
+                </div>
+              )}
+
               <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid #ef4444',
-                color: '#fca5a5',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                marginBottom: '16px',
-                fontSize: '13px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))',
+                gap: '20px',
+                alignItems: 'start'
               }}>
-                {errorMsg}
-              </div>
-            )}
+                {/* Columna Izquierda: Código, Tipo y Título */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: 'rgba(2, 6, 23, 0.4)', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fb7185' }}>
+                      1. Identificación y Tipo de Beneficio
+                    </h4>
 
-            <form onSubmit={handleSaveCupon} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Código del Cupón *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingCupon}
-                    value={formCodigo}
-                    onChange={(e) => setFormCodigo(e.target.value.toUpperCase())}
-                    placeholder="Ej: BABA20"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                      fontWeight: '800',
-                      textTransform: 'uppercase'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Tipo de Promoción *
-                  </label>
-                  <select
-                    value={formTipo}
-                    onChange={(e: any) => setFormTipo(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="porcentaje">Porcentaje (% OFF)</option>
-                    <option value="monto_fijo">Monto Fijo ($ OFF)</option>
-                    <option value="envio_gratis">Envío / Flete Gratis</option>
-                  </select>
-                </div>
-              </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Código Alfanumérico *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          disabled={!!editingCupon}
+                          value={formCodigo}
+                          onChange={(e) => setFormCodigo(e.target.value.toUpperCase())}
+                          placeholder="Ej: BABA20"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fbbf24',
+                            boxSizing: 'border-box',
+                            fontWeight: '800',
+                            letterSpacing: '1px',
+                            textTransform: 'uppercase'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Modalidad del Descuento *
+                        </label>
+                        <select
+                          value={formTipo}
+                          onChange={(e: any) => setFormTipo(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="porcentaje">Porcentaje (% OFF)</option>
+                          <option value="monto_fijo">Monto Fijo ($ OFF)</option>
+                          <option value="envio_gratis">Envío Gratis ($0.00)</option>
+                        </select>
+                      </div>
+                    </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Título de la Oferta *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formTitulo}
-                  onChange={(e) => setFormTitulo(e.target.value)}
-                  placeholder="Ej: 10% de Descuento en Locales de Baba"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Título Público de la Campaña *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formTitulo}
+                        onChange={(e) => setFormTitulo(e.target.value)}
+                        placeholder="Ej: 15% de Descuento en tu primera compra en Baba"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Valor ({formTipo === 'porcentaje' ? '%' : '$'}) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formValor}
-                    onChange={(e) => setFormValor(parseFloat(e.target.value) || 0)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Tope Máx. Descuento ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formTope}
-                    onChange={(e) => setFormTope(e.target.value)}
-                    placeholder="Opcional (ej: 2.50)"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Descripción o Términos de la Promoción
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={formDescripcion}
+                        onChange={(e) => setFormDescripcion(e.target.value)}
+                        placeholder="Válido únicamente para comercios de comida rápida en Baba y Babahoyo..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                          resize: 'none',
+                        }}
+                      />
+                    </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Compra Mínima ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formCompraMinima}
-                    onChange={(e) => setFormCompraMinima(parseFloat(e.target.value) || 0)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Valor ({formTipo === 'porcentaje' ? '%' : '$'}) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={formValor}
+                          onChange={(e) => setFormValor(parseFloat(e.target.value) || 0)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#38bdf8',
+                            fontWeight: 'bold',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Tope Máx. Descuento ($ USD)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formTope}
+                          onChange={(e) => setFormTope(e.target.value)}
+                          placeholder="Opcional (ej: 3.00)"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    ¿Quién Financia el Descuento?
-                  </label>
-                  <select
-                    value={formFinanciadoPor}
-                    onChange={(e: any) => setFormFinanciadoPor(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
+
+                {/* Columna Derecha: Restricciones y Financiación */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: 'rgba(2, 6, 23, 0.4)', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fb7185' }}>
+                      2. Condiciones, Vigencia y Patrocinador
+                    </h4>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Compra Mínima ($ USD)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formCompraMinima}
+                          onChange={(e) => setFormCompraMinima(parseFloat(e.target.value) || 0)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                          Límite Total de Usos
+                        </label>
+                        <input
+                          type="number"
+                          value={formLimiteUsos}
+                          onChange={(e) => setFormLimiteUsos(e.target.value)}
+                          placeholder="Ej: 500 (vacío = sin límite)"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
+                            borderRadius: '10px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Entidad que Financia el Descuento
+                      </label>
+                      <select
+                        value={formFinanciadoPor}
+                        onChange={(e: any) => setFormFinanciadoPor(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <option value="plataforma">100% DeliveryYa (Campaña de Adquisición App)</option>
+                        <option value="comercio">100% Comercio Aliado (Promoción del Local)</option>
+                        <option value="compartido">50% Plataforma / 50% Comercio</option>
+                      </select>
+                      <div style={{ marginTop: '6px', fontSize: '11px', color: '#94a3b8' }}>
+                        {formFinanciadoPor === 'plataforma' && '💡 La plataforma asume el costo para ganar nuevos usuarios.'}
+                        {formFinanciadoPor === 'comercio' && '🏬 El comercio absorbe el descuento como promoción propia.'}
+                        {formFinanciadoPor === 'compartido' && '🤝 Costo dividido a partes iguales entre app y restaurante.'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Fecha Límite de Expiración
+                      </label>
+                      <input
+                        type="date"
+                        value={formFechaFin}
+                        onChange={(e) => setFormFechaFin(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* Switch Cupón Activo */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                       background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="plataforma">100% DeliveryYa (Campaña App)</option>
-                    <option value="comercio">100% Comercio Aliado</option>
-                    <option value="compartido">50% Plataforma / 50% Comercio</option>
-                  </select>
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid #334155'
+                    }}>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#fff' }}>
+                          ¿Cupón Disponible Inmediatamente?
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {formActivo ? 'Los clientes pueden aplicarlo en su carrito' : 'Pausado temporalmente'}
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formActivo}
+                        onChange={(e) => setFormActivo(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#e11d48', cursor: 'pointer' }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Fecha de Expiración
-                </label>
-                <input
-                  type="date"
-                  value={formFechaFin}
-                  onChange={(e) => setFormFechaFin(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    background: '#1e293b',
-                    color: '#cbd5e1',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  style={{
-                    flex: 2,
-                    padding: '12px',
-                    background: 'linear-gradient(135deg, #e11d48, #be123c)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '10px',
-                    fontWeight: '800',
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {saving ? 'Guardando...' : editingCupon ? 'Guardar Cambios' : 'Crear Cupón'}
-                </button>
               </div>
             </form>
+
+            {/* Footer Fijo con Acciones */}
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 10,
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(10px)',
+              padding: '16px 28px',
+              borderTop: '1px solid #1e293b',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="interactive-btn"
+                style={{
+                  padding: '10px 20px',
+                  background: '#1e293b',
+                  color: '#cbd5e1',
+                  border: '1px solid #334155',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="cuponForm"
+                disabled={saving}
+                className="interactive-btn"
+                style={{
+                  padding: '10px 24px',
+                  background: 'linear-gradient(135deg, #e11d48, #be123c)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: '800',
+                  fontSize: '13px',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+                }}
+              >
+                {saving ? 'Guardando...' : editingCupon ? 'Guardar Cambios' : 'Crear Promoción'}
+              </button>
+            </div>
           </div>
         </div>
       )}

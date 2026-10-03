@@ -564,24 +564,24 @@ export default function MenuManagement() {
           </button>
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filteredProductos.map((prod) => (
             <div
               key={prod.id}
-              className={`flex flex-col justify-between overflow-hidden rounded-2xl border bg-slate-900 transition-all ${
+              className={`group flex flex-col justify-between overflow-hidden rounded-2xl border bg-slate-900 card-hover-fx transition-all duration-300 ${
                 prod.is_disponible
-                  ? 'border-slate-800 hover:border-slate-700'
+                  ? 'border-slate-800 hover:border-rose-500/50 hover:shadow-xl hover:shadow-rose-950/25'
                   : 'border-rose-950/60 bg-slate-950/80 opacity-75'
               }`}
             >
               <div>
                 {/* Imagen del Plato / Producto */}
-                <div className="relative h-44 w-full bg-slate-800">
+                <div className="relative h-44 w-full bg-slate-800 overflow-hidden">
                   {prod.imagen_url ? (
                     <img
                       src={prod.imagen_url}
                       alt={prod.nombre}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
@@ -701,373 +701,431 @@ export default function MenuManagement() {
         </div>
       )}
 
-      {/* Modal Crear / Editar Plato */}
+      {/* Modal Crear / Editar Plato - Diseño Panorámico Responsivo 2 Columnas */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-extrabold">
-                {editingProduct ? 'Editar Plato de la Carta' : 'Crear Nuevo Plato'}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-5xl rounded-3xl border border-slate-700 bg-slate-900 text-white shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header Fijo */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-6 py-4 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/20 text-rose-400">
+                  <UtensilsCrossed size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-white">
+                    {editingProduct ? 'Editar Plato o Producto' : 'Crear Nuevo Plato / Producto'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Configura los datos del producto, precios, fotos y variaciones de porciones
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="rounded-xl border border-slate-700/60 p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                title="Cerrar ventana"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {errorMsg && (
-              <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-950/40 px-3.5 py-2.5 text-xs text-rose-300">
-                {errorMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleSaveProduct} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-300">Nombre del Plato *</label>
-                <input
-                  type="text"
-                  required
-                  value={formNombre}
-                  onChange={(e) => setFormNombre(e.target.value)}
-                  placeholder="Ej: Seco de Pato Criollo"
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300">Descripción o Ingredientes</label>
-                <textarea
-                  rows={2}
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  placeholder="Acompañado de arroz con choclo, maduro frito y ensalada..."
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300">Precio USD ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.05"
-                    required
-                    value={formPrecio}
-                    onChange={(e) => setFormPrecio(e.target.value)}
-                    placeholder="4.50"
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                  />
+            {/* Cuerpo con Scroll y 2 Columnas Widescreen */}
+            <form id="productForm" onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {errorMsg && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-xs text-rose-300">
+                  {errorMsg}
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300">Unidad de Medida</label>
-                  <select
-                    value={formUnidadMedida}
-                    onChange={(e) => setFormUnidadMedida(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
-                  >
-                    <option value="unidad">Unidad (ud)</option>
-                    <option value="porción">Porción / Plato</option>
-                    <option value="kg">Kilogramo (kg)</option>
-                    <option value="libra">Libra (lb)</option>
-                    <option value="litro">Litro (L)</option>
-                    <option value="botella">Botella</option>
-                    <option value="paquete">Paquete</option>
-                    <option value="caja">Caja</option>
-                  </select>
-                </div>
-              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* Columna Izquierda: Información Principal y Categorización */}
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                      1. Información del Producto
+                    </h4>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300">Categoría del Producto</label>
-                <select
-                  value={formCategoriaId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setFormCategoriaId(val);
-                    if (val === 'NEW') {
-                      setFormNuevaCategoria('');
-                    } else {
-                      const found = categorias.find(c => c.id === val);
-                      if (found) setFormCategoria(found.nombre);
-                    }
-                  }}
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white focus:border-rose-500 focus:outline-none"
-                >
-                  <option value="">-- Seleccionar Categoría --</option>
-                  {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icono} {cat.nombre}
-                    </option>
-                  ))}
-                  <option value="NEW">➕ Crear Nueva Categoría...</option>
-                </select>
-
-                {formCategoriaId === 'NEW' && (
-                  <div className="mt-2 rounded-xl border border-rose-500/40 bg-rose-950/20 p-3">
-                    <label className="block text-[11px] font-bold text-rose-300">Nombre de la Nueva Categoría</label>
-                    <input
-                      type="text"
-                      required
-                      value={formNuevaCategoria}
-                      onChange={(e) => {
-                        setFormNuevaCategoria(e.target.value);
-                        setFormCategoria(e.target.value);
-                      }}
-                      placeholder="Ej: Mariscos, Bebidas Frías, Lácteos..."
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* CONTROL OPCIONAL DE STOCK / INVENTARIO */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
-                <div className="flex items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    id="prodManejaStock"
-                    checked={formManejaStock}
-                    onChange={(e) => setFormManejaStock(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded accent-rose-600"
-                  />
-                  <div>
-                    <label htmlFor="prodManejaStock" className="text-xs font-bold text-slate-200 cursor-pointer">
-                      ¿Controlar inventario / stock numérico?
-                    </label>
-                    <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
-                      {formManejaStock
-                        ? 'Se descontará con cada venta. Si llega a 0, figurará como Agotado.'
-                        : 'Desactivado: Para restaurantes o comercios sin inventario digital (stock infinito).'}
-                    </p>
-                  </div>
-                </div>
-
-                {formManejaStock && (
-                  <div className="pt-2 border-t border-slate-800">
-                    <label className="block text-xs font-bold text-amber-400">Cantidad de Stock Disponible *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      required={formManejaStock}
-                      value={formStockDisponible}
-                      onChange={(e) => setFormStockDisponible(e.target.value)}
-                      placeholder="Ej: 20"
-                      className="mt-1 w-full rounded-xl border border-amber-500/40 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
-                <div className="flex items-start justify-between gap-2.5">
-                  <div className="flex items-start gap-2.5">
-                    <input
-                      type="checkbox"
-                      id="prodTieneTamanos"
-                      checked={formTieneTamanos}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFormTieneTamanos(checked);
-                        if (checked && formTamanos.length === 0) {
-                          const base = parseFloat(formPrecio) || 2.50;
-                          setFormTamanos([
-                            { nombre: '1/2 Libra / Pequeño', precio: Math.round(base * 0.6 * 100) / 100 },
-                            { nombre: '1 Libra / Estándar', precio: base },
-                          ]);
-                        }
-                      }}
-                      className="mt-0.5 h-4 w-4 rounded accent-rose-600"
-                    />
                     <div>
-                      <label htmlFor="prodTieneTamanos" className="text-xs font-bold text-slate-200 cursor-pointer">
-                        ¿Ofrecer diferentes tamaños o porciones?
+                      <label className="block text-xs font-bold text-slate-300">
+                        Nombre del Plato / Artículo *
                       </label>
-                      <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
-                        Define opciones como 1/2 libra, 1 libra, 2 libras, Familiar, Personal, etc., cada una con su precio.
-                      </p>
+                      <input
+                        type="text"
+                        required
+                        value={formNombre}
+                        onChange={(e) => setFormNombre(e.target.value)}
+                        placeholder="Ej: Seco de Pato Criollo / Hamburguesa Especial"
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none transition-colors"
+                      />
                     </div>
-                  </div>
-                  {formTieneTamanos && (
-                    <button
-                      type="button"
-                      onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: parseFloat(formPrecio) || 1.50 }])}
-                      className="rounded-lg bg-rose-950/70 border border-rose-800/40 px-2.5 py-1 text-xs font-bold text-rose-300 hover:bg-rose-900/60"
-                    >
-                      + Añadir Tamaño
-                    </button>
-                  )}
-                </div>
 
-                {formTieneTamanos && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    {formTamanos.map((tam, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          required={formTieneTamanos}
-                          value={tam.nombre}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
-                          }}
-                          placeholder="Ej: 1 Libra, Personal, 500g"
-                          className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                        />
-                        <div className="relative w-28">
-                          <span className="absolute left-2.5 top-1.5 text-xs text-slate-400">$</span>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300">
+                        Categoría en la Carta / Menú *
+                      </label>
+                      <select
+                        value={formCategoriaId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormCategoriaId(val);
+                          if (val === 'NEW') {
+                            setFormNuevaCategoria('');
+                          } else {
+                            const found = categorias.find(c => c.id === val);
+                            if (found) setFormCategoria(found.nombre);
+                          }
+                        }}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-rose-500 focus:outline-none transition-colors"
+                      >
+                        <option value="">-- Seleccionar Categoría --</option>
+                        {categorias.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.icono} {cat.nombre}
+                          </option>
+                        ))}
+                        <option value="NEW">➕ Crear Nueva Categoría...</option>
+                      </select>
+
+                      {formCategoriaId === 'NEW' && (
+                        <div className="mt-2.5 rounded-xl border border-rose-500/40 bg-rose-950/20 p-3">
+                          <label className="block text-[11px] font-bold text-rose-300">
+                            Nombre de la Nueva Categoría
+                          </label>
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0.05"
-                            required={formTieneTamanos}
-                            value={tam.precio}
+                            type="text"
+                            required
+                            value={formNuevaCategoria}
                             onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                              setFormNuevaCategoria(e.target.value);
+                              setFormCategoria(e.target.value);
                             }}
-                            placeholder="Precio"
-                            className="w-full rounded-lg border border-slate-700 bg-slate-800 py-1.5 pl-6 pr-2 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                            placeholder="Ej: Mariscos, Bebidas Frías, Postres..."
+                            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
                           />
                         </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300">
+                        Descripción o Ingredientes
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={formDesc}
+                        onChange={(e) => setFormDesc(e.target.value)}
+                        placeholder="Detalle ingredientes, preparación o acompañamientos (ej. Incluye arroz, maduro y chifle)..."
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300">
+                        Unidad de Medida
+                      </label>
+                      <select
+                        value={formUnidadMedida}
+                        onChange={(e) => setFormUnidadMedida(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white focus:border-rose-500 focus:outline-none transition-colors"
+                      >
+                        <option value="unidad">Unidad (ud)</option>
+                        <option value="porción">Porción / Plato</option>
+                        <option value="kg">Kilogramo (kg)</option>
+                        <option value="libra">Libra (lb)</option>
+                        <option value="litro">Litro (L)</option>
+                        <option value="botella">Botella</option>
+                        <option value="paquete">Paquete</option>
+                        <option value="caja">Caja</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Estado y Políticas */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Disponibilidad y Restricciones
+                    </h4>
+
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <input
+                        type="checkbox"
+                        id="prodDisponible"
+                        checked={formDisponible}
+                        onChange={(e) => setFormDisponible(e.target.checked)}
+                        className="h-4 w-4 rounded accent-rose-600"
+                      />
+                      <label htmlFor="prodDisponible" className="text-xs font-medium text-slate-200 cursor-pointer">
+                        Producto activo y visible para los clientes en la carta
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-xl border border-rose-900/30 bg-rose-950/20 p-3">
+                      <input
+                        type="checkbox"
+                        id="prodRequiereReceta"
+                        checked={formRequiereReceta}
+                        onChange={(e) => setFormRequiereReceta(e.target.checked)}
+                        className="h-4 w-4 rounded accent-rose-600"
+                      />
+                      <label htmlFor="prodRequiereReceta" className="text-xs font-medium text-rose-300 cursor-pointer">
+                        💊 Requiere receta médica (Para farmacias o medicina bajo prescripción)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna Derecha: Precios, Inventario, Tamaños e Imagen */}
+                <div className="space-y-4">
+                  {/* Precios e Inventario */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                      2. Precio y Existencias
+                    </h4>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300">
+                        Precio de Venta Base ($ USD) *
+                      </label>
+                      <div className="relative mt-1">
+                        <span className="absolute left-3.5 top-2.5 text-sm font-bold text-emerald-400">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.05"
+                          required
+                          value={formPrecio}
+                          onChange={(e) => setFormPrecio(e.target.value)}
+                          placeholder="4.50"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-8 pr-3.5 text-sm font-semibold text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* CONTROL OPCIONAL DE STOCK / INVENTARIO */}
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-3">
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          id="prodManejaStock"
+                          checked={formManejaStock}
+                          onChange={(e) => setFormManejaStock(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded accent-rose-600"
+                        />
+                        <div>
+                          <label htmlFor="prodManejaStock" className="text-xs font-bold text-slate-200 cursor-pointer">
+                            ¿Controlar inventario / stock numérico?
+                          </label>
+                          <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                            {formManejaStock
+                              ? 'Se descontará con cada venta. Si llega a 0, figurará como Agotado.'
+                              : 'Desactivado: Recomendado para restaurantes con cocina en vivo (stock ilimitado).'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {formManejaStock && (
+                        <div className="pt-2 border-t border-slate-800">
+                          <label className="block text-xs font-bold text-amber-400">Cantidad de Stock Disponible *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            required={formManejaStock}
+                            value={formStockDisponible}
+                            onChange={(e) => setFormStockDisponible(e.target.value)}
+                            placeholder="Ej: 20"
+                            className="mt-1 w-full rounded-xl border border-amber-500/40 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          id="prodTieneTamanos"
+                          checked={formTieneTamanos}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormTieneTamanos(checked);
+                            if (checked && formTamanos.length === 0) {
+                              const base = parseFloat(formPrecio) || 2.50;
+                              setFormTamanos([
+                                { nombre: '1/2 Libra / Pequeño', precio: Math.round(base * 0.6 * 100) / 100 },
+                                { nombre: '1 Libra / Estándar', precio: base },
+                              ]);
+                            }
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded accent-rose-600"
+                        />
+                        <div>
+                          <label htmlFor="prodTieneTamanos" className="text-xs font-bold text-slate-200 cursor-pointer">
+                            ¿Ofrecer diferentes tamaños o porciones?
+                          </label>
+                          <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                            Permite elegir Personal, Familiar, 1/2 libra, etc., cada una con su precio independiente.
+                          </p>
+                        </div>
+                      </div>
+                      {formTieneTamanos && (
                         <button
                           type="button"
-                          onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
-                          className="rounded p-1 text-slate-500 hover:bg-rose-950/60 hover:text-rose-400"
-                          title="Eliminar este tamaño"
+                          onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: parseFloat(formPrecio) || 1.50 }])}
+                          className="rounded-lg bg-rose-950/80 border border-rose-800/40 px-2.5 py-1 text-xs font-bold text-rose-300 hover:bg-rose-900"
+                        >
+                          + Añadir
+                        </button>
+                      )}
+                    </div>
+
+                    {formTieneTamanos && (
+                      <div className="space-y-2 pt-2 border-t border-slate-800">
+                        {formTamanos.map((tam, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              required={formTieneTamanos}
+                              value={tam.nombre}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
+                              }}
+                              placeholder="Ej: 1 Libra, Personal, 500g"
+                              className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                            />
+                            <div className="relative w-28">
+                              <span className="absolute left-2.5 top-1.5 text-xs text-slate-400">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.05"
+                                required={formTieneTamanos}
+                                value={tam.precio}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                                }}
+                                placeholder="Precio"
+                                className="w-full rounded-lg border border-slate-700 bg-slate-800 py-1.5 pl-6 pr-2 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
+                              className="rounded p-1 text-slate-500 hover:bg-rose-950/60 hover:text-rose-400"
+                              title="Eliminar este tamaño"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FOTOGRAFÍA DEL PRODUCTO CON SUBIDA Y PREVISUALIZACIÓN */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+                    <label className="block text-xs font-bold text-slate-300">
+                      Fotografía del Producto / Plato
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                          📁 Subir archivo local
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 5 * 1024 * 1024) {
+                                alert('La imagen no debe superar los 5MB.');
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = (uploadEvt) => {
+                                setFormImagenUrl(uploadEvt.target?.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="block w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-rose-400 hover:file:bg-slate-700 cursor-pointer"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                          🌐 O enlace URL web
+                        </label>
+                        <input
+                          type="url"
+                          value={formImagenUrl}
+                          onChange={(e) => setFormImagenUrl(e.target.value)}
+                          placeholder="https://images.unsplash..."
+                          className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Previsualización en vivo */}
+                    {formImagenUrl && (
+                      <div className="relative mt-2 h-40 w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900 group">
+                        <img
+                          src={formImagenUrl}
+                          alt="Vista previa"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormImagenUrl('')}
+                          className="absolute right-2 top-2 rounded-lg bg-rose-600/90 p-1.5 text-white hover:bg-rose-600 shadow-md transition-all"
+                          title="Eliminar imagen"
                         >
                           <X size={14} />
                         </button>
+                        <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                          ✓ Foto cargada
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* FOTOGRAFÍA DEL PRODUCTO CON SUBIDA Y PREVISUALIZACIÓN */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
-                <label className="block text-xs font-bold text-slate-300">Fotografía del Producto / Plato</label>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Opción 1: Subir Archivo */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                      📁 Subir desde tu equipo / teléfono
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert('La imagen no debe superar los 5MB.');
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvt) => {
-                            setFormImagenUrl(uploadEvt.target?.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="block w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-rose-400 hover:file:bg-slate-700 cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Opción 2: Pegar URL */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                      🌐 O pegar enlace web directo
-                    </label>
-                    <input
-                      type="url"
-                      value={formImagenUrl}
-                      onChange={(e) => setFormImagenUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                    />
+                    )}
                   </div>
                 </div>
-
-                {/* Previsualización en vivo */}
-                {formImagenUrl && (
-                  <div className="relative mt-2 h-36 w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
-                    <img
-                      src={formImagenUrl}
-                      alt="Vista previa"
-                      className="h-full w-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFormImagenUrl('')}
-                      className="absolute right-2 top-2 rounded-lg bg-rose-600/90 p-1.5 text-white hover:bg-rose-600 shadow-md"
-                      title="Eliminar imagen"
-                    >
-                      <X size={14} />
-                    </button>
-                    <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
-                      ✓ Vista previa lista
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="prodDisponible"
-                    checked={formDisponible}
-                    onChange={(e) => setFormDisponible(e.target.checked)}
-                    className="h-4 w-4 rounded accent-rose-600"
-                  />
-                  <label htmlFor="prodDisponible" className="text-xs text-slate-300">
-                    Producto activo inmediatamente para pedidos de clientes
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="prodRequiereReceta"
-                    checked={formRequiereReceta}
-                    onChange={(e) => setFormRequiereReceta(e.target.checked)}
-                    className="h-4 w-4 rounded accent-rose-600"
-                  />
-                  <label htmlFor="prodRequiereReceta" className="text-xs text-rose-300">
-                    💊 Requiere receta médica (Farmacias / Medicamentos controlados)
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-900/30 hover:from-rose-500 hover:to-rose-600 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <Loader2 size={16} className="mx-auto animate-spin" />
-                  ) : editingProduct ? (
-                    'Guardar Cambios'
-                  ) : (
-                    'Agregar a la Carta'
-                  )}
-                </button>
               </div>
             </form>
+
+            {/* Footer Fijo con Acciones */}
+            <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-slate-800 bg-slate-900/95 px-6 py-4 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="productForm"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-900/30 hover:from-rose-500 hover:to-rose-600 disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : editingProduct ? (
+                  'Guardar Cambios'
+                ) : (
+                  'Agregar a la Carta'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

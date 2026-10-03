@@ -396,15 +396,15 @@ export default function StaffManagement({ comercioId, isRetail = false, canEdit 
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredUsuarios.map(user => {
             const isPinVisible = !!visiblePins[user.id];
             return (
               <div 
                 key={user.id} 
-                className={`bg-slate-900/80 border rounded-2xl p-5 transition-all flex flex-col justify-between ${
+                className={`card-hover-fx group bg-slate-900/80 border rounded-2xl p-5 flex flex-col justify-between transition-all ${
                   user.is_activo 
-                    ? 'border-slate-800 hover:border-slate-700 shadow-md shadow-slate-950/50' 
+                    ? 'border-slate-800 hover:border-rose-500/40 shadow-md shadow-slate-950/50' 
                     : 'border-slate-800/40 opacity-70 bg-slate-900/30'
                 }`}
               >
@@ -501,166 +501,216 @@ export default function StaffManagement({ comercioId, isRetail = false, canEdit 
         </div>
       )}
 
-      {/* Modal para Crear / Editar Colaborador */}
+      {/* Modal para Crear / Editar Colaborador - Diseño Panorámico 2 Columnas */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            {/* Header del Modal */}
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-rose-600/20 text-rose-400 flex items-center justify-center">
-                  <Users size={16} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+            {/* Header del Modal Fijo */}
+            <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-rose-600/20 text-rose-400 flex items-center justify-center">
+                  <Users size={20} />
                 </div>
-                <h3 className="font-extrabold text-white text-base">
-                  {editingUser ? 'Editar Colaborador' : 'Nuevo Colaborador'}
-                </h3>
+                <div>
+                  <h3 className="font-extrabold text-white text-base">
+                    {editingUser ? 'Editar Colaborador' : 'Registrar Nuevo Colaborador'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Gestiona los accesos, perfil operativo y credenciales de punto de venta
+                  </p>
+                </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors"
+                title="Cerrar modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Formulario */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Formulario en 2 Columnas con Scroll */}
+            <form id="staffForm" onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
               {modalError && (
-                <div className="bg-rose-950/80 border border-rose-500/40 text-rose-300 px-3 py-2 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle size={15} className="shrink-0" />
+                <div className="bg-rose-950/80 border border-rose-500/40 text-rose-300 px-4 py-3 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0" />
                   <span>{modalError}</span>
                 </div>
               )}
 
-              {/* Nombre */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Nombre Completo <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Carlos Mendoza"
-                  value={formNombre}
-                  onChange={e => setFormNombre(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
-                />
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                {/* Columna Izquierda: Información Personal y Contacto */}
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                      1. Datos del Colaborador
+                    </h4>
 
-              {/* Rol Adaptativo según el tipo de negocio */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Rol y Funciones en el Local <span className="text-rose-400">*</span>
-                </label>
-                <select
-                  value={formRol}
-                  onChange={e => setFormRol(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
-                >
-                  <option value="cajero">💵 Cajero (Acepta pedidos, cobros y despacho)</option>
-                  {!isRetail ? (
-                    <option value="cocina">👨‍🍳 Personal de Cocina / KDS (Solo ve pedidos a preparar sin precios)</option>
-                  ) : (
-                    <option value="picker">📦 Picker / Bodeguero (Recolecta productos en percha y empaca)</option>
-                  )}
-                  <option value="admin">👑 Administrador / Encargado (Acceso completo y configuración)</option>
-                </select>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {formRol === 'cocina' && 'Ideal para pantallas en el área de cocina sin acceso a montos ni dinero.'}
-                  {formRol === 'picker' && 'Ideal para tiendas y supermercados para marcar ítems encontrados en percha.'}
-                  {formRol === 'cajero' && 'Acceso a comanda, facturación, despacho y apertura/cierre de caja.'}
-                  {formRol === 'admin' && 'Acceso total a catálogo, precios, colaboradores y reportes.'}
-                </p>
-              </div>
+                    {/* Nombre */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Nombre Completo <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: Carlos Mendoza"
+                        value={formNombre}
+                        onChange={e => setFormNombre(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                      />
+                    </div>
 
-              {/* Teléfono */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Teléfono Móvil (WhatsApp)
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Ej: 0991234567"
-                  value={formTelefono}
-                  onChange={e => setFormTelefono(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
-                />
-              </div>
+                    {/* Teléfono */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Teléfono Móvil (WhatsApp)
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="Ej: 0991234567"
+                        value={formTelefono}
+                        onChange={e => setFormTelefono(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                      />
+                    </div>
 
-              {/* PIN de 4 dígitos */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                    <KeyRound size={13} className="text-amber-400" /> PIN de Acceso Rápido (4 Dígitos) <span className="text-rose-400">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={generateRandomPin}
-                    className="text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors"
-                  >
-                    🎲 Generar Aleatorio
-                  </button>
+                    {/* Email Opcional */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Correo Electrónico (Opcional)
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="colaborador@local.com"
+                        value={formEmail}
+                        onChange={e => setFormEmail(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Switch Activo */}
+                  <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-slate-800">
+                    <div>
+                      <span className="block text-xs font-bold text-slate-200">
+                        Estado de la Cuenta
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {formActivo ? 'Habilitado para operar en el sistema' : 'Acceso suspendido temporalmente'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormActivo(!formActivo)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
+                        formActivo ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          formActivo ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  placeholder="Ej: 1234"
-                  value={formPin}
-                  onChange={e => setFormPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest text-center text-white focus:outline-none focus:border-rose-500"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Se usa en la pantalla de mostrador para cambiar de turno sin escribir correos ni contraseñas.
-                </p>
-              </div>
 
-              {/* Switch Activo */}
-              <div className="flex items-center justify-between p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                <span className="text-xs font-bold text-slate-300">¿Usuario Habilitado para Ingresar?</span>
-                <button
-                  type="button"
-                  onClick={() => setFormActivo(!formActivo)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    formActivo ? 'bg-emerald-600' : 'bg-slate-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      formActivo ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
+                {/* Columna Derecha: Rol y Credenciales */}
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                      2. Rol y Seguridad
+                    </h4>
 
-              {/* Botones de Acción */}
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950 transition-all flex items-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <RefreshCw size={13} className="animate-spin" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} />
-                      <span>{editingUser ? 'Guardar Cambios' : 'Registrar Colaborador'}</span>
-                    </>
-                  )}
-                </button>
+                    {/* Rol Adaptativo según el tipo de negocio */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Puesto de Operación <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        value={formRol}
+                        onChange={e => setFormRol(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
+                      >
+                        <option value="cajero">💵 Cajero (Acepta pedidos, cobros y despacho)</option>
+                        {!isRetail ? (
+                          <option value="cocina">👨‍🍳 Cocina / KDS (Solo comandas sin precios)</option>
+                        ) : (
+                          <option value="picker">📦 Picker / Bodega (Selecciona productos en percha)</option>
+                        )}
+                        <option value="admin">👑 Administrador (Acceso total al comercio)</option>
+                      </select>
+                      
+                      <div className="mt-2 rounded-xl bg-slate-900 border border-slate-800 p-2.5 text-[11px] text-slate-400 leading-relaxed">
+                        {formRol === 'cocina' && '👨‍🍳 Ideal para pantallas táctiles o tablets en área de preparación/cocina. No muestra montos de facturación.'}
+                        {formRol === 'picker' && '📦 Ideal para tiendas, minimarkets y farmacias. Permite marcar productos recolectados en pasillos.'}
+                        {formRol === 'cajero' && '💵 Manejo de comandas entrantes, cobros en efectivo o transferencia, y cierre de turno.'}
+                        {formRol === 'admin' && '👑 Permiso total para cambiar menús, precios, horarios, comisiones y administrar trabajadores.'}
+                      </div>
+                    </div>
+
+                    {/* PIN de 4 dígitos */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                          <KeyRound size={13} className="text-amber-400" /> PIN de Acceso Rápido <span className="text-rose-400">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={generateRandomPin}
+                          className="text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors"
+                        >
+                          🎲 Generar PIN
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        placeholder="Ej: 1234"
+                        value={formPin}
+                        onChange={e => setFormPin(e.target.value.replace(/\D/g, ''))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-mono tracking-widest text-center text-amber-400 font-bold focus:outline-none focus:border-rose-500 transition-colors"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Permite cambio de turno instantáneo en la pantalla de pedidos sin ingresar contraseñas largas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </form>
+
+            {/* Footer del Modal Fijo */}
+            <div className="sticky bottom-0 z-10 px-6 py-4 border-t border-slate-800 bg-slate-900/95 backdrop-blur-md flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="staffForm"
+                disabled={saving}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-950 transition-all flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    <span>{editingUser ? 'Guardar Cambios' : 'Registrar Colaborador'}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

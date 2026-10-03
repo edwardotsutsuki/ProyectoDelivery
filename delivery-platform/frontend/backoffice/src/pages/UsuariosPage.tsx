@@ -549,12 +549,13 @@ export default function UsuariosPage({
           <p style={{ fontSize: '14px', margin: 0 }}>Intenta ajustar los filtros de búsqueda o registra un nuevo usuario.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: '18px' }}>
           {filteredUsers.map(user => {
             const badge = getRoleBadge(user.rol);
             return (
               <div
                 key={user.id}
+                className="interactive-card"
                 style={{
                   background: '#0f172a',
                   border: `1px solid ${user.estado_activo ? '#1e293b' : '#7f1d1d'}`,
@@ -631,6 +632,7 @@ export default function UsuariosPage({
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       onClick={() => handleEditClick(user)}
+                      className="interactive-btn"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -650,6 +652,7 @@ export default function UsuariosPage({
 
                     <button
                       onClick={() => handleToggleEstado(user.id, user.estado_activo)}
+                      className="interactive-btn"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -675,7 +678,7 @@ export default function UsuariosPage({
         </div>
       )}
 
-      {/* Modal Crear / Editar Usuario */}
+      {/* Modal Crear / Editar Usuario - Diseño Panorámico Responsivo 2 Columnas */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -683,225 +686,337 @@ export default function UsuariosPage({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(0, 0, 0, 0.8)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px',
+          padding: '16px',
           zIndex: 9999,
-          backdropFilter: 'blur(4px)',
+          backdropFilter: 'blur(6px)',
         }}>
           <div style={{
             background: '#0f172a',
             border: '1px solid #334155',
-            borderRadius: '20px',
+            borderRadius: '24px',
             width: '100%',
-            maxWidth: '520px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '28px',
+            maxWidth: 'min(94vw, 920px)',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             color: '#fff',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+            boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.85)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>
-                {editingUserId ? 'Editar Datos de Usuario' : 'Registrar Nuevo Usuario'}
-              </h3>
+            {/* Header Fijo */}
+            <div style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(10px)',
+              padding: '20px 28px',
+              borderBottom: '1px solid #1e293b',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'rgba(225, 29, 72, 0.15)',
+                  color: '#fb7185',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Users size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#fff' }}>
+                    {editingUserId ? 'Editar Datos de Usuario' : 'Registrar Nuevo Usuario'}
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                    Control de accesos para clientes, motorizados, encargados de comercios y administradores
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  borderRadius: '10px',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {errorMsg && (
+            {/* Formulario en 2 Columnas con Scroll */}
+            <form id="userForm" onSubmit={handleSaveUser} style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '24px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+            }}>
+              {errorMsg && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid #ef4444',
+                  color: '#fca5a5',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                }}>
+                  {errorMsg}
+                </div>
+              )}
+
               <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid #ef4444',
-                color: '#fca5a5',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                marginBottom: '16px',
-                fontSize: '13px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))',
+                gap: '20px',
+                alignItems: 'start'
               }}>
-                {errorMsg}
-              </div>
-            )}
+                {/* Columna Izquierda: Información Personal y Contacto */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: 'rgba(2, 6, 23, 0.4)', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fb7185' }}>
+                      1. Información del Usuario
+                    </h4>
 
-            <form onSubmit={handleSaveUser} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Nombre y Apellidos *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formNombre}
-                  onChange={(e) => setFormNombre(e.target.value)}
-                  placeholder="Ej: Darwin Vera Mendoza"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Nombre y Apellidos *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formNombre}
+                        onChange={(e) => setFormNombre(e.target.value)}
+                        placeholder="Ej: Darwin Vera Mendoza"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  Correo Electrónico *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="Ej: darwin@delivery.com"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Correo Electrónico *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={formEmail}
+                        onChange={(e) => setFormEmail(e.target.value)}
+                        placeholder="Ej: darwin@delivery.com"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                  {editingUserId ? 'Nueva Contraseña (dejar en blanco para conservar)' : 'Contraseña Inicial *'}
-                </label>
-                <input
-                  type="password"
-                  required={!editingUserId}
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder={editingUserId ? '••••••••' : 'Mínimo 6 caracteres'}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    color: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Rol de Usuario *
-                  </label>
-                  <select
-                    value={formRol}
-                    onChange={(e: any) => setFormRol(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="cliente">Cliente Final</option>
-                    <option value="repartidor">Repartidor Motorizado</option>
-                    <option value="comercio">Comercio / Restaurante</option>
-                    <option value="admin">Administrador Backoffice</option>
-                  </select>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Teléfono / WhatsApp Móvil *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formTelefono}
+                        onChange={(e) => setFormTelefono(e.target.value)}
+                        placeholder="+5939..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
-                    Teléfono / WhatsApp *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formTelefono}
-                    onChange={(e) => setFormTelefono(e.target.value)}
-                    placeholder="+5939..."
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
+                {/* Columna Derecha: Rol y Credenciales */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: 'rgba(2, 6, 23, 0.4)', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fb7185' }}>
+                      2. Rol en la Plataforma y Seguridad
+                    </h4>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        Rol de Acceso *
+                      </label>
+                      <select
+                        value={formRol}
+                        onChange={(e: any) => setFormRol(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <option value="cliente">👤 Cliente Final (Realiza pedidos en la app)</option>
+                        <option value="repartidor">🛵 Repartidor Motorizado (Entrega pedidos y cobra flete)</option>
+                        <option value="comercio">🏬 Dueño de Comercio / Restaurante (Panel de ventas)</option>
+                        <option value="admin">🛡️ Administrador General Backoffice (Acceso total)</option>
+                      </select>
+                      <div style={{ marginTop: '6px', fontSize: '11px', color: '#94a3b8' }}>
+                        {formRol === 'cliente' && 'Acceso a la app de compras, carrito y seguimiento de pedidos.'}
+                        {formRol === 'repartidor' && 'Acceso a la app de motorizados con GPS y billetera de entregas.'}
+                        {formRol === 'comercio' && 'Acceso al portal del comercio para recibir órdenes y ajustar menú.'}
+                        {formRol === 'admin' && 'Acceso a finanzas, configuración de tarifas globales y comisiones.'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
+                        {editingUserId ? 'Nueva Contraseña (dejar en blanco para conservar)' : 'Contraseña de Ingreso *'}
+                      </label>
+                      <input
+                        type="password"
+                        required={!editingUserId}
+                        value={formPassword}
+                        onChange={(e) => setFormPassword(e.target.value)}
+                        placeholder={editingUserId ? '••••••••' : 'Mínimo 6 caracteres'}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          color: '#fff',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* Switch Usuario Activo */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                       background: '#1e293b',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
                       border: '1px solid #334155',
-                      borderRadius: '10px',
-                      color: '#fff',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                      marginTop: '6px',
+                    }}>
+                      <div>
+                        <span style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#fff' }}>
+                          Estado de la Cuenta
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {formActivo ? 'Habilitado para ingresar y operar en el sistema' : 'Acceso suspendido preventivamente'}
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formActivo}
+                        onChange={(e) => setFormActivo(e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <input
-                  type="checkbox"
-                  id="userActivo"
-                  checked={formActivo}
-                  onChange={(e) => setFormActivo(e.target.checked)}
-                  style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
-                />
-                <label htmlFor="userActivo" style={{ fontSize: '14px', color: '#cbd5e1', cursor: 'pointer' }}>
-                  Cuenta activa y autorizada para operar en la plataforma
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    background: '#1e293b',
-                    color: '#cbd5e1',
-                    border: '1px solid #334155',
-                    borderRadius: '10px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  style={{
-                    flex: 2,
-                    padding: '12px',
-                    background: 'linear-gradient(135deg, #e11d48, #be123c)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '10px',
-                    fontWeight: '800',
-                    cursor: saving ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  {saving ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : editingUserId ? (
-                    'Guardar Cambios'
-                  ) : (
-                    'Registrar Usuario'
-                  )}
-                </button>
               </div>
             </form>
+
+            {/* Footer Fijo con Acciones */}
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 10,
+              background: 'rgba(15, 23, 42, 0.95)',
+              backdropFilter: 'blur(10px)',
+              padding: '16px 28px',
+              borderTop: '1px solid #1e293b',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="interactive-btn"
+                style={{
+                  padding: '10px 20px',
+                  background: '#1e293b',
+                  color: '#cbd5e1',
+                  border: '1px solid #334155',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="userForm"
+                disabled={saving}
+                className="interactive-btn"
+                style={{
+                  padding: '10px 24px',
+                  background: 'linear-gradient(135deg, #e11d48, #be123c)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: '800',
+                  fontSize: '13px',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : editingUserId ? (
+                  'Guardar Cambios'
+                ) : (
+                  'Registrar Usuario'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
