@@ -754,10 +754,15 @@ orderRouter.patch('/:pedidoId/rechazar', async (req: Request, res: Response) => 
 // 6. Listar pedidos listos para despacho (para la App del Repartidor en Baba)
 orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
   try {
+    const includePending = req.query.includePending === 'true';
+    const statusClause = includePending
+      ? `p.estado::text IN ('listo', 'READY_FOR_PICKUP', 'creado', 'preparando')`
+      : `p.estado::text IN ('listo', 'READY_FOR_PICKUP')`;
+
     const query = `
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
-        p.direccion_entrega, p.notas, p.fecha_creacion,
+        p.ganancia_repartidor, p.direccion_entrega, p.notas, p.fecha_creacion,
         ST_Y(p.ubicacion_entrega) as lat_entrega,
         ST_X(p.ubicacion_entrega) as lon_entrega,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
@@ -776,7 +781,7 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
       FROM pedidos p
       JOIN usuarios u ON u.id = p.cliente_id
       JOIN comercios c ON c.id = p.comercio_id
-      WHERE p.estado::text IN ('listo', 'READY_FOR_PICKUP') AND p.repartidor_id IS NULL
+      WHERE ${statusClause} AND p.repartidor_id IS NULL
       ORDER BY p.fecha_creacion ASC;
     `;
     const result = await pgPool.query(query);
@@ -793,6 +798,67 @@ function resolveDriverId(id: string): string {
   }
   return id;
 }
+
+// 6.1 Obtener pedido activo asignado al repartidor
+orderRouter.get('/repartidor/:repartidorId/activo', async (req: Request, res: Response) => {
+  try {
+    const repartidorId = resolveDriverId(req.params.repartidorId);
+    const query = `
+      SELECT 
+        p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.ganancia_repartidor, p.direccion_entrega, p.notas, p.fecha_creacion, p.fecha_actualizacion,
+        ST_Y(p.ubicacion_entrega) as lat_entrega,
+        ST_X(p.ubicacion_entrega) as lon_entrega,
+        u.nombre as cliente_nombre, u.telefono as cliente_telefono,
+        c.nombre_comercial as comercio_nombre, c.direccion as comercio_direccion,
+        ST_Y(c.ubicacion) as comercio_lat, ST_X(c.ubicacion) as comercio_lon,
+        (
+          SELECT json_agg(json_build_object(
+            'producto', COALESCE(pr.nombre, 'Plato especial'),
+            'cantidad', pi.cantidad,
+            'precio_unitario', pi.precio_unitario
+          ))
+          FROM pedidos_items pi
+          LEFT JOIN productos pr ON pr.id = pi.producto_id
+          WHERE pi.pedido_id = p.id
+        ) as items
+      FROM pedidos p
+      JOIN usuarios u ON u.id = p.cliente_id
+      JOIN comercios c ON c.id = p.comercio_id
+      WHERE p.repartidor_id::text = $1 AND p.estado::text IN ('en_camino', 'aceptado', 'listo')
+      ORDER BY p.fecha_actualizacion DESC
+      LIMIT 1;
+    `;
+    const result = await pgPool.query(query, [repartidorId]);
+    res.json({ success: true, data: result.rows[0] || null });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 6.2 Obtener historial de entregas del repartidor
+orderRouter.get('/repartidor/:repartidorId/historial', async (req: Request, res: Response) => {
+  try {
+    const repartidorId = resolveDriverId(req.params.repartidorId);
+    const query = `
+      SELECT 
+        p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.ganancia_repartidor, p.direccion_entrega, p.fecha_actualizacion as fecha_entrega,
+        u.nombre as cliente_nombre,
+        c.nombre_comercial as comercio_nombre
+      FROM pedidos p
+      JOIN usuarios u ON u.id = p.cliente_id
+      JOIN comercios c ON c.id = p.comercio_id
+      WHERE p.repartidor_id::text = $1 AND p.estado::text = 'entregado'
+      ORDER BY p.fecha_actualizacion DESC
+      LIMIT 20;
+    `;
+    const result = await pgPool.query(query, [repartidorId]);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
 
 // 7. Repartidor toma el pedido e inicia ruta (en_camino)
 orderRouter.patch('/:pedidoId/tomar', async (req: Request, res: Response) => {
