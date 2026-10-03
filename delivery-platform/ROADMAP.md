@@ -208,9 +208,20 @@
   - [x] 13/13 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 - [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
   - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`), compatible con Expo Go.
-  - [x] Conexión al API Gateway y WebSocket en red local y remota.
+  - [x] Conexión al API Gateway y WebSocket en red local y remota vía túnel público (`https://delivery-baba-api.loca.lt/api/v1`).
   - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
   - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
+  - [x] **Interfaz de Usuario Moderna (Estilo Uber Eats / Rappi Soy Repartidor)**:
+    - Cabecera con selector de turno Online/Offline con radar visual pulsante y estado de satélites GPS en Baba Centro.
+    - Barra HUD de métricas del día (Ganancia Hoy, Entregas Concluidas, Deuda Efectivo retenido).
+    - Pestañas de navegación: *Misión Activa / Despacho*, *Mi Billetera*, *Historial de Entregas*, *Perfil y Conexión*.
+    - Radar de Despacho en Vivo: Conectado a `GET /api/v1/orders/disponibles/reparto` con polling 7s, tarjetas de comanda con origen, destino, número de ítems, ganancia estimada (`+$0.80`) y botón "Aceptar Pedido".
+    - HUD de Misión Activa en 2 pasos:
+      1. *Paso 1 (Retiro en Restaurante)*: Nombre y dirección de cocina, botones 1-clic a Waze y Google Maps, checklist de verificación de platos y confirmación de recogida.
+      2. *Paso 2 (Entrega al Domicilio)*: Datos de cliente, botón de llamada telefónica directa (`tel:`), navegación 1-clic a la vivienda, alerta de cobro de alta visibilidad (Efectivo obligatorio vs Pagado por Transferencia) y botón de entrega final.
+    - Liquidación Automática en el Ledger: Al entregar, `PATCH /orders/:id/entregar` asienta el cobro en efectivo o ganancia digital en `transacciones_ledger` e informa al cliente y restaurante vía Redis Pub/Sub.
+    - Alerta de Límite de Efectivo en Caja ($25+) para avisar al motorizado de liquidar en la central de Baba.
+    - Selector dinámico de servidor (Túnel remoto vs IP local WiFi).
   - [x] 14/14 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 
 ---
