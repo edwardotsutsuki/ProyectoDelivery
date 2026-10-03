@@ -7,12 +7,13 @@ import {
   TextInput,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   fetchComercios,
   fetchProductosComercio,
@@ -23,6 +24,11 @@ import {
   type ZonaTarifa,
   type CouponValidationResult,
 } from './src/services/catalogClientApi';
+import {
+  loginClient,
+  registerClient,
+  type ClientUser,
+} from './src/services/authClientApi';
 import {
   buildOrderPayload,
   submitOrder,
@@ -37,7 +43,7 @@ import {
 const DEFAULT_API = 'http://192.168.68.123:8080/api/v1';
 
 type Screen = 'stores' | 'catalog' | 'cart' | 'checkout' | 'tracking';
-type Payment = 'efectivo' | 'transferencia';
+type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual';
 
 interface CartLine {
   id: string;
@@ -61,7 +67,6 @@ const VERTICALES = [
   { id: 'todos', label: 'Todos', icon: '🌟' },
   { id: 'restaurante', label: 'Restaurantes', icon: '🍔' },
   { id: 'supermercado', label: 'Supermercados', icon: '🛒' },
-  { id: 'farmacia', label: 'Farmacias', icon: '💊' },
   { id: 'express', label: 'Express', icon: '⚡' },
 ];
 
@@ -69,6 +74,24 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [screen, setScreen] = useState<Screen>('stores');
   const [selectedCity, setSelectedCity] = useState<'baba' | 'babahoyo'>('baba');
   const [selectedVertical, setSelectedVertical] = useState('todos');
+
+  // Usuario y Autenticación
+  const [currentUser, setCurrentUser] = useState<ClientUser | null>({
+    id: '44444444-4444-4444-4444-444444444444',
+    name: 'Edward Otsutsuki (Baba)',
+    email: 'edward.otsutsuki@gmail.com',
+    phone: '+593995544332',
+    role: 'cliente',
+    saldoBilletera: 25.50,
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('edward.otsutsuki@gmail.com');
+  const [authPassword, setAuthPassword] = useState('cliente123');
+  const [authName, setAuthName] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   // Comercios y Catálogo
   const [comercios, setComercios] = useState<ComercioItem[]>([]);
@@ -114,7 +137,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     },
   ]);
 
-  // 1. Cargar Comercios iniciales
+  // Carga inicial
   useEffect(() => {
     loadStores();
     loadRates();
@@ -129,7 +152,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       });
       setComercios(data);
     } catch {
-      // Ignorar fallback automático en servicio
+      // Manejado internamente por el fallback
     } finally {
       setLoadingComercios(false);
     }
@@ -144,7 +167,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     }
   };
 
-  // 2. Cargar Menú del Comercio Seleccionado
+  // Cargar Menú del Comercio Seleccionado
   const selectStore = async (store: ComercioItem) => {
     setSelectedComercio(store);
     setSelectedCategory('todos');
@@ -204,7 +227,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const cartCount = cartLinesArray.reduce((acc, it) => acc + it.quantity, 0);
   const subtotal = cartLinesArray.reduce((acc, it) => acc + it.price * it.quantity, 0);
 
-  // Flete con verificación de subsidio
   const deliveryFee = selectedComercio?.subsidia_envio
     ? 0
     : (selectedComercio?.tarifa_fija_local ?? selectedTarifa?.tarifa_envio ?? 1.50);
@@ -212,27 +234,63 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const discount = couponResult?.valid ? couponResult.descuento : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
 
-  // Aplicar Cupón de Descuento
+  // Cupones
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
     setValidatingCoupon(true);
     setError('');
     const res = await validateCoupon(apiBaseUrl, couponCode, subtotal);
     setCouponResult(res);
-    if (!res.valid) {
-      setError(res.message);
-    }
+    if (!res.valid) setError(res.message);
     setValidatingCoupon(false);
   };
 
-  // Enviar Pedido en Vivo a Cocina
+  // Autenticación
+  const handleAuthSubmit = async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    if (authMode === 'login') {
+      const res = await loginClient(apiBaseUrl, authEmail, authPassword);
+      if (res.success && res.user) {
+        setCurrentUser(res.user);
+        setShowAuthModal(false);
+      } else {
+        setAuthError(res.message);
+      }
+    } else {
+      if (!authName.trim()) {
+        setAuthError('Por favor ingresa tu nombre completo.');
+        setAuthLoading(false);
+        return;
+      }
+      const res = await registerClient(apiBaseUrl, {
+        name: authName,
+        email: authEmail,
+        password: authPassword,
+        phone: authPhone,
+      });
+      if (res.success && res.user) {
+        setCurrentUser(res.user);
+        setShowAuthModal(false);
+      } else {
+        setAuthError(res.message);
+      }
+    }
+    setAuthLoading(false);
+  };
+
+  // Enviar Pedido
   const submitLiveOrder = async () => {
     if (cartCount === 0) {
-      setError('Tu carrito está vacío.');
+      setError('Tu canasta está vacía.');
       return;
     }
     if (!address.trim() || address.trim().length < 8) {
-      setError('Por favor indica una dirección clara de entrega.');
+      setError('Por favor indica una dirección clara de entrega en Baba o Babahoyo.');
+      return;
+    }
+    if (payment === 'saldo_virtual' && currentUser && (currentUser.saldoBilletera ?? 0) < total) {
+      setError(`Saldo insuficiente en Billetera ($${(currentUser.saldoBilletera ?? 0).toFixed(2)}). Elige efectivo o transferencia.`);
       return;
     }
 
@@ -249,20 +307,25 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       const payload = buildOrderPayload(
         itemsForApi,
         address,
-        payment,
+        payment === 'saldo_virtual' ? 'transferencia' : payment,
         selectedComercio?.id || '55555555-5555-5555-5555-555555555555',
-        'usr-cliente-01',
+        currentUser?.id || 'usr-cliente-01',
         {
           costoEnvio: deliveryFee,
           cuponCodigo: couponResult?.valid ? couponResult.codigo : undefined,
           descuentoCupon: discount,
           zonaTarifaId: selectedTarifa?.id,
-          notas: notes || `Pedido desde App Móvil - ${selectedComercio?.nombre_comercial || 'Baba'}`,
+          notas: notes || `Pedido desde App Móvil - ${currentUser?.name || 'Cliente Baba'}`,
         }
       );
 
       const result = await submitOrder(apiBaseUrl, payload);
       setConfirmedOrder(result.pedido);
+
+      // Descontar saldo virtual si aplicó
+      if (payment === 'saldo_virtual' && currentUser) {
+        setCurrentUser(prev => prev ? { ...prev, saldoBilletera: Math.max(0, (prev.saldoBilletera || 0) - total) } : null);
+      }
 
       // Guardar en Historial
       const newPast: PastOrder = {
@@ -280,7 +343,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       setCouponCode('');
       setScreen('tracking');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al conectar con el servidor.');
+      setError(err instanceof Error ? err.message : 'Error al procesar el pedido con el servidor.');
     } finally {
       setSubmitting(false);
     }
@@ -312,14 +375,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     }
   }, [screen, confirmedOrder]);
 
-  // Categorías de productos del comercio actual
   const productCategories = ['todos', ...new Set(productos.map(p => p.categoria || 'Varios'))];
   const filteredProducts = selectedCategory === 'todos'
     ? productos
     : productos.filter(p => (p.categoria || 'Varios') === selectedCategory);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Cabecera Principal */}
         <View style={styles.header}>
@@ -345,6 +408,21 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
               </Pressable>
             </View>
           </View>
+
+          {/* Barra de Perfil / Sesión */}
+          <View style={styles.userBar}>
+            {currentUser ? (
+              <Pressable onPress={() => setShowAuthModal(true)} style={styles.userProfileBtn}>
+                <Text style={styles.userProfileText}>
+                  👤 {currentUser.name.split(' ')[0]} · 💰 Saldo: <Text style={{ color: '#16a34a' }}>${(currentUser.saldoBilletera ?? 0).toFixed(2)}</Text>
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setShowAuthModal(true)} style={styles.loginQuickBtn}>
+                <Text style={styles.loginQuickText}>👤 Iniciar Sesión / Registrarse</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Barra de Navegación */}
@@ -353,7 +431,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             onPress={() => setScreen('stores')}
             style={[styles.navTab, screen === 'stores' && styles.navTabActive]}
           >
-            <Text style={[styles.navTabText, screen === 'stores' && styles.navTabTextActive]}>🏪 Comercios</Text>
+            <Text style={[styles.navTabText, screen === 'stores' && styles.navTabTextActive]}>🏪 Locales</Text>
           </Pressable>
 
           {selectedComercio && (
@@ -403,14 +481,19 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 ))}
               </ScrollView>
 
-              <Text style={styles.sectionTitle}>
-                Locales abiertos en {selectedCity === 'baba' ? 'Baba' : 'Babahoyo'}
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>
+                  Locales en {selectedCity === 'baba' ? 'Baba' : 'Babahoyo'} ({comercios.length})
+                </Text>
+                <Pressable onPress={loadStores} style={styles.refreshBtn}>
+                  <Text style={styles.refreshBtnText}>🔄 Actualizar</Text>
+                </Pressable>
+              </View>
 
               {loadingComercios ? (
                 <View style={styles.centerBox}>
-                  <ActivityIndicator size="large" color="#cf3349" />
-                  <Text style={styles.loadingText}>Cargando comercios de Los Ríos...</Text>
+                  <ActivityIndicator size="large" color="#e11d48" />
+                  <Text style={styles.loadingText}>Conectando con comercios de Los Ríos...</Text>
                 </View>
               ) : (
                 comercios.map(store => (
@@ -435,9 +518,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       {store.subsidia_envio ? (
                         <Text style={styles.freeShippingBadge}>🎉 Envío GRATIS</Text>
                       ) : (
-                        <Text style={styles.deliveryBadge}>🛵 Envío: ${Number(store.costo_base_envio || 1.5).toFixed(2)}</Text>
+                        <Text style={styles.deliveryBadge}>🛵 Envío: ${Number(store.costo_base_envio || 1.0).toFixed(2)}</Text>
                       )}
-                      <Text style={styles.viewMenuText}>Ver carta →</Text>
+                      <Text style={styles.viewMenuText}>Ver menú →</Text>
                     </View>
                   </Pressable>
                 ))
@@ -450,7 +533,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           {/* ======================================================== */}
           {screen === 'catalog' && selectedComercio && (
             <>
-              {/* Encabezado del Local */}
               <View style={styles.storeBannerCard}>
                 <Text style={styles.bannerEmoji}>{selectedComercio.tipo_comercio_icono || '🍽️'}</Text>
                 <View style={{ flex: 1 }}>
@@ -462,7 +544,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
               </View>
 
-              {/* Filtro de Categorías del Comercio */}
               {productCategories.length > 2 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.verticalFilter}>
                   {productCategories.map(cat => (
@@ -483,13 +564,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
               {loadingProductos ? (
                 <View style={styles.centerBox}>
-                  <ActivityIndicator size="large" color="#cf3349" />
+                  <ActivityIndicator size="large" color="#e11d48" />
                   <Text style={styles.loadingText}>Cargando carta en vivo...</Text>
                 </View>
               ) : filteredProducts.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyTitle}>Catálogo en actualización</Text>
-                  <Text style={styles.emptyDesc}>Este comercio está preparando nuevos platos.</Text>
+                  <Text style={styles.emptyDesc}>Este local está preparando nuevos platos.</Text>
                 </View>
               ) : (
                 filteredProducts.map(product => {
@@ -519,7 +600,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         </View>
                       </View>
 
-                      {/* Tamaños / Variantes si existen */}
                       {product.tamanos && product.tamanos.length > 0 && (
                         <View style={styles.sizesRow}>
                           {product.tamanos.map((size, idx) => (
@@ -534,7 +614,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         </View>
                       )}
 
-                      {/* Botón de Agregar / Cantidad */}
                       <View style={styles.productActions}>
                         {qtyInCart > 0 ? (
                           <View style={styles.qtyControlRow}>
@@ -566,7 +645,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 })
               )}
 
-              {/* Botón flotante al carrito */}
               {cartCount > 0 && (
                 <Pressable
                   onPress={() => setScreen('cart')}
@@ -581,7 +659,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           )}
 
           {/* ======================================================== */}
-          {/* PANTALLA 3: CANASTA & CHECKOUT CON CUPONES Y TARIFAS      */}
+          {/* PANTALLA 3: CANASTA & CHECKOUT CON CUPONES Y BILLETERA   */}
           {/* ======================================================== */}
           {screen === 'cart' && (
             <>
@@ -593,12 +671,11 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                   <Text style={styles.emptyTitle}>Tu canasta está vacía</Text>
                   <Text style={styles.emptyDesc}>Explora los locales de Baba y añade algo delicioso.</Text>
                   <Pressable onPress={() => setScreen('stores')} style={styles.primaryBtn}>
-                    <Text style={styles.primaryBtnText}>Explorar Comercios</Text>
+                    <Text style={styles.primaryBtnText}>Explorar Locales</Text>
                   </Pressable>
                 </View>
               ) : (
                 <>
-                  {/* Lista de Ítems */}
                   {cartLinesArray.map(item => (
                     <View key={item.id + (item.sizeName || '')} style={styles.cartItemCard}>
                       <View style={{ flex: 1 }}>
@@ -659,7 +736,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     />
                   </View>
 
-                  {/* Sección de Cupones de Descuento */}
+                  {/* Cupones de Descuento */}
                   <View style={styles.checkoutCard}>
                     <Text style={styles.checkoutCardTitle}>🎟️ Cupón de Descuento</Text>
                     <View style={styles.couponRow}>
@@ -692,39 +769,51 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     )}
                   </View>
 
-                  {/* Método de Pago */}
+                  {/* Forma de Pago con Billetera Virtual */}
                   <View style={styles.checkoutCard}>
                     <Text style={styles.checkoutCardTitle}>💳 Forma de Pago</Text>
-                    <View style={styles.paymentRow}>
+                    <View style={styles.paymentCol}>
+                      {currentUser && (
+                        <Pressable
+                          onPress={() => setPayment('saldo_virtual')}
+                          style={[styles.paymentBtn, payment === 'saldo_virtual' && styles.paymentBtnActive]}
+                        >
+                          <Text style={[styles.paymentBtnText, payment === 'saldo_virtual' && styles.paymentBtnTextActive]}>
+                            💰 Saldo Billetera Virtual (${(currentUser.saldoBilletera ?? 0).toFixed(2)})
+                          </Text>
+                        </Pressable>
+                      )}
+
                       <Pressable
                         onPress={() => setPayment('efectivo')}
                         style={[styles.paymentBtn, payment === 'efectivo' && styles.paymentBtnActive]}
                       >
                         <Text style={[styles.paymentBtnText, payment === 'efectivo' && styles.paymentBtnTextActive]}>
-                          💵 Efectivo al recibir
+                          💵 Efectivo contra entrega
                         </Text>
                       </Pressable>
+
                       <Pressable
                         onPress={() => setPayment('transferencia')}
                         style={[styles.paymentBtn, payment === 'transferencia' && styles.paymentBtnActive]}
                       >
                         <Text style={[styles.paymentBtnText, payment === 'transferencia' && styles.paymentBtnTextActive]}>
-                          📱 Transferencia / DeUna
+                          📱 Transferencia Banco Pichincha / DeUna
                         </Text>
                       </Pressable>
                     </View>
                   </View>
 
-                  {/* Resumen Financiero */}
+                  {/* Resumen */}
                   <View style={styles.summaryCard}>
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Subtotal de productos</Text>
+                      <Text style={styles.summaryLabel}>Subtotal</Text>
                       <Text style={styles.summaryVal}>${subtotal.toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>
-                        Envío ({selectedTarifa?.zona_nombre || 'Tarifa estándar'})
+                        Envío ({selectedTarifa?.zona_nombre || 'Estándar'})
                       </Text>
                       <Text style={styles.summaryVal}>
                         {deliveryFee === 0 ? '¡GRATIS!' : `$${deliveryFee.toFixed(2)}`}
@@ -748,7 +837,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
                   {!!error && <Text style={styles.errorText}>{error}</Text>}
 
-                  {/* Botón de Enviar Pedido */}
                   <Pressable
                     onPress={submitLiveOrder}
                     disabled={submitting}
@@ -783,10 +871,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
                   <Text style={styles.radarOrderNum}>Comanda #{confirmedOrder.id.slice(0, 8)}</Text>
                   <Text style={styles.radarDriver}>
-                    Repartidor asignado: <Text style={{ fontWeight: '800' }}>Carlos Moto 01</Text>
+                    Repartidor: <Text style={{ fontWeight: '800' }}>Carlos Moto 01</Text>
                   </Text>
 
-                  {/* Stepper de Estados */}
                   <View style={styles.stepperContainer}>
                     <View style={styles.stepperStepActive}>
                       <Text style={styles.stepperIcon}>🍳</Text>
@@ -812,7 +899,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       Destino: <Text style={{ fontWeight: '800' }}>{address}</Text>
                     </Text>
                     <Text style={styles.radarDetailRow}>
-                      Total de la orden: <Text style={{ fontWeight: '800', color: '#16a34a' }}>${confirmedOrder.total}</Text>
+                      Total: <Text style={{ fontWeight: '800', color: '#16a34a' }}>${confirmedOrder.total}</Text>
                     </Text>
                   </View>
                 </View>
@@ -824,8 +911,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
               )}
 
-              {/* Historial de Pedidos */}
-              <Text style={styles.sectionTitle}>Historial de Pedidos Anteriores</Text>
+              <Text style={styles.sectionTitle}>Historial de Pedidos</Text>
               {pastOrders.map(order => (
                 <View key={order.id} style={styles.pastOrderCard}>
                   <View style={styles.pastOrderHeader}>
@@ -844,7 +930,117 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ======================================================== */}
+      {/* MODAL DE INICIO DE SESIÓN / REGISTRO / PERFIL            */}
+      {/* ======================================================== */}
+      <Modal visible={showAuthModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {currentUser ? 'Mi Cuenta' : (authMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta')}
+              </Text>
+              <Pressable onPress={() => setShowAuthModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </Pressable>
+            </View>
+
+            {currentUser ? (
+              <View style={{ paddingVertical: 12 }}>
+                <Text style={styles.profileName}>{currentUser.name}</Text>
+                <Text style={styles.profileEmail}>📧 {currentUser.email}</Text>
+                <Text style={styles.profilePhone}>📱 {currentUser.phone || '+593995544332'}</Text>
+
+                <View style={styles.walletBox}>
+                  <Text style={styles.walletBoxLabel}>Saldo Billetera Digital</Text>
+                  <Text style={styles.walletBoxValue}>${(currentUser.saldoBilletera ?? 0).toFixed(2)}</Text>
+                  <Text style={styles.walletBoxSub}>Disponible para compras con 1 clic</Text>
+                </View>
+
+                <Pressable
+                  onPress={() => {
+                    setCurrentUser(null);
+                    setShowAuthModal(false);
+                  }}
+                  style={styles.logoutBtn}
+                >
+                  <Text style={styles.logoutBtnText}>Cerrar Sesión</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ paddingVertical: 8 }}>
+                {authMode === 'register' && (
+                  <>
+                    <Text style={styles.inputLabel}>Nombre y Apellido:</Text>
+                    <TextInput
+                      value={authName}
+                      onChangeText={setAuthName}
+                      style={styles.textInputSingle}
+                      placeholder="Ej: Edward Salvatierra"
+                    />
+
+                    <Text style={styles.inputLabel}>Teléfono / WhatsApp:</Text>
+                    <TextInput
+                      value={authPhone}
+                      onChangeText={setAuthPhone}
+                      keyboardType="phone-pad"
+                      style={styles.textInputSingle}
+                      placeholder="Ej: +593991234567"
+                    />
+                  </>
+                )}
+
+                <Text style={styles.inputLabel}>Correo electrónico:</Text>
+                <TextInput
+                  value={authEmail}
+                  onChangeText={setAuthEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.textInputSingle}
+                  placeholder="ejemplo@delivery.com"
+                />
+
+                <Text style={styles.inputLabel}>Contraseña:</Text>
+                <TextInput
+                  value={authPassword}
+                  onChangeText={setAuthPassword}
+                  secureTextEntry
+                  style={styles.textInputSingle}
+                  placeholder="••••••••"
+                />
+
+                {!!authError && <Text style={styles.errorText}>{authError}</Text>}
+
+                <Pressable
+                  onPress={handleAuthSubmit}
+                  disabled={authLoading}
+                  style={styles.submitOrderBtn}
+                >
+                  {authLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.submitOrderText}>
+                      {authMode === 'login' ? 'Entrar a mi Cuenta' : 'Registrarme'}
+                    </Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setAuthMode(m => m === 'login' ? 'register' : 'login')}
+                  style={{ marginTop: 12, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: '#e11d48', fontWeight: '700' }}>
+                    {authMode === 'login' ? '¿No tienes cuenta? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -861,6 +1057,12 @@ const styles = StyleSheet.create({
   cityButtonText: { fontSize: 12, fontWeight: '700', color: '#475569' },
   cityButtonTextActive: { color: '#fff' },
 
+  userBar: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  userProfileBtn: { backgroundColor: '#f8fafc', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', alignSelf: 'flex-start' },
+  userProfileText: { fontSize: 12, fontWeight: '700', color: '#0f172a' },
+  loginQuickBtn: { backgroundColor: '#fef2f2', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fecdd3', alignSelf: 'flex-start' },
+  loginQuickText: { fontSize: 12, fontWeight: '800', color: '#e11d48' },
+
   navBar: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   navTab: { flex: 1, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   navTabActive: { borderBottomWidth: 3, borderBottomColor: '#e11d48' },
@@ -868,7 +1070,10 @@ const styles = StyleSheet.create({
   navTabTextActive: { color: '#e11d48', fontWeight: '800' },
 
   scrollContent: { padding: 16, paddingBottom: 48 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginVertical: 12 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
+  refreshBtn: { backgroundColor: '#f1f5f9', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8 },
+  refreshBtnText: { fontSize: 11, fontWeight: '700', color: '#475569' },
 
   verticalFilter: { flexDirection: 'row', marginBottom: 12 },
   verticalPill: { backgroundColor: '#fff', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
@@ -940,7 +1145,7 @@ const styles = StyleSheet.create({
   zoneBadgeTextActive: { color: '#e11d48', fontWeight: '800' },
   inputLabel: { fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8, marginBottom: 4 },
   textInput: { minHeight: 55, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 10, fontSize: 13, color: '#0f172a', textAlignVertical: 'top' },
-  textInputSingle: { height: 42, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10, fontSize: 13, color: '#0f172a' },
+  textInputSingle: { height: 42, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10, fontSize: 13, color: '#0f172a', marginBottom: 4 },
 
   couponRow: { flexDirection: 'row', gap: 8 },
   couponInput: { flex: 1, height: 42, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, fontSize: 13, fontWeight: '700', color: '#0f172a' },
@@ -949,10 +1154,10 @@ const styles = StyleSheet.create({
   couponSuccessBadge: { backgroundColor: '#f0fdf4', padding: 8, borderRadius: 6, marginTop: 8, borderWidth: 1, borderColor: '#bbf7d0' },
   couponSuccessText: { color: '#16a34a', fontSize: 12, fontWeight: '700' },
 
-  paymentRow: { flexDirection: 'row', gap: 8 },
-  paymentBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', alignItems: 'center' },
+  paymentCol: { gap: 8 },
+  paymentBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1' },
   paymentBtnActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
-  paymentBtnText: { fontSize: 11, fontWeight: '700', color: '#334155' },
+  paymentBtnText: { fontSize: 12, fontWeight: '700', color: '#334155' },
   paymentBtnTextActive: { color: '#fff' },
 
   summaryCard: { backgroundColor: '#fff', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 12 },
@@ -966,7 +1171,7 @@ const styles = StyleSheet.create({
   totalVal: { fontSize: 18, fontWeight: '900', color: '#e11d48' },
 
   errorText: { color: '#dc2626', fontSize: 13, fontWeight: '700', textAlign: 'center', marginVertical: 8 },
-  submitOrderBtn: { backgroundColor: '#e11d48', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 4 },
+  submitOrderBtn: { backgroundColor: '#e11d48', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 8 },
   submitOrderText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 
   radarCard: { backgroundColor: '#f0fdf4', borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#10b981', marginBottom: 16 },
@@ -979,7 +1184,7 @@ const styles = StyleSheet.create({
   stepperStepActive: { alignItems: 'center' },
   stepperStep: { alignItems: 'center', opacity: 0.4 },
   stepperIcon: { fontSize: 24 },
-  stepperLabel: { fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 4 },
+  stepperLabel: { fontSize: 11, fontWeight: '700', color: '#0f172a' },
   stepperLineActive: { flex: 1, height: 4, backgroundColor: '#10b981', marginHorizontal: 6, borderRadius: 2 },
   stepperLine: { flex: 1, height: 4, backgroundColor: '#cbd5e1', marginHorizontal: 6, borderRadius: 2 },
   radarDetailsBox: { backgroundColor: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#d1fae5' },
@@ -1000,4 +1205,21 @@ const styles = StyleSheet.create({
   emptyDesc: { fontSize: 13, color: '#64748b', textAlign: 'center', marginVertical: 4 },
   primaryBtn: { backgroundColor: '#0f172a', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginTop: 10 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  modalCloseText: { fontSize: 14, fontWeight: '800', color: '#64748b' },
+
+  profileName: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  profileEmail: { fontSize: 13, color: '#64748b', marginVertical: 4 },
+  profilePhone: { fontSize: 13, color: '#64748b' },
+  walletBox: { backgroundColor: '#f0fdf4', padding: 16, borderRadius: 14, marginVertical: 14, borderWidth: 1, borderColor: '#bbf7d0', alignItems: 'center' },
+  walletBoxLabel: { fontSize: 12, fontWeight: '700', color: '#166534' },
+  walletBoxValue: { fontSize: 28, fontWeight: '900', color: '#15803d', marginVertical: 4 },
+  walletBoxSub: { fontSize: 11, color: '#16a34a' },
+  logoutBtn: { backgroundColor: '#fef2f2', paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#fecdd3' },
+  logoutBtnText: { color: '#e11d48', fontWeight: '800', fontSize: 13 },
 });
