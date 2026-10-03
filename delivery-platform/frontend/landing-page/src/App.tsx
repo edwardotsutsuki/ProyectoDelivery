@@ -714,6 +714,7 @@ export default function App() {
   const storeActivoParaPedido = comercioCarrito || comercioActivo;
   const totalItemsCount = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(Number(item.producto.precio || 0) * 100) * item.cantidad, 0);
+  const subtotal = subtotalCents / 100;
   // Cálculo dinámico de flete zonal y políticas de comercio
   let costoEnvioCalculado = 1.00;
   if (storeActivoParaPedido?.subsidia_envio) {

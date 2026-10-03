@@ -40,9 +40,9 @@ userRouter.get('/', async (req: Request, res: Response) => {
     const { rol } = req.query;
     let query = `
       SELECT u.id, u.nombre, u.email, u.telefono, u.rol, u.estado_activo, u.comercio_id, u.fecha_creacion,
-             COALESCE(c.nombre_comercial, '') as comercio_nombre
+             COALESCE(c.nombre_comercial, (SELECT nombre_comercial FROM comercios WHERE usuario_id = u.id LIMIT 1), '') as comercio_nombre
       FROM usuarios u
-      LEFT JOIN comercios c ON (c.id = u.comercio_id OR c.usuario_id = u.id)
+      LEFT JOIN comercios c ON c.id = u.comercio_id
     `;
     const params: any[] = [];
 

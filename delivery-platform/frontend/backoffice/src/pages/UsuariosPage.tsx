@@ -64,7 +64,13 @@ export default function UsuariosPage({
       const res = await fetch(`${apiBaseUrl}/users`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        setUsers(data.data);
+        const seen = new Set<string>();
+        const unique = data.data.filter((u: UserItem) => {
+          if (!u?.id || seen.has(u.id)) return false;
+          seen.add(u.id);
+          return true;
+        });
+        setUsers(unique);
       }
     } catch (err) {
       console.error('Error cargando usuarios:', err);
@@ -186,6 +192,14 @@ export default function UsuariosPage({
     }
   };
 
+  const normalizeRole = (r?: string): 'cliente' | 'repartidor' | 'comercio' | 'admin' => {
+    const clean = (r || '').toLowerCase().trim();
+    if (clean === 'admin' || clean === 'administrador') return 'admin';
+    if (clean === 'comercio') return 'comercio';
+    if (clean === 'repartidor') return 'repartidor';
+    return 'cliente';
+  };
+
   const filteredUsers = users.filter(u => {
     const matchesSearch =
       u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -194,7 +208,8 @@ export default function UsuariosPage({
 
     if (!matchesSearch) return false;
 
-    if (roleFilter !== 'all' && u.rol !== roleFilter) return false;
+    const normalizedUserRole = normalizeRole(u.rol);
+    if (roleFilter !== 'all' && normalizedUserRole !== roleFilter) return false;
 
     if (statusFilter === 'active' && !u.estado_activo) return false;
     if (statusFilter === 'suspended' && u.estado_activo) return false;
@@ -203,14 +218,15 @@ export default function UsuariosPage({
   });
 
   const countByRole = {
-    cliente: users.filter(u => u.rol === 'cliente').length,
-    repartidor: users.filter(u => u.rol === 'repartidor').length,
-    comercio: users.filter(u => u.rol === 'comercio').length,
-    admin: users.filter(u => u.rol === 'admin').length,
+    cliente: users.filter(u => normalizeRole(u.rol) === 'cliente').length,
+    repartidor: users.filter(u => normalizeRole(u.rol) === 'repartidor').length,
+    comercio: users.filter(u => normalizeRole(u.rol) === 'comercio').length,
+    admin: users.filter(u => normalizeRole(u.rol) === 'admin').length,
   };
 
   const getRoleBadge = (rol: string) => {
-    switch (rol) {
+    const normalized = normalizeRole(rol);
+    switch (normalized) {
       case 'admin':
         return {
           icon: <Shield size={14} />,

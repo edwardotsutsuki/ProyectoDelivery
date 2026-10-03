@@ -331,12 +331,6 @@ function ProtectedPortal() {
             </div>
           </button>
 
-          {config.demosEnabled && (
-            <Link to="/demo/pedidos" className="text-xs text-rose-300 underline underline-offset-4">
-              Demo
-            </Link>
-          )}
-
           <button
             className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
             onClick={() => client.signOut()}
@@ -484,8 +478,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
-            {config.demosEnabled && <Route path="/demo/pedidos" element={<KanbanOrders source="mock" />} />}
-            {config.demosEnabled && <Route path="/demo/tracking" element={<TrackingDemo />} />}
             <Route path="/pedidos" element={<ProtectedPortal />} />
             <Route path="/menu" element={<ProtectedPortal />} />
             <Route path="/equipo" element={<ProtectedPortal />} />
