@@ -385,9 +385,17 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
                           </p>
                         )}
 
-                        <div className="mb-4 flex items-center justify-between">
-                          <span className="text-sm text-slate-400">Total</span>
-                          <strong className="text-xl">{currency.format(orderTotal(order))}</strong>
+                        <div className="mb-4 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-400">Total Pedido</span>
+                            <strong className="text-xl">{currency.format(orderTotal(order))}</strong>
+                          </div>
+                          {order.pagoNeto !== undefined && (
+                            <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold bg-emerald-950/30 px-2 py-1 rounded">
+                              <span>Tu ingreso neto:</span>
+                              <span>{currency.format(order.pagoNeto)}</span>
+                            </div>
+                          )}
                         </div>
 
                         {order.status === 'PENDING' ? (

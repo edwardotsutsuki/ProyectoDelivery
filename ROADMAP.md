@@ -254,6 +254,28 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
     - Subida directa de imágenes desde el equipo (`FileReader`) y pegado de URL con previsualización en vivo dentro del formulario y botón para descartar imagen.
     - Badges de tamaños configurados en las tarjetas de administración.
 
+### Fase 5.15: Tarifas Fijas Zonales y Reparto de Comisiones Versátiles (Baba & Babahoyo) ✅
+- [x] **Base de Datos (PostgreSQL / PostGIS)**:
+  - [x] Script `03_tarifas_y_comisiones.sql` ejecutado exitosamente en `delivery-db-postgis`.
+  - [x] Tabla `configuracion_tarifas` con campos: `id`, `canton`, `zona_nombre`, `tarifa_envio`, `comision_repartidor_pct`, `comision_plataforma_pct`, `tarifa_servicio_cliente`, `radio_max_km`, `tiempo_estimado_min`, `is_activa`.
+  - [x] Semillas tarifarias zonales para Baba ($1.00 urbano, $1.50 periferia, $2.50 recintos) y Babahoyo ($1.50 urbano central, $2.00 periferia).
+  - [x] Alteración de tabla `comercios`: `tipo_comision` ('porcentaje', 'fijo_por_orden', 'suscripcion_mensual'), `valor_comision`, `cuota_mensual`, `subsidia_envio`, `tarifa_fija_local`.
+  - [x] Alteración de tabla `pedidos`: `tarifa_servicio`, `comision_comercio`, `ganancia_repartidor`, `ganancia_plataforma`, `pago_neto_comercio`, `zona_tarifa_id`.
+- [x] **Backend Core (`delivery-backend-core`)**:
+  - [x] Nuevo módulo `rates.controller.ts` montado en `/api/v1/config` y `/api/config` con endpoints completos `GET`, `POST`, `PUT`, `PATCH /toggle`, `DELETE`.
+  - [x] `catalog.controller.ts`: Retorna y actualiza en `comercios` los nuevos campos de políticas de comisión y flete preferencial.
+  - [x] `order.controller.ts`: Cálculo financiero dinámico en `/checkout`, aplicando split exacto de repartidor (80%), plataforma (20%) y comercio (neto = venta - comisión).
+  - [x] Nuevo endpoint `GET /orders/admin/todos` con desglose contable para auditoría en Backoffice.
+- [x] **Backoffice (`delivery-frontend-backoffice`)**:
+  - [x] Reescritura completa de `ZonasTarifasPage.tsx` conectada a `/api/v1/config/tarifas`, con edición en vivo de fletes, porcentajes y tiempos estimados, creación de nuevas zonas y simulador de reparto económico instantáneo.
+  - [x] `ComerciosPage.tsx`: Sección 4 en modal para configurar el plan de comisión (% ventas, tarifa fija por orden o membresía mensual VIP), flete local pactado y subsidio de envío patrocinado. Badges dinámicos en tarjetas de comercios.
+- [x] **Storefront Cliente (`delivery-frontend-landing`)**:
+  - [x] Selector dinámico de zonas de entrega (`[ 🛵 Baba Urbano · $1.00 ]`, `[ 🛵 Baba Periferia · $1.50 ]`, `[ 🛵 Recintos · $2.50 ]`) en checkout con cálculo instantáneo del flete.
+  - [x] Soporte para flete subsidiado por el local (`🎉 ¡Envío GRATIS patrocinado por el local!`) o tarifa preferencial pactada.
+  - [x] Desglose transparente en el resumen de orden antes de confirmar.
+- [x] **Panel Comercio (`delivery-frontend-comercio`)**:
+  - [x] En `KanbanOrders.tsx`, cada comanda muestra el Total del Pedido y el **Ingreso Neto del Local** calculado en tiempo real.
+
 ---
 
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)

@@ -138,6 +138,7 @@ catalogRouter.get('/comercios', async (req: Request, res: Response) => {
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
         c.calificacion, c.costo_base_envio, c.estado_aprobacion,
+        c.tipo_comision, c.valor_comision, c.cuota_mensual, c.subsidia_envio, c.tarifa_fija_local,
         c.tipo_comercio_id,
         COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
         COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
@@ -192,6 +193,7 @@ catalogRouter.get('/comercios/admin', async (req: Request, res: Response) => {
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
         c.calificacion, c.costo_base_envio,
+        c.tipo_comision, c.valor_comision, c.cuota_mensual, c.subsidia_envio, c.tarifa_fija_local,
         c.tipo_comercio_id,
         COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
         COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
@@ -310,6 +312,7 @@ catalogRouter.get('/comercio/:comercioId', async (req: Request, res: Response) =
         ST_X(c.ubicacion) as lon, ST_Y(c.ubicacion) as lat,
         c.is_abierto, c.telefono, c.categoria, c.tiempo_entrega_promedio,
         c.calificacion, c.costo_base_envio,
+        c.tipo_comision, c.valor_comision, c.cuota_mensual, c.subsidia_envio, c.tarifa_fija_local,
         c.tipo_comercio_id,
         COALESCE(tc.nombre, 'Restaurantes') as tipo_comercio_nombre,
         COALESCE(tc.icono, '🍔') as tipo_comercio_icono,
@@ -709,6 +712,11 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       titularCuenta,
       estadoAprobacion,
       usuarioId,
+      tipoComision,
+      valorComision,
+      cuotaMensual,
+      subsidiaEnvio,
+      tarifaFijaLocal,
     } = req.body;
 
     const query = `
@@ -735,11 +743,18 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
         titular_cuenta = COALESCE($18, titular_cuenta),
         estado_aprobacion = COALESCE($19, estado_aprobacion),
         usuario_id = COALESCE($20, usuario_id),
+        tipo_comision = COALESCE($21, tipo_comision),
+        valor_comision = COALESCE($22, valor_comision),
+        cuota_mensual = COALESCE($23, cuota_mensual),
+        subsidia_envio = COALESCE($24, subsidia_envio),
+        tarifa_fija_local = CASE WHEN $25::numeric IS NOT NULL THEN $25::numeric ELSE tarifa_fija_local END,
         fecha_actualizacion = NOW()
-      WHERE id::text = $21 OR id::text = $22
+      WHERE id::text = $26 OR id::text = $27
       RETURNING id, usuario_id, nombre_comercial, descripcion, direccion, is_abierto, categoria, tipo_comercio_id,
                 maneja_inventario_general, telefono, costo_base_envio, tiempo_entrega_promedio, ruc, razon_social,
-                banco, tipo_cuenta, numero_cuenta, titular_cuenta, estado_aprobacion, ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
+                banco, tipo_cuenta, numero_cuenta, titular_cuenta, estado_aprobacion,
+                tipo_comision, valor_comision, cuota_mensual, subsidia_envio, tarifa_fija_local,
+                ST_X(ubicacion) as lon, ST_Y(ubicacion) as lat;
     `;
 
     const result = await pgPool.query(query, [
@@ -763,6 +778,11 @@ catalogRouter.put('/comercio/:comercioId', async (req: Request, res: Response) =
       titularCuenta !== undefined ? titularCuenta : null,
       estadoAprobacion !== undefined ? estadoAprobacion : null,
       usuarioId !== undefined ? usuarioId : null,
+      tipoComision !== undefined ? tipoComision : null,
+      valorComision !== undefined ? Number(valorComision) : null,
+      cuotaMensual !== undefined ? Number(cuotaMensual) : null,
+      subsidiaEnvio !== undefined ? Boolean(subsidiaEnvio) : null,
+      tarifaFijaLocal !== undefined && tarifaFijaLocal !== null ? Number(tarifaFijaLocal) : null,
       rawId,
       targetId,
     ]);

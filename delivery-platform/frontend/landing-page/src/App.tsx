@@ -64,6 +64,10 @@ interface Comercio {
   tipo_layout?: 'restaurante' | 'grid_ecommerce';
   requiere_cocina?: boolean;
   maneja_inventario_general?: boolean;
+  tipo_comision?: string;
+  valor_comision?: number | string;
+  subsidia_envio?: boolean;
+  tarifa_fija_local?: number | string | null;
 }
 
 export interface TamanoOpcion {
@@ -214,6 +218,8 @@ export default function App() {
   const [clienteNombre, setClienteNombre] = useState('Edward Otsutsuki');
   const [clienteTelefono, setClienteTelefono] = useState('+593995544332');
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [zonasTarifas, setZonasTarifas] = useState<any[]>([]);
+  const [zonaSeleccionada, setZonaSeleccionada] = useState<any | null>(null);
   const [orderError, setOrderError] = useState('');
 
   // Opciones de tamaños seleccionados por producto (ID del producto -> { nombre, precio })
@@ -544,8 +550,25 @@ export default function App() {
     }
   };
 
+  const fetchTarifas = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/config/tarifas`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setZonasTarifas(data.data);
+          const defaultZona = data.data.find((z: any) => z.canton === 'Baba' && z.zona_nombre.includes('Urbano')) || data.data[0];
+          setZonaSeleccionada(defaultZona);
+        }
+      }
+    } catch (err) {
+      console.warn('Error al cargar tarifas de envío:', err);
+    }
+  };
+
   useEffect(() => {
     fetchComercios();
+    fetchTarifas();
   }, []);
 
   // 2. Cargar menú cuando se selecciona un comercio
@@ -691,9 +714,20 @@ export default function App() {
   const storeActivoParaPedido = comercioCarrito || comercioActivo;
   const totalItemsCount = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const subtotalCents = carrito.reduce((acc, item) => acc + Math.round(Number(item.producto.precio || 0) * 100) * item.cantidad, 0);
-  const subtotal = subtotalCents / 100;
-  const costoEnvio = storeActivoParaPedido?.canton === 'Babahoyo' ? 1.50 : 1.25;
-  const total = subtotal + (carrito.length > 0 ? costoEnvio : 0);
+  // Cálculo dinámico de flete zonal y políticas de comercio
+  let costoEnvioCalculado = 1.00;
+  if (storeActivoParaPedido?.subsidia_envio) {
+    costoEnvioCalculado = 0.00;
+  } else if (storeActivoParaPedido?.tarifa_fija_local !== null && storeActivoParaPedido?.tarifa_fija_local !== undefined) {
+    costoEnvioCalculado = Number(storeActivoParaPedido.tarifa_fija_local);
+  } else if (zonaSeleccionada) {
+    costoEnvioCalculado = Number(zonaSeleccionada.tarifa_envio);
+  } else if (storeActivoParaPedido?.canton === 'Babahoyo') {
+    costoEnvioCalculado = 1.50;
+  }
+  const costoEnvio = costoEnvioCalculado;
+  const tarifaServicio = zonaSeleccionada ? Number(zonaSeleccionada.tarifa_servicio_cliente || 0) : 0;
+  const total = subtotal + (carrito.length > 0 ? costoEnvio + tarifaServicio : 0);
 
   // Gestión de Perfil de Usuario
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -866,6 +900,7 @@ export default function App() {
         latEntrega: coordsEntrega.lat,
         lonEntrega: coordsEntrega.lon,
         costoEnvio,
+        zonaTarifaId: zonaSeleccionada?.id,
         politicaSustitucion: targetComercio?.tipo_layout === 'grid_ecommerce' ? politicaSustitucion : undefined,
         recetaAdjunta: tieneProductosReceta ? recetaAdjunta : undefined,
       };
@@ -2240,6 +2275,69 @@ export default function App() {
                   ))}
                 </div>
 
+                {/* Selector de Sector de Entrega y Tarifa Fija Transparente */}
+                {zonasTarifas.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                        🛵 Sector de Entrega (Tarifa Fija Transparente):
+                      </span>
+                      {storeActivoParaPedido?.subsidia_envio && (
+                        <span style={{ fontSize: '11px', background: '#fdf2f8', color: '#db2777', padding: '2px 8px', borderRadius: '6px', fontWeight: '800' }}>
+                          🎉 ¡Envío GRATIS patrocinado por el local!
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                      {zonasTarifas.map((z) => {
+                        const isSelected = zonaSeleccionada?.id === z.id;
+                        const esGratis = storeActivoParaPedido?.subsidia_envio;
+                        return (
+                          <button
+                            key={z.id}
+                            type="button"
+                            onClick={() => setZonaSeleccionada(z)}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: '10px',
+                              border: isSelected ? '2px solid #e11d48' : '1px solid #cbd5e1',
+                              background: isSelected ? '#fff1f2' : '#f8fafc',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: '12px', fontWeight: '800', color: isSelected ? '#e11d48' : '#1e293b' }}>
+                                {z.canton}: {z.zona_nombre.split('(')[0]}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                ~{z.tiempo_estimado_min} min · {z.descripcion ? z.descripcion.slice(0, 24) + '...' : 'Casco urbano'}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontWeight: '900',
+                              fontSize: '12px',
+                              color: esGratis ? '#16a34a' : isSelected ? '#e11d48' : '#059669',
+                              background: esGratis ? '#dcfce7' : isSelected ? '#ffe4e6' : '#ecfdf5',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              whiteSpace: 'nowrap',
+                              marginLeft: '6px'
+                            }}>
+                              {esGratis ? 'GRATIS' : `$${Number(z.tarifa_envio).toFixed(2)}`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   rows={2}
                   required
@@ -2604,10 +2702,20 @@ export default function App() {
                   <span>Subtotal comida:</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Tarifa de envío (Baba):</span>
-                  <span>${costoEnvio.toFixed(2)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    Flete fijo ({zonaSeleccionada ? zonaSeleccionada.zona_nombre.split('(')[0] : 'Baba Urbano'}):
+                  </span>
+                  <span style={{ fontWeight: '700', color: storeActivoParaPedido?.subsidia_envio ? '#16a34a' : '#0f172a' }}>
+                    {storeActivoParaPedido?.subsidia_envio ? '¡GRATIS! ($0.00)' : `$${costoEnvio.toFixed(2)}`}
+                  </span>
                 </div>
+                {tarifaServicio > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Tarifa de servicio app:</span>
+                    <span>${tarifaServicio.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '10px', fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>
                   <span>Total:</span>
                   <span style={{ color: '#e11d48' }}>${total.toFixed(2)} USD</span>

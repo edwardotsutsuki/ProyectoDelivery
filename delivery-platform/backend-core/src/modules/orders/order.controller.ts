@@ -190,7 +190,8 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       direccionEntrega,
       lonEntrega = -79.6783, // Coordenadas Baba por defecto
       latEntrega = -1.7917,
-      costoEnvio = 1.50,
+      costoEnvio = 1.00,
+      zonaTarifaId,
       notas = '',
       items: directItems,
     } = req.body;
@@ -215,31 +216,102 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
     client = await pgPool.connect();
     await client.query('BEGIN');
 
+    // 1. Consultar configuración de comisión del comercio
+    const merchantRes = await client.query(
+      'SELECT tipo_comision, valor_comision, subsidia_envio, tarifa_fija_local FROM comercios WHERE id::text = $1',
+      [targetMerchantId]
+    );
+    const merchantConfig = merchantRes.rows[0] || {
+      tipo_comision: 'porcentaje',
+      valor_comision: 10.00,
+      subsidia_envio: false,
+      tarifa_fija_local: null,
+    };
+
+    // 2. Consultar configuración de tarifa zonal
+    let tariffRow: any = null;
+    if (zonaTarifaId) {
+      const tariffRes = await client.query('SELECT * FROM configuracion_tarifas WHERE id::text = $1', [zonaTarifaId]);
+      if (tariffRes.rows.length > 0) tariffRow = tariffRes.rows[0];
+    }
+    if (!tariffRow) {
+      const defaultTariffRes = await client.query(
+        "SELECT * FROM configuracion_tarifas WHERE canton = 'Baba' AND is_activa = true ORDER BY orden ASC LIMIT 1"
+      );
+      if (defaultTariffRes.rows.length > 0) tariffRow = defaultTariffRes.rows[0];
+    }
+
+    // 3. Cálculo de flete y montos
+    let tarifaEnvioCalculada = Number(costoEnvio || 1.00);
+    if (merchantConfig.tarifa_fija_local !== null && merchantConfig.tarifa_fija_local !== undefined) {
+      tarifaEnvioCalculada = Number(merchantConfig.tarifa_fija_local);
+    } else if (tariffRow) {
+      tarifaEnvioCalculada = Number(tariffRow.tarifa_envio);
+    }
+
+    if (merchantConfig.subsidia_envio) {
+      tarifaEnvioCalculada = 0.00;
+    }
+
+    const tarifaServicioCliente = tariffRow ? Number(tariffRow.tarifa_servicio_cliente || 0.00) : 0.00;
+
     const subtotal = cartItems.reduce(
       (acc: number, item: any) => acc + Number(item.precio || item.unitPrice || 0) * Number(item.cantidad || item.quantity || 1),
       0
     );
-    const total = subtotal + Number(costoEnvio);
+
+    // 4. Cálculo de comisiones
+    let comisionComercio = 0.00;
+    const tipoComision = merchantConfig.tipo_comision || 'porcentaje';
+    const valorComision = Number(merchantConfig.valor_comision ?? 10.00);
+
+    if (tipoComision === 'porcentaje') {
+      comisionComercio = Number(((subtotal * valorComision) / 100.0).toFixed(2));
+    } else if (tipoComision === 'fijo_por_orden') {
+      comisionComercio = Number(valorComision.toFixed(2));
+    } else if (tipoComision === 'suscripcion_mensual') {
+      comisionComercio = 0.00;
+    } else {
+      comisionComercio = Number((subtotal * 0.10).toFixed(2));
+    }
+
+    const riderSplitPct = tariffRow ? Number(tariffRow.comision_repartidor_pct || 80.00) : 80.00;
+    const platformSplitPct = tariffRow ? Number(tariffRow.comision_plataforma_pct || 20.00) : 20.00;
+
+    const gananciaRepartidor = Number(((tarifaEnvioCalculada * riderSplitPct) / 100.0).toFixed(2));
+    const gananciaFletePlataforma = Number(((tarifaEnvioCalculada * platformSplitPct) / 100.0).toFixed(2));
+    const gananciaPlataforma = Number((comisionComercio + gananciaFletePlataforma + tarifaServicioCliente).toFixed(2));
+    const pagoNetoComercio = Number((subtotal - comisionComercio).toFixed(2));
+
+    const total = Number((subtotal + tarifaEnvioCalculada + tarifaServicioCliente).toFixed(2));
 
     const orderInsertQuery = `
       INSERT INTO pedidos (
         cliente_id, comercio_id, estado, metodo_pago, subtotal, costo_envio, total, 
-        direccion_entrega, ubicacion_entrega, notas
+        direccion_entrega, ubicacion_entrega, notas,
+        tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, zona_tarifa_id
       ) VALUES (
-        $1, $2, 'creado', $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($8, $9), 4326), $10
-      ) RETURNING id, estado, total, fecha_creacion;
+        $1, $2, 'creado', $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($8, $9), 4326), $10,
+        $11, $12, $13, $14, $15, $16
+      ) RETURNING id, estado, total, subtotal, costo_envio, tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, fecha_creacion;
     `;
     const orderResult = await client.query(orderInsertQuery, [
       targetClientId,
       targetMerchantId,
       metodoPago,
       subtotal,
-      costoEnvio,
+      tarifaEnvioCalculada,
       total,
       direccionEntrega || 'Barrio San Antonio, Calle Bolívar y Sucre, Baba',
       lonEntrega,
       latEntrega,
       notas,
+      tarifaServicioCliente,
+      comisionComercio,
+      gananciaRepartidor,
+      gananciaPlataforma,
+      pagoNetoComercio,
+      tariffRow?.id || null,
     ]);
     const pedidoCreado = orderResult.rows[0];
 
@@ -332,6 +404,7 @@ orderRouter.get('/comercio/:comercioId', async (req: Request, res: Response) => 
     const query = `
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.tarifa_servicio, p.comision_comercio, p.ganancia_repartidor, p.ganancia_plataforma, p.pago_neto_comercio, p.zona_tarifa_id,
         p.direccion_entrega, p.notas, p.fecha_creacion,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
         r.nombre as repartidor_nombre,
@@ -362,6 +435,43 @@ orderRouter.get('/comercio/:comercioId', async (req: Request, res: Response) => 
 
     // Entregar únicamente órdenes reales registradas en la base de datos
     res.json({ success: true, count: rows.length, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 3.0. Listar todos los pedidos para Backoffice (Auditoría Financiera y Desglose de Ganancias)
+orderRouter.get('/admin/todos', async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
+        p.tarifa_servicio, p.comision_comercio, p.ganancia_repartidor, p.ganancia_plataforma, p.pago_neto_comercio,
+        p.direccion_entrega, p.notas, p.fecha_creacion, p.motivo_rechazo,
+        u.nombre as cliente_nombre, u.telefono as cliente_telefono,
+        c.nombre_comercial, c.tipo_comision, c.valor_comision,
+        r.nombre as repartidor_nombre,
+        zt.zona_nombre as zona_tarifa_nombre, zt.canton as zona_canton,
+        (
+          SELECT json_agg(json_build_object(
+            'producto', COALESCE(pr.nombre, 'Plato especial'),
+            'cantidad', pi.cantidad,
+            'precio_unitario', pi.precio_unitario
+          ))
+          FROM pedidos_items pi
+          LEFT JOIN productos pr ON pr.id = pi.producto_id
+          WHERE pi.pedido_id = p.id
+        ) as items
+      FROM pedidos p
+      JOIN usuarios u ON u.id = p.cliente_id
+      JOIN comercios c ON c.id = p.comercio_id
+      LEFT JOIN usuarios r ON r.id = p.repartidor_id
+      LEFT JOIN configuracion_tarifas zt ON zt.id = p.zona_tarifa_id
+      ORDER BY p.fecha_creacion DESC
+      LIMIT 100;
+    `;
+    const result = await pgPool.query(query);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

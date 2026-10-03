@@ -57,6 +57,11 @@ export interface Comercio {
   motivo_rechazo?: string;
   fecha_solicitud?: string;
   fecha_aprobacion?: string;
+  tipo_comision?: 'porcentaje' | 'fijo_por_orden' | 'suscripcion_mensual';
+  valor_comision?: number | string;
+  cuota_mensual?: number | string;
+  subsidia_envio?: boolean;
+  tarifa_fija_local?: number | string | null;
 }
 
 interface ComerciosPageProps {
@@ -102,6 +107,13 @@ export default function ComerciosPage({
   const [formLon, setFormLon] = useState(-79.6783);
   const [formBaseFee, setFormBaseFee] = useState(1.50);
   const [formPrepTime, setFormPrepTime] = useState(30);
+
+  // Form State - Comisiones & Tarifas Versátiles
+  const [formTipoComision, setFormTipoComision] = useState<'porcentaje' | 'fijo_por_orden' | 'suscripcion_mensual'>('porcentaje');
+  const [formValorComision, setFormValorComision] = useState<number>(10.00);
+  const [formCuotaMensual, setFormCuotaMensual] = useState<number>(0.00);
+  const [formSubsidiaEnvio, setFormSubsidiaEnvio] = useState<boolean>(false);
+  const [formTarifaFijaLocal, setFormTarifaFijaLocal] = useState<string>('');
 
   // Form State - Fiscal & Bancario
   const [formRuc, setFormRuc] = useState('');
@@ -283,6 +295,12 @@ export default function ComerciosPage({
     setFormNumeroCuenta(c.numero_cuenta || '');
     setFormTitularCuenta(c.titular_cuenta || '');
 
+    setFormTipoComision(c.tipo_comision || 'porcentaje');
+    setFormValorComision(Number(c.valor_comision ?? 10.00));
+    setFormCuotaMensual(Number(c.cuota_mensual ?? 0.00));
+    setFormSubsidiaEnvio(Boolean(c.subsidia_envio));
+    setFormTarifaFijaLocal(c.tarifa_fija_local !== null && c.tarifa_fija_local !== undefined ? String(c.tarifa_fija_local) : '');
+
     setFormUsuarioId(c.usuario_id || '');
     setFormCrearUsuario(false);
     setFormUsuarioNombre(c.usuario_nombre || '');
@@ -338,6 +356,11 @@ export default function ComerciosPage({
         tipoCuenta: formTipoCuenta || 'ahorros',
         numeroCuenta: formNumeroCuenta.trim() || null,
         titularCuenta: formTitularCuenta.trim() || null,
+        tipoComision: formTipoComision,
+        valorComision: Number(formValorComision),
+        cuotaMensual: Number(formCuotaMensual),
+        subsidiaEnvio: Boolean(formSubsidiaEnvio),
+        tarifaFijaLocal: formTarifaFijaLocal ? Number(formTarifaFijaLocal) : null,
       };
 
       if (isEditing) {
@@ -402,6 +425,12 @@ export default function ComerciosPage({
     setFormTipoCuenta('ahorros');
     setFormNumeroCuenta('');
     setFormTitularCuenta('');
+
+    setFormTipoComision('porcentaje');
+    setFormValorComision(10.00);
+    setFormCuotaMensual(0.00);
+    setFormSubsidiaEnvio(false);
+    setFormTarifaFijaLocal('');
 
     setFormCrearUsuario(true);
     setFormUsuarioNombre('');
@@ -903,9 +932,58 @@ export default function ComerciosPage({
                         </div>
                       </div>
 
+                      {/* Plan de Comisión y Políticas del Local */}
+                      <div style={{
+                        marginTop: '10px',
+                        background: '#1e293b',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                        alignItems: 'center',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                      }}>
+                        <span style={{
+                          background: '#064e3b',
+                          color: '#34d399',
+                          padding: '2px 8px',
+                          borderRadius: '6px'
+                        }}>
+                          💰 {comercio.tipo_comision === 'fijo_por_orden' 
+                              ? `$${Number(comercio.valor_comision || 0.40).toFixed(2)} / pedido`
+                              : comercio.tipo_comision === 'suscripcion_mensual'
+                              ? `VIP $${Number(comercio.cuota_mensual || 15).toFixed(2)}/mes`
+                              : `${Number(comercio.valor_comision || 10.00).toFixed(1)}% comisión`}
+                        </span>
+
+                        {comercio.subsidia_envio && (
+                          <span style={{
+                            background: '#701a75',
+                            color: '#f472b6',
+                            padding: '2px 8px',
+                            borderRadius: '6px'
+                          }}>
+                            🎁 Subsidia Envíos
+                          </span>
+                        )}
+
+                        {comercio.tarifa_fija_local && (
+                          <span style={{
+                            background: '#1e1b4b',
+                            color: '#818cf8',
+                            padding: '2px 8px',
+                            borderRadius: '6px'
+                          }}>
+                            📍 Flete local: ${Number(comercio.tarifa_fija_local).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+
                       {/* Usuario Encargado Vinculado */}
                       <div style={{
-                        marginTop: '12px',
+                        marginTop: '8px',
                         background: '#1e293b',
                         padding: '10px 12px',
                         borderRadius: '10px',
@@ -1585,6 +1663,159 @@ export default function ComerciosPage({
                         fontSize: '13px',
                       }}
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 4: Plan de Comisiones y Políticas de Flete (Modelo Versátil Baba/Babahoyo) */}
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    4. Modelo de Comisión y Políticas de Flete (Baba & Babahoyo)
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', background: '#1e293b', padding: '3px 8px', borderRadius: '6px' }}>
+                    100% Editable y Versátil
+                  </span>
+                </div>
+
+                <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+                  Personaliza cómo genera ingresos este local: Porcentaje sobre ventas (8-10%), tarifa fija por pedido ($0.40), o membresía mensual fija ($15/mes sin comisión por orden).
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                      Modelo de Comisión
+                    </label>
+                    <select
+                      value={formTipoComision}
+                      onChange={(e: any) => {
+                        const val = e.target.value;
+                        setFormTipoComision(val);
+                        if (val === 'porcentaje' && formValorComision < 1) setFormValorComision(10.00);
+                        if (val === 'fijo_por_orden' && formValorComision > 5) setFormValorComision(0.40);
+                        if (val === 'suscripcion_mensual' && formCuotaMensual < 5) setFormCuotaMensual(15.00);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        background: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#fff',
+                        boxSizing: 'border-box',
+                        fontSize: '13px',
+                      }}
+                    >
+                      <option value="porcentaje">% Porcentaje sobre Ventas</option>
+                      <option value="fijo_por_orden">$ Tarifa Fija por Cada Pedido</option>
+                      <option value="suscripcion_mensual">💎 Membresía Mensual VIP (0% por orden)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                      {formTipoComision === 'porcentaje' ? 'Comisión (%)' : formTipoComision === 'fijo_por_orden' ? 'Valor por Orden ($)' : 'Comisión por Orden'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      disabled={formTipoComision === 'suscripcion_mensual'}
+                      value={formTipoComision === 'suscripcion_mensual' ? 0 : formValorComision}
+                      onChange={(e) => setFormValorComision(parseFloat(e.target.value) || 0)}
+                      placeholder={formTipoComision === 'porcentaje' ? '10.00' : '0.40'}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        background: formTipoComision === 'suscripcion_mensual' ? '#0f172a' : '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: formTipoComision === 'suscripcion_mensual' ? '#64748b' : '#34d399',
+                        fontWeight: '700',
+                        boxSizing: 'border-box',
+                        fontSize: '13px',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                      Cuota Mensual Fija ($/mes)
+                    </label>
+                    <input
+                      type="number"
+                      step="1.00"
+                      value={formCuotaMensual}
+                      onChange={(e) => setFormCuotaMensual(parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        background: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#38bdf8',
+                        fontWeight: '700',
+                        boxSizing: 'border-box',
+                        fontSize: '13px',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#94a3b8' }}>
+                      Tarifa Fija de Envío Especial para este Local ($)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      value={formTarifaFijaLocal}
+                      onChange={(e) => setFormTarifaFijaLocal(e.target.value)}
+                      placeholder="Vacío = Tarifa Zonal Estándar ($1.00)"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        background: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#fff',
+                        boxSizing: 'border-box',
+                        fontSize: '13px',
+                      }}
+                    />
+                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                      Si defines un valor (ej. $1.00), anula el flete zonal para clientes de este local.
+                    </span>
+                  </div>
+
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: formSubsidiaEnvio ? 'rgba(236, 72, 153, 0.15)' : '#1e293b',
+                    border: formSubsidiaEnvio ? '1px solid #f472b6' : '1px solid #334155',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    marginTop: '20px'
+                  }}
+                  onClick={() => setFormSubsidiaEnvio(!formSubsidiaEnvio)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formSubsidiaEnvio}
+                      onChange={(e) => setFormSubsidiaEnvio(e.target.checked)}
+                      style={{ width: '18px', height: '18px', marginRight: '10px', cursor: 'pointer' }}
+                    />
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: formSubsidiaEnvio ? '#f472b6' : '#cbd5e1' }}>
+                        Local Subsidia el Flete (Envío Gratis)
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                        El cliente no paga envío; el costo del flete se cobra al comercio.
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

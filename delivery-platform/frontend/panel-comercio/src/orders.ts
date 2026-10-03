@@ -14,6 +14,9 @@ export interface Order {
   politicaSustitucion?: string;
   bultos?: number;
   recetaAdjunta?: string;
+  pagoNeto?: number;
+  comision?: number;
+  subtotal?: number;
 }
 export function selectOrders(orders: Order[], query: string, overdueOnly: boolean, now: number): Order[] {
   const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
