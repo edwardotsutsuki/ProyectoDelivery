@@ -66,6 +66,11 @@ interface Comercio {
   maneja_inventario_general?: boolean;
 }
 
+export interface TamanoOpcion {
+  nombre: string;
+  precio: number;
+}
+
 interface Producto {
   id: string;
   nombre: string;
@@ -81,6 +86,7 @@ interface Producto {
   requiere_receta?: boolean;
   is_disponible: boolean;
   imagen_url?: string;
+  tamanos?: TamanoOpcion[];
 }
 
 interface CartItem {
@@ -209,6 +215,12 @@ export default function App() {
   const [clienteTelefono, setClienteTelefono] = useState('+593995544332');
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
+
+  // Opciones de tamaños seleccionados por producto (ID del producto -> { nombre, precio })
+  const [selectedSizes, setSelectedSizes] = useState<{ [prodId: string]: TamanoOpcion }>({});
+
+  // Control de tamaño de vista del catálogo ('compact' | 'standard' | 'large')
+  const [tamanoVista, setTamanoVista] = useState<'compact' | 'standard' | 'large'>('standard');
 
   // Consultar Billetera Virtual (Ledger)
   const fetchWallet = async (userId: string) => {
@@ -585,19 +597,34 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Gestión de Carrito con Aislamiento Multitienda y Control Opcional de Stock
-  const agregarAlCarrito = (producto: Producto) => {
+  // Gestión de Carrito con Aislamiento Multitienda, Variantes de Tamaño y Control Opcional de Stock
+  const agregarAlCarrito = (producto: Producto, tamanoOpt?: TamanoOpcion) => {
     if (!comercioActivo) return;
 
+    // Si tiene tamaños configurados y no se pasó uno explícito, tomar el seleccionado o el primero
+    let activeSize = tamanoOpt;
+    if (!activeSize && producto.tamanos && producto.tamanos.length > 0) {
+      activeSize = selectedSizes[producto.id] || producto.tamanos[0];
+    }
+
+    const prodToAdd: Producto = activeSize
+      ? {
+          ...producto,
+          id: `${producto.id}__tam__${encodeURIComponent(activeSize.nombre)}`,
+          nombre: `${producto.nombre} (${activeSize.nombre})`,
+          precio: Number(activeSize.precio),
+        }
+      : producto;
+
     if (carrito.length > 0 && comercioCarrito && comercioCarrito.id !== comercioActivo.id) {
-      setPendingAddProduct(producto);
+      setPendingAddProduct(prodToAdd);
       setShowSwitchStoreModal(true);
       return;
     }
 
     // Validación opcional de stock (solo si el producto tiene maneja_stock = true)
     if (producto.maneja_stock && producto.stock_disponible !== null && producto.stock_disponible !== undefined) {
-      const existe = carrito.find(item => item.producto.id === producto.id);
+      const existe = carrito.find(item => item.producto.id === prodToAdd.id);
       const cantidadEnCarrito = existe ? existe.cantidad : 0;
       if (cantidadEnCarrito >= producto.stock_disponible) {
         alert(`Lo sentimos, solo quedan ${producto.stock_disponible} unidades disponibles de este producto.`);
@@ -607,13 +634,13 @@ export default function App() {
 
     setComercioCarrito(comercioActivo);
     setCarrito(prev => {
-      const existe = prev.find(item => item.producto.id === producto.id);
+      const existe = prev.find(item => item.producto.id === prodToAdd.id);
       if (existe) {
         return prev.map(item =>
-          item.producto.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+          item.producto.id === prodToAdd.id ? { ...item, cantidad: item.cantidad + 1 } : item
         );
       }
-      return [...prev, { producto, cantidad: 1 }];
+      return [...prev, { producto: prodToAdd, cantidad: 1 }];
     });
   };
 
@@ -829,7 +856,8 @@ export default function App() {
         clienteId: customerUser.id,
         comercioId: targetComercio?.id || '55555555-5555-5555-5555-555555555555',
         items: carrito.map(item => ({
-          id: item.producto.id,
+          id: item.producto.id.includes('__tam__') ? item.producto.id.split('__tam__')[0] : item.producto.id,
+          nombre: item.producto.nombre,
           cantidad: item.cantidad,
           precio: item.producto.precio,
         })),
@@ -1497,7 +1525,7 @@ export default function App() {
             })()}
           </div>
 
-          {/* Listado de Productos (Adaptativo según tipo_layout: 'grid_ecommerce' vs 'restaurante') */}
+          {/* Listado de Productos (Adaptativo con Selector de Tamaño de Cuadrícula y Fotos) */}
           {(() => {
             const prodsFiltrados = productos.filter(p => {
               const catName = p.categoria_nombre || p.categoria;
@@ -1519,165 +1547,434 @@ export default function App() {
 
             const isRetailLayout = comercioActivo.tipo_layout === 'grid_ecommerce';
 
-            return (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isRetailLayout ? 'repeat(auto-fill, minmax(230px, 1fr))' : 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '16px'
-              }}>
-                {prodsFiltrados.map(prod => {
-                  const itemCarrito = carrito.find(it => it.producto.id === prod.id);
-                  const cantidad = itemCarrito?.cantidad || 0;
-                  const isAgotado = prod.maneja_stock && prod.stock_disponible !== null && prod.stock_disponible <= 0;
+            // Parámetros dinámicos según el selector de tamaño de vista
+            const viewConfigs = {
+              compact: {
+                minmax: isRetailLayout ? '190px' : '230px',
+                imgHeight: '130px',
+                titleSize: '14px',
+                cardPadding: '12px',
+                showDesc: false,
+              },
+              standard: {
+                minmax: isRetailLayout ? '240px' : '280px',
+                imgHeight: '170px',
+                titleSize: '16px',
+                cardPadding: '16px',
+                showDesc: true,
+              },
+              large: {
+                minmax: isRetailLayout ? '320px' : '360px',
+                imgHeight: '230px',
+                titleSize: '18px',
+                cardPadding: '20px',
+                showDesc: true,
+              },
+            };
+            const currentCfg = viewConfigs[tamanoVista] || viewConfigs.standard;
 
-                  return (
-                    <div
-                      key={prod.id}
+            return (
+              <div>
+                {/* Barra de Herramientas: Conteo y Selector de Tamaños de Tarjeta */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '14px',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>
+                    Mostrando <strong style={{ color: '#0f172a' }}>{prodsFiltrados.length}</strong> {prodsFiltrados.length === 1 ? 'producto' : 'productos'}
+                  </div>
+
+                  {/* Selector de Tamaño de Cuadrícula / Tarjetas */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: '#fff',
+                    border: '1px solid #e2e8f0',
+                    padding: '3px 4px',
+                    borderRadius: '10px'
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', padding: '0 4px' }}>
+                      Tamaño de vista:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTamanoVista('compact')}
                       style={{
-                        background: '#fff',
-                        borderRadius: '16px',
-                        border: '1px solid #e2e8f0',
-                        padding: isRetailLayout ? '16px' : '20px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        opacity: isAgotado ? 0.6 : 1,
-                        position: 'relative'
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: tamanoVista === 'compact' ? '#e11d48' : 'transparent',
+                        color: tamanoVista === 'compact' ? '#fff' : '#64748b',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
                       }}
                     >
-                      <div>
-                        {/* Header de la tarjeta de producto */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
-                            {prod.categoria_icono || '🏷️'} {prod.categoria_nombre || prod.categoria || 'General'}
-                          </span>
-                          {prod.requiere_receta && (
-                            <span style={{ background: '#fee2e2', color: '#dc2626', fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px' }}>
-                              💊 Receta
-                            </span>
-                          )}
-                        </div>
+                      📱 Compacto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTamanoVista('standard')}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: tamanoVista === 'standard' ? '#e11d48' : 'transparent',
+                        color: tamanoVista === 'standard' ? '#fff' : '#64748b',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      🖼️ Estándar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTamanoVista('large')}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: tamanoVista === 'large' ? '#e11d48' : 'transparent',
+                        color: tamanoVista === 'large' ? '#fff' : '#64748b',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      🔍 Grande
+                    </button>
+                  </div>
+                </div>
 
-                        <h3 style={{ fontSize: isRetailLayout ? '15px' : '16px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0', lineHeight: 1.3 }}>
-                          {prod.nombre}
-                        </h3>
+                {/* Cuadrícula de Productos */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(auto-fill, minmax(${currentCfg.minmax}, 1fr))`,
+                  gap: '16px'
+                }}>
+                  {prodsFiltrados.map(prod => {
+                    // Tamaño seleccionado activo para este producto (si tiene tamanos)
+                    const activeTamano = (prod.tamanos && prod.tamanos.length > 0)
+                      ? (selectedSizes[prod.id] || prod.tamanos[0])
+                      : null;
+                    const precioActivo = activeTamano ? Number(activeTamano.precio) : Number(prod.precio || 0);
 
-                        <p style={{ color: '#64748b', fontSize: '12px', lineHeight: 1.4, margin: '0 0 12px 0' }}>
-                          {prod.descripcion}
-                        </p>
+                    // Clave de carrito para controlar cantidades de esta variante exacta
+                    const cartKey = activeTamano
+                      ? `${prod.id}__tam__${encodeURIComponent(activeTamano.nombre)}`
+                      : prod.id;
+                    const itemCarrito = carrito.find(it => it.producto.id === cartKey);
+                    const cantidad = itemCarrito?.cantidad || 0;
+                    const isAgotado = prod.maneja_stock && prod.stock_disponible !== null && prod.stock_disponible <= 0;
 
-                        {/* Control Opcional de Stock: Solo se muestra si maneja_stock = true */}
-                        {prod.maneja_stock && (
-                          <div style={{ marginBottom: '10px' }}>
-                            {isAgotado ? (
-                              <span style={{ background: '#f1f5f9', color: '#dc2626', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
-                                ❌ Agotado
-                              </span>
-                            ) : prod.stock_disponible !== null && prod.stock_disponible <= 5 ? (
-                              <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
-                                ⚡ ¡Solo {prod.stock_disponible} disponibles!
-                              </span>
-                            ) : prod.stock_disponible !== null ? (
-                              <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px' }}>
-                                📦 Stock: {prod.stock_disponible}
-                              </span>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Footer con Precio, Unidad de Medida y Stepper de Carrito */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: '4px' }}>
-                        <div>
-                          <div style={{ fontSize: '18px', fontWeight: '900', color: '#e11d48', lineHeight: 1 }}>
-                            ${Number(prod.precio || 0).toFixed(2)}
-                          </div>
-                          {prod.unidad_medida && prod.unidad_medida !== 'unidad' && (
-                            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
-                              / {prod.unidad_medida}
-                            </span>
-                          )}
-                        </div>
-
-                        {isAgotado ? (
-                          <button
-                            disabled
-                            style={{
-                              background: '#f1f5f9',
-                              color: '#94a3b8',
-                              border: '1px solid #e2e8f0',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              fontWeight: '700',
-                              cursor: 'not-allowed'
-                            }}
-                          >
-                            Sin Stock
-                          </button>
-                        ) : cantidad > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <button
-                              onClick={() => modificarCantidad(prod.id, -1)}
+                    return (
+                      <div
+                        key={prod.id}
+                        style={{
+                          background: '#fff',
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          opacity: isAgotado ? 0.6 : 1,
+                          position: 'relative',
+                          boxShadow: '0 2px 6px -1px rgba(0, 0, 0, 0.05)',
+                          transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+                        }}
+                      >
+                        {/* FOTOGRAFÍA DEL PRODUCTO CON BADGES FLOTANTES */}
+                        <div style={{
+                          position: 'relative',
+                          width: '100%',
+                          height: currentCfg.imgHeight,
+                          background: '#f1f5f9',
+                          overflow: 'hidden'
+                        }}>
+                          {prod.imagen_url ? (
+                            <img
+                              src={prod.imagen_url}
+                              alt={prod.nombre}
+                              loading="lazy"
                               style={{
-                                width: '30px',
-                                height: '30px',
-                                borderRadius: '8px',
-                                border: '1px solid #cbd5e1',
-                                background: '#f8fafc',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: 'block',
                               }}
-                            >
-                              <Minus size={13} />
-                            </button>
-                            <span style={{ fontWeight: '800', fontSize: '13px', minWidth: '18px', textAlign: 'center' }}>
-                              {cantidad}
-                            </span>
-                            <button
-                              onClick={() => modificarCantidad(prod.id, 1)}
-                              style={{
-                                width: '30px',
-                                height: '30px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                background: '#e11d48',
-                                color: '#fff',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                              onError={(e) => {
+                                const target = e.target as HTMLElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector('.img-fallback') as HTMLElement;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }
                               }}
-                            >
-                              <Plus size={13} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => agregarAlCarrito(prod)}
+                            />
+                          ) : null}
+
+                          {/* Fallback elegante si la imagen no existe o falla */}
+                          <div
+                            className="img-fallback"
                             style={{
-                              background: '#ffe4e6',
-                              color: '#e11d48',
-                              border: 'none',
-                              padding: '6px 14px',
-                              borderRadius: '8px',
-                              fontWeight: '700',
-                              fontSize: '13px',
-                              cursor: 'pointer',
-                              display: 'flex',
+                              display: prod.imagen_url ? 'none' : 'flex',
+                              position: 'absolute',
+                              inset: 0,
                               alignItems: 'center',
-                              gap: '4px'
+                              justifyContent: 'center',
+                              background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                              color: '#64748b',
+                              fontSize: currentCfg.imgHeight === '230px' ? '48px' : '36px'
                             }}
                           >
-                            <Plus size={14} /> Agregar
-                          </button>
-                        )}
+                            <span>{prod.categoria_icono || (isRetailLayout ? '🛍️' : '🍽️')}</span>
+                          </div>
+
+                          {/* Badges superiores sobre la fotografía */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '8px',
+                            left: '8px',
+                            right: '8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            pointerEvents: 'none'
+                          }}>
+                            <span style={{
+                              background: 'rgba(255, 255, 255, 0.94)',
+                              backdropFilter: 'blur(4px)',
+                              color: '#1e293b',
+                              fontSize: '10px',
+                              fontWeight: '700',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                            }}>
+                              {prod.categoria_icono || '🏷️'} {prod.categoria_nombre || prod.categoria || 'General'}
+                            </span>
+
+                            {prod.requiere_receta && (
+                              <span style={{
+                                background: '#fee2e2',
+                                color: '#dc2626',
+                                fontSize: '10px',
+                                fontWeight: '800',
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                              }}>
+                                💊 Receta
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* CUERPO DE LA TARJETA */}
+                        <div style={{
+                          padding: currentCfg.cardPadding,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          flex: 1,
+                          justifyContent: 'space-between'
+                        }}>
+                          <div>
+                            <h3 style={{
+                              fontSize: currentCfg.titleSize,
+                              fontWeight: '800',
+                              color: '#0f172a',
+                              margin: '0 0 4px 0',
+                              lineHeight: 1.3
+                            }}>
+                              {prod.nombre}
+                            </h3>
+
+                            {currentCfg.showDesc && prod.descripcion && (
+                              <p style={{
+                                color: '#64748b',
+                                fontSize: '12px',
+                                lineHeight: 1.4,
+                                margin: '0 0 10px 0',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
+                              }}>
+                                {prod.descripcion}
+                              </p>
+                            )}
+
+                            {/* SELECTOR DE DIFERENTES TAMAÑOS / PRESENTACIONES */}
+                            {prod.tamanos && prod.tamanos.length > 0 && (
+                              <div style={{ marginBottom: '10px' }}>
+                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', marginBottom: '5px' }}>
+                                  Tamaño / Porción:
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                  {prod.tamanos.map(tam => {
+                                    const isSelected = activeTamano?.nombre === tam.nombre;
+                                    return (
+                                      <button
+                                        key={tam.nombre}
+                                        type="button"
+                                        onClick={() => setSelectedSizes(prev => ({ ...prev, [prod.id]: tam }))}
+                                        style={{
+                                          padding: '3px 8px',
+                                          borderRadius: '6px',
+                                          fontSize: '11px',
+                                          fontWeight: isSelected ? '800' : '600',
+                                          border: isSelected ? '1.5px solid #e11d48' : '1px solid #cbd5e1',
+                                          background: isSelected ? '#fff1f2' : '#f8fafc',
+                                          color: isSelected ? '#e11d48' : '#475569',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        {tam.nombre} · ${Number(tam.precio).toFixed(2)}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Control Opcional de Stock */}
+                            {prod.maneja_stock && (
+                              <div style={{ marginBottom: '10px' }}>
+                                {isAgotado ? (
+                                  <span style={{ background: '#f1f5f9', color: '#dc2626', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
+                                    ❌ Agotado
+                                  </span>
+                                ) : prod.stock_disponible !== null && prod.stock_disponible <= 5 ? (
+                                  <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '4px' }}>
+                                    ⚡ ¡Solo {prod.stock_disponible} disponibles!
+                                  </span>
+                                ) : prod.stock_disponible !== null ? (
+                                  <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px' }}>
+                                    📦 Stock: {prod.stock_disponible}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer con Precio Dinámico según Tamaño, Unidad y Stepper */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderTop: '1px solid #f1f5f9',
+                            paddingTop: '10px',
+                            marginTop: '6px'
+                          }}>
+                            <div>
+                              <div style={{ fontSize: '17px', fontWeight: '900', color: '#e11d48', lineHeight: 1 }}>
+                                ${precioActivo.toFixed(2)}
+                              </div>
+                              {activeTamano ? (
+                                <span style={{ fontSize: '11px', color: '#e11d48', fontWeight: '700' }}>
+                                  ({activeTamano.nombre})
+                                </span>
+                              ) : prod.unidad_medida && prod.unidad_medida !== 'unidad' ? (
+                                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                                  / {prod.unidad_medida}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {isAgotado ? (
+                              <button
+                                disabled
+                                style={{
+                                  background: '#f1f5f9',
+                                  color: '#94a3b8',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                  fontWeight: '700',
+                                  cursor: 'not-allowed'
+                                }}
+                              >
+                                Sin Stock
+                              </button>
+                            ) : cantidad > 0 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  onClick={() => modificarCantidad(cartKey, -1)}
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #cbd5e1',
+                                    background: '#f8fafc',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Minus size={13} />
+                                </button>
+                                <span style={{ fontWeight: '800', fontSize: '13px', minWidth: '18px', textAlign: 'center' }}>
+                                  {cantidad}
+                                </span>
+                                <button
+                                  onClick={() => modificarCantidad(cartKey, 1)}
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#e11d48',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Plus size={13} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => agregarAlCarrito(prod, activeTamano || undefined)}
+                                style={{
+                                  background: '#ffe4e6',
+                                  color: '#e11d48',
+                                  border: 'none',
+                                  padding: '6px 14px',
+                                  borderRadius: '8px',
+                                  fontWeight: '700',
+                                  fontSize: '13px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  transition: 'background 0.15s ease'
+                                }}
+                              >
+                                <Plus size={14} /> Agregar
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}

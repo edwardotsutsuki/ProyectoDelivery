@@ -463,7 +463,8 @@ catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: R
         COALESCE(p.unidad_medida, 'unidad') as unidad_medida,
         COALESCE(p.maneja_stock, false) as maneja_stock,
         p.stock_disponible,
-        COALESCE(p.requiere_receta, false) as requiere_receta
+        COALESCE(p.requiere_receta, false) as requiere_receta,
+        COALESCE(p.tamanos, '[]'::jsonb) as tamanos
       FROM productos p
       LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
       WHERE (p.comercio_id::text = $1 OR p.comercio_id::text = $2) AND (p.is_eliminado IS NOT TRUE)
@@ -836,6 +837,7 @@ catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: 
       manejaStock = false,
       stockDisponible = null,
       requiereReceta = false,
+      tamanos = [],
     } = req.body;
 
     if (!nombre || precio === undefined) {
@@ -870,10 +872,10 @@ catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: 
     const query = `
       INSERT INTO productos (
         comercio_id, categoria_id, nombre, descripcion, precio, categoria,
-        imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta, tamanos
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
       RETURNING id, comercio_id, categoria_id, nombre, descripcion, precio, categoria,
-                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta;
+                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta, tamanos;
     `;
 
     const result = await pgPool.query(query, [
@@ -889,6 +891,7 @@ catalogRouter.post('/comercio/:comercioId/productos', async (req: Request, res: 
       Boolean(manejaStock),
       manejaStock && stockDisponible !== null && stockDisponible !== undefined ? Number(stockDisponible) : null,
       Boolean(requiereReceta),
+      JSON.stringify(Array.isArray(tamanos) ? tamanos : []),
     ]);
 
     res.status(201).json({
@@ -918,6 +921,7 @@ catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) =
       manejaStock,
       stockDisponible,
       requiereReceta,
+      tamanos,
     } = req.body;
 
     // Si se pasa nuevaCategoriaNombre, crearla
@@ -966,10 +970,11 @@ catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) =
           WHEN $10::int IS NOT NULL THEN $10 
           ELSE stock_disponible END,
         requiere_receta = COALESCE($11, requiere_receta),
+        tamanos = CASE WHEN $12::text IS NOT NULL THEN $12::jsonb ELSE tamanos END,
         fecha_actualizacion = NOW()
-      WHERE id::text = $12
+      WHERE id::text = $13
       RETURNING id, comercio_id, categoria_id, nombre, descripcion, precio, categoria,
-                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta;
+                imagen_url, is_disponible, unidad_medida, maneja_stock, stock_disponible, requiere_receta, tamanos;
     `;
 
     const result = await pgPool.query(query, [
@@ -984,6 +989,7 @@ catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) =
       manejaStock !== undefined ? Boolean(manejaStock) : null,
       stockDisponible !== undefined ? (stockDisponible !== null ? Number(stockDisponible) : null) : null,
       requiereReceta !== undefined ? Boolean(requiereReceta) : null,
+      tamanos !== undefined ? JSON.stringify(Array.isArray(tamanos) ? tamanos : []) : null,
       productoId,
     ]);
 

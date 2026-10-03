@@ -84,9 +84,7 @@ export function createOrdersApi(request: Request = authClient.authorizedRequest)
     },
     async reject(order: Order, motivo: string, signal?: AbortSignal): Promise<void> {
       const response = await request(`${ORDERS_PATH}/${encodeURIComponent(order.id)}/rechazar`, {
-        method: 'PATCH',
-        signal,
-        body: JSON.stringify({ motivo }),
+        method: 'PATCH', signal, body: JSON.stringify({ motivo: motivo || 'Rechazado por el comercio' }),
       });
       if (response.status !== 200 && response.status !== 204) {
         const body = object(await response.json());

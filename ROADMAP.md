@@ -235,6 +235,27 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 
 ---
 
+### ✅ Fase 5.14: Renderizado de Fotografías de Catálogo, Selector de Densidad de Tarjetas y Opciones de Tamaños/Presentaciones Multi-Precio (Completada)
+- [x] **Renderizado de Fotografías de Productos en el Storefront (`frontend/landing-page`)**:
+  - [x] Corrección del storefront donde los productos no mostraban sus fotos: añadido contenedor de imagen responsive con `object-fit: cover`, bordes redondeados y carga diferida (`loading="lazy"`).
+  - [x] Fallback automático con gradiente y emojis temáticos (`🦐`, `🐟`, `🍔`, `💊`, `🛍️`) si el producto no tiene foto o falla el enlace externo.
+  - [x] Badges flotantes sobre la imagen para categoría y advertencia de receta médica obligatoria.
+- [x] **Selector de Densidad y Tamaño de Tarjetas en la Tienda**:
+  - [x] Nueva barra de herramientas superior con botones de alternancia en vivo:
+    - **📱 Compacto**: Cuadrícula densa (minmax 190px/230px, imagen 130px) ideal para compras masivas y percha rápida de supermercado.
+    - **🖼️ Estándar**: Tamaño balanceado (minmax 240px/280px, imagen 170px) para navegación cómoda con descripción completa.
+    - **🔍 Grande**: Tarjetas amplias (minmax 320px/360px, imagen 230px) con fotos destacadas tipo catálogo gourmet.
+- [x] **Variantes y Opciones para Diferentes Tamaños / Presentaciones**:
+  - [x] Soporte en base de datos PostgreSQL: columna `tamanos JSONB DEFAULT '[]'::jsonb` en tabla `productos`.
+  - [x] Soporte en `backend-core`: `catalog.controller.ts` y `order.controller.ts` soportan almacenamiento y lectura de tamaños/precios diferenciados y resolución limpia de IDs de productos en comandas.
+  - [x] En `landing-page/src/App.tsx`: Píldoras interactivas de tamaños en cada tarjeta (`[1/2 Libra · $1.75] [1 Libra · $3.00]`), actualización dinámica del precio principal al seleccionar tamaño, y agregación al carrito con la porción elegida.
+  - [x] En `panel-comercio/src/pages/MenuManagement.tsx` y `backoffice/src/pages/ProductosPage.tsx`:
+    - Sección interactiva para definir opciones de tamaños y precios diferenciados (`+ Añadir Tamaño`).
+    - Subida directa de imágenes desde el equipo (`FileReader`) y pegado de URL con previsualización en vivo dentro del formulario y botón para descartar imagen.
+    - Badges de tamaños configurados en las tarjetas de administración.
+
+---
+
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
 
 ```

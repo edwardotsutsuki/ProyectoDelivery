@@ -106,8 +106,10 @@ const PRODUCT_SLUG_MAP: Record<string, string> = {
 };
 
 function resolveProductId(id?: string): string {
-  if (id && PRODUCT_SLUG_MAP[id]) return PRODUCT_SLUG_MAP[id];
-  if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return id;
+  if (!id) return '66666666-6666-6666-6666-666666666601';
+  const cleanId = id.includes('__tam__') ? id.split('__tam__')[0] : id;
+  if (PRODUCT_SLUG_MAP[cleanId]) return PRODUCT_SLUG_MAP[cleanId];
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)) return cleanId;
   return '66666666-6666-6666-6666-666666666601';
 }
 

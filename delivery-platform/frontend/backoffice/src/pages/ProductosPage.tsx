@@ -18,6 +18,11 @@ import {
   Sparkles
 } from 'lucide-react';
 
+export interface TamanoItem {
+  nombre: string;
+  precio: number;
+}
+
 interface Producto {
   id: string;
   comercio_id: string;
@@ -34,6 +39,7 @@ interface Producto {
   maneja_stock?: boolean;
   stock_disponible?: number | null;
   requiere_receta?: boolean;
+  tamanos?: TamanoItem[];
 }
 
 interface CategoriaItem {
@@ -85,6 +91,8 @@ export default function ProductosPage({
   const [formManejaStock, setFormManejaStock] = useState(false);
   const [formStockDisponible, setFormStockDisponible] = useState<number>(20);
   const [formRequiereReceta, setFormRequiereReceta] = useState(false);
+  const [formTieneTamanos, setFormTieneTamanos] = useState(false);
+  const [formTamanos, setFormTamanos] = useState<TamanoItem[]>([]);
 
   // 1. Cargar lista de comercios
   useEffect(() => {
@@ -175,6 +183,8 @@ export default function ProductosPage({
     setFormManejaStock(false);
     setFormStockDisponible(20);
     setFormRequiereReceta(false);
+    setFormTieneTamanos(false);
+    setFormTamanos([]);
     setErrorMsg('');
     setSuccessMsg('');
     setShowModal(true);
@@ -194,6 +204,13 @@ export default function ProductosPage({
     setFormManejaStock(Boolean(prod.maneja_stock));
     setFormStockDisponible(prod.stock_disponible !== null && prod.stock_disponible !== undefined ? Number(prod.stock_disponible) : 20);
     setFormRequiereReceta(Boolean(prod.requiere_receta));
+    if (prod.tamanos && Array.isArray(prod.tamanos) && prod.tamanos.length > 0) {
+      setFormTieneTamanos(true);
+      setFormTamanos(prod.tamanos);
+    } else {
+      setFormTieneTamanos(false);
+      setFormTamanos([]);
+    }
     setErrorMsg('');
     setSuccessMsg('');
     setShowModal(true);
@@ -224,6 +241,7 @@ export default function ProductosPage({
         manejaStock: formManejaStock,
         stockDisponible: formManejaStock ? Number(formStockDisponible) : null,
         requiereReceta: formRequiereReceta,
+        tamanos: formTieneTamanos && formTamanos.length > 0 ? formTamanos.filter(t => t.nombre.trim() && Number(t.precio) > 0) : [],
       };
 
       let res;
@@ -495,6 +513,17 @@ export default function ProductosPage({
                     )}
                   </div>
 
+                  {/* Badges de Tamaños */}
+                  {prod.tamanos && prod.tamanos.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                      {prod.tamanos.map((t, idx) => (
+                        <span key={idx} style={{ fontSize: '10px', background: '#334155', color: '#f43f5e', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                          {t.nombre}: ${Number(t.precio).toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {prod.requiere_receta && (
                     <div style={{ fontSize: '11px', color: '#ec4899', fontWeight: '700', marginTop: '6px' }}>
                       ⚠️ Requiere Receta Médica
@@ -729,17 +758,146 @@ export default function ProductosPage({
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                  URL de Imagen (Opcional)
+              {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
+              <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: formTieneTamanos ? '10px' : 0 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '700', color: '#fff', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formTieneTamanos}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormTieneTamanos(checked);
+                        if (checked && formTamanos.length === 0) {
+                          setFormTamanos([
+                            { nombre: '1/2 Libra / Pequeño', precio: Math.round(Number(formPrecio) * 0.6 * 100) / 100 },
+                            { nombre: '1 Libra / Estándar', precio: Number(formPrecio) },
+                          ]);
+                        }
+                      }}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    📐 ¿Ofrecer diferentes tamaños o porciones?
+                  </label>
+                  {formTieneTamanos && (
+                    <button
+                      type="button"
+                      onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: Number(formPrecio) || 1.50 }])}
+                      style={{ background: '#334155', color: '#f43f5e', border: '1px solid #475569', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      + Añadir Tamaño
+                    </button>
+                  )}
+                </div>
+
+                {formTieneTamanos && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
+                    {formTamanos.map((tam, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="text"
+                          required={formTieneTamanos}
+                          value={tam.nombre}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
+                          }}
+                          placeholder="Nombre (ej: 1 Libra, Personal)"
+                          style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 10px', color: '#fff', fontSize: '13px' }}
+                        />
+                        <div style={{ position: 'relative', width: '110px' }}>
+                          <span style={{ position: 'absolute', left: '8px', top: '7px', color: '#94a3b8', fontSize: '12px' }}>$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.05"
+                            required={formTieneTamanos}
+                            value={tam.precio}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                            }}
+                            placeholder="Precio"
+                            style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 8px 6px 20px', color: '#fff', fontSize: '13px' }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
+                          style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: '4px' }}
+                          title="Eliminar este tamaño"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* FOTOGRAFÍA CON SUBIDA Y PREVISUALIZACIÓN */}
+              <div style={{ background: '#1e293b', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
+                  Fotografía del Producto
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={formImagenUrl}
-                  onChange={(e) => setFormImagenUrl(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '10px 12px', color: '#fff', fontSize: '13px' }}
-                />
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                      📁 Subir desde archivo:
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert('La imagen no debe superar los 5MB.');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvt) => {
+                            setFormImagenUrl(uploadEvt.target?.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      style={{ fontSize: '11px', color: '#cbd5e1' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                      🌐 O pegar URL directa:
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={formImagenUrl}
+                      onChange={(e) => setFormImagenUrl(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '6px 10px', color: '#fff', fontSize: '12px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Previsualización */}
+                {formImagenUrl && (
+                  <div style={{ position: 'relative', marginTop: '10px', height: '140px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #334155' }}>
+                    <img src={formImagenUrl} alt="Vista previa" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      onClick={() => setFormImagenUrl('')}
+                      style={{ position: 'absolute', top: '8px', right: '8px', background: '#e11d48', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px', cursor: 'pointer' }}
+                      title="Eliminar imagen"
+                    >
+                      <X size={14} />
+                    </button>
+                    <span style={{ position: 'absolute', bottom: '6px', left: '8px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px' }}>
+                      ✓ Vista previa lista
+                    </span>
+                  </div>
+                )}
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer' }}>

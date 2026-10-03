@@ -20,6 +20,11 @@ import {
 import { useAuth } from '../AuthProvider';
 import { config } from '../config';
 
+export interface TamanoItem {
+  nombre: string;
+  precio: number;
+}
+
 interface ProductItem {
   id: string;
   comercio_id: string;
@@ -36,6 +41,7 @@ interface ProductItem {
   maneja_stock?: boolean;
   stock_disponible?: number | null;
   requiere_receta?: boolean;
+  tamanos?: TamanoItem[];
 }
 
 interface CategoriaComercio {
@@ -92,6 +98,8 @@ export default function MenuManagement() {
   const [formRequiereReceta, setFormRequiereReceta] = useState(false);
   const [formImagenUrl, setFormImagenUrl] = useState('');
   const [formDisponible, setFormDisponible] = useState(true);
+  const [formTieneTamanos, setFormTieneTamanos] = useState(false);
+  const [formTamanos, setFormTamanos] = useState<TamanoItem[]>([]);
 
   // Bulk Import State
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -268,6 +276,8 @@ export default function MenuManagement() {
     setFormRequiereReceta(false);
     setFormImagenUrl('');
     setFormDisponible(true);
+    setFormTieneTamanos(false);
+    setFormTamanos([]);
     setErrorMsg('');
     setSuccessMsg('');
     setShowModal(true);
@@ -287,6 +297,13 @@ export default function MenuManagement() {
     setFormRequiereReceta(Boolean(p.requiere_receta));
     setFormImagenUrl(p.imagen_url || '');
     setFormDisponible(p.is_disponible);
+    if (p.tamanos && Array.isArray(p.tamanos) && p.tamanos.length > 0) {
+      setFormTieneTamanos(true);
+      setFormTamanos(p.tamanos);
+    } else {
+      setFormTieneTamanos(false);
+      setFormTamanos([]);
+    }
     setErrorMsg('');
     setSuccessMsg('');
     setShowModal(true);
@@ -371,6 +388,7 @@ export default function MenuManagement() {
         requiereReceta: formRequiereReceta,
         imagenUrl: formImagenUrl.trim() || null,
         isDisponible: formDisponible,
+        tamanos: formTieneTamanos && formTamanos.length > 0 ? formTamanos.filter(t => t.nombre.trim() && Number(t.precio) > 0) : [],
       };
 
       const res = await fetch(url, {
@@ -631,6 +649,17 @@ export default function MenuManagement() {
                       ✨ Stock ilimitado (sin inventario)
                     </div>
                   )}
+
+                  {/* Badges de Tamaños si están configurados */}
+                  {prod.tamanos && prod.tamanos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {prod.tamanos.map((t, idx) => (
+                        <span key={idx} className="rounded bg-rose-950/40 border border-rose-800/30 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+                          {t.nombre}: ${Number(t.precio).toFixed(2)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -833,15 +862,159 @@ export default function MenuManagement() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300">URL de Fotografía (Opcional)</label>
-                <input
-                  type="url"
-                  value={formImagenUrl}
-                  onChange={(e) => setFormImagenUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                />
+              {/* OPCIONES DE TAMAÑOS / PRESENTACIONES */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="prodTieneTamanos"
+                      checked={formTieneTamanos}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormTieneTamanos(checked);
+                        if (checked && formTamanos.length === 0) {
+                          const base = parseFloat(formPrecio) || 2.50;
+                          setFormTamanos([
+                            { nombre: '1/2 Libra / Pequeño', precio: Math.round(base * 0.6 * 100) / 100 },
+                            { nombre: '1 Libra / Estándar', precio: base },
+                          ]);
+                        }
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded accent-rose-600"
+                    />
+                    <div>
+                      <label htmlFor="prodTieneTamanos" className="text-xs font-bold text-slate-200 cursor-pointer">
+                        ¿Ofrecer diferentes tamaños o porciones?
+                      </label>
+                      <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                        Define opciones como 1/2 libra, 1 libra, 2 libras, Familiar, Personal, etc., cada una con su precio.
+                      </p>
+                    </div>
+                  </div>
+                  {formTieneTamanos && (
+                    <button
+                      type="button"
+                      onClick={() => setFormTamanos(prev => [...prev, { nombre: '', precio: parseFloat(formPrecio) || 1.50 }])}
+                      className="rounded-lg bg-rose-950/70 border border-rose-800/40 px-2.5 py-1 text-xs font-bold text-rose-300 hover:bg-rose-900/60"
+                    >
+                      + Añadir Tamaño
+                    </button>
+                  )}
+                </div>
+
+                {formTieneTamanos && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    {formTamanos.map((tam, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          required={formTieneTamanos}
+                          value={tam.nombre}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, nombre: val } : t));
+                          }}
+                          placeholder="Ej: 1 Libra, Personal, 500g"
+                          className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                        />
+                        <div className="relative w-28">
+                          <span className="absolute left-2.5 top-1.5 text-xs text-slate-400">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.05"
+                            required={formTieneTamanos}
+                            value={tam.precio}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setFormTamanos(prev => prev.map((t, i) => i === idx ? { ...t, precio: val } : t));
+                            }}
+                            placeholder="Precio"
+                            className="w-full rounded-lg border border-slate-700 bg-slate-800 py-1.5 pl-6 pr-2 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormTamanos(prev => prev.filter((_, i) => i !== idx))}
+                          className="rounded p-1 text-slate-500 hover:bg-rose-950/60 hover:text-rose-400"
+                          title="Eliminar este tamaño"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* FOTOGRAFÍA DEL PRODUCTO CON SUBIDA Y PREVISUALIZACIÓN */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 space-y-3">
+                <label className="block text-xs font-bold text-slate-300">Fotografía del Producto / Plato</label>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Opción 1: Subir Archivo */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      📁 Subir desde tu equipo / teléfono
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert('La imagen no debe superar los 5MB.');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvt) => {
+                            setFormImagenUrl(uploadEvt.target?.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="block w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-rose-400 hover:file:bg-slate-700 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Opción 2: Pegar URL */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      🌐 O pegar enlace web directo
+                    </label>
+                    <input
+                      type="url"
+                      value={formImagenUrl}
+                      onChange={(e) => setFormImagenUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Previsualización en vivo */}
+                {formImagenUrl && (
+                  <div className="relative mt-2 h-36 w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
+                    <img
+                      src={formImagenUrl}
+                      alt="Vista previa"
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFormImagenUrl('')}
+                      className="absolute right-2 top-2 rounded-lg bg-rose-600/90 p-1.5 text-white hover:bg-rose-600 shadow-md"
+                      title="Eliminar imagen"
+                    >
+                      <X size={14} />
+                    </button>
+                    <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                      ✓ Vista previa lista
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 pt-1">
