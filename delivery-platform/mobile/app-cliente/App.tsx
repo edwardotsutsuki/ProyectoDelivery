@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -135,6 +136,12 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
   // Telemetría en Vivo e Historial Real
   const [trackingData, setTrackingData] = useState<OrderTrackingEta | null>(null);
+  const [ratingModalOrder, setRatingModalOrder] = useState<PastOrder | null>(null);
+  const [storeStars, setStoreStars] = useState(5);
+  const [storeReview, setStoreReview] = useState('');
+  const [driverStars, setDriverStars] = useState(5);
+  const [driverReview, setDriverReview] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
   const [pastOrders, setPastOrders] = useState<PastOrder[]>([
     {
       id: 'ord-baba-prev-001',
@@ -474,6 +481,75 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         distanciaMetros: 480,
         etaMinutos: 5,
       });
+    }
+  };
+
+  // Auto-seleccionar comanda en curso si se entra al Radar
+  useEffect(() => {
+    if (screen === 'tracking' && !confirmedOrder) {
+      const active = pastOrders.find(o => o.estado !== 'entregado' && o.estado !== 'cancelado');
+      if (active) {
+        setConfirmedOrder({
+          id: active.id,
+          total: active.total,
+          estado: active.estado,
+          fechaCreacion: active.fecha,
+          numeroComanda: active.id.slice(0, 8),
+          fecha: active.fecha,
+          mensajeCocina: 'Tu comanda está siendo atendida en Baba.',
+        });
+      }
+    }
+  }, [screen, confirmedOrder, pastOrders]);
+
+  // Registro de Push Token en segundo plano
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetch(`${apiBaseUrl.replace(/\/$/, '')}/orders/push-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+        body: JSON.stringify({
+          usuarioId: currentUser.id,
+          pushToken: `ExponentPushToken[client-${currentUser.id.slice(0, 8)}]`,
+          plataforma: Platform.OS,
+          dispositivo: 'Expo Mobile App',
+        }),
+      }).catch(() => {});
+    }
+  }, [currentUser, apiBaseUrl]);
+
+  // Enviar Calificación de Pedido
+  const handleSubmitRating = async () => {
+    if (!ratingModalOrder || !currentUser) return;
+    setSubmittingRating(true);
+    try {
+      const res = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/orders/${ratingModalOrder.id}/calificar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify({
+          clienteId: currentUser.id,
+          calificacionComercio: storeStars,
+          comentarioComercio: storeReview,
+          calificacionRepartidor: driverStars,
+          comentarioRepartidor: driverReview,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert('¡Calificación Enviada! ⭐', 'Gracias por tus comentarios. Tu evaluación apoya a los restaurantes y motorizados de Baba.');
+        setRatingModalOrder(null);
+        setStoreReview('');
+        setDriverReview('');
+      } else {
+        Alert.alert('Aviso', data.message || 'No se pudo enviar la calificación.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Error de conexión.');
+    } finally {
+      setSubmittingRating(false);
     }
   };
 
@@ -1127,9 +1203,44 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     <Text style={{ fontSize: 11, fontWeight: '700', color: order.estado === 'entregado' ? '#16a34a' : '#d97706' }}>
                       {order.estado === 'entregado' ? '🟢 Entregado' : order.estado === 'en_camino' ? '🛵 En camino' : '🍳 En cocina'}
                     </Text>
-                    <Pressable onPress={() => handleRepeatOrder(order)} style={styles.repeatOrderBtn}>
-                      <Text style={styles.repeatOrderBtnText}>🔁 Repetir pedido</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                      {order.estado !== 'entregado' && order.estado !== 'cancelado' && (
+                        <Pressable
+                          onPress={() => {
+                            setConfirmedOrder({
+                              id: order.id,
+                              total: order.total,
+                              estado: order.estado,
+                              fechaCreacion: order.fecha,
+                              numeroComanda: order.id.slice(0, 8),
+                              fecha: order.fecha,
+                              mensajeCocina: 'Tu comanda está siendo atendida en Baba.',
+                            });
+                            setScreen('tracking');
+                          }}
+                          style={[styles.repeatOrderBtn, { backgroundColor: '#0284c7' }]}
+                        >
+                          <Text style={[styles.repeatOrderBtnText, { color: '#fff' }]}>📡 Seguir en Radar</Text>
+                        </Pressable>
+                      )}
+                      {order.estado === 'entregado' && (
+                        <Pressable
+                          onPress={() => {
+                            setRatingModalOrder(order);
+                            setStoreStars(5);
+                            setDriverStars(5);
+                            setStoreReview('');
+                            setDriverReview('');
+                          }}
+                          style={[styles.repeatOrderBtn, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}
+                        >
+                          <Text style={[styles.repeatOrderBtnText, { color: '#b45309' }]}>⭐ Calificar</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => handleRepeatOrder(order)} style={styles.repeatOrderBtn}>
+                        <Text style={styles.repeatOrderBtnText}>🔁 Repetir</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
               ))}
@@ -1313,6 +1424,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
               </Pressable>
               <Pressable
                 onPress={() => {
+                  if (!storeConflictModal) return;
                   const prod = storeConflictModal.pendingProduct;
                   const st = storeConflictModal.pendingStore;
                   setCart({});
@@ -1334,6 +1446,78 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 <Text style={styles.conflictConfirmBtnText}>Vaciar y cambiar</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* MODAL DE CALIFICACIÓN DE SERVICIO (COMERCIO Y REPARTIDOR) */}
+      {/* ======================================================== */}
+      <Modal visible={!!ratingModalOrder} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>⭐ Calificar Experiencia</Text>
+              <Pressable onPress={() => setRatingModalOrder(null)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+                Pedido #{ratingModalOrder?.id.slice(0, 8)} · Tu opinión ayuda a la comunidad de Baba.
+              </Text>
+
+              {/* 1. Calificación al Restaurante */}
+              <View style={styles.ratingCardSection}>
+                <Text style={styles.ratingSectionTitle}>🍽️ ¿Qué tal estuvo la comida?</Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Pressable key={star} onPress={() => setStoreStars(star)} style={styles.starBtn}>
+                      <Text style={{ fontSize: 28 }}>{star <= storeStars ? '⭐' : '☆'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.ratingInput}
+                  placeholder="Comentario sobre el sabor, temperatura o empaque..."
+                  placeholderTextColor="#94a3b8"
+                  value={storeReview}
+                  onChangeText={setStoreReview}
+                />
+              </View>
+
+              {/* 2. Calificación al Motorizado */}
+              <View style={styles.ratingCardSection}>
+                <Text style={styles.ratingSectionTitle}>🛵 ¿Cómo fue la entrega del repartidor?</Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Pressable key={star} onPress={() => setDriverStars(star)} style={styles.starBtn}>
+                      <Text style={{ fontSize: 28 }}>{star <= driverStars ? '⭐' : '☆'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.ratingInput}
+                  placeholder="Puntualidad, amabilidad y cuidado al entregar..."
+                  placeholderTextColor="#94a3b8"
+                  value={driverReview}
+                  onChangeText={setDriverReview}
+                />
+              </View>
+
+              <Pressable
+                onPress={handleSubmitRating}
+                disabled={submittingRating}
+                style={[styles.submitRatingBtn, submittingRating && { opacity: 0.6 }]}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitRatingBtnText}>ENVIAR EVALUACIÓN</Text>
+                )}
+              </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1565,4 +1749,12 @@ const styles = StyleSheet.create({
   conflictCancelBtnText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   conflictConfirmBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#e11d48', alignItems: 'center' },
   conflictConfirmBtnText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+
+  ratingCardSection: { backgroundColor: '#f8fafc', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 14 },
+  ratingSectionTitle: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginVertical: 6 },
+  starBtn: { padding: 4 },
+  ratingInput: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', padding: 10, fontSize: 12, color: '#0f172a', marginTop: 8 },
+  submitRatingBtn: { backgroundColor: '#e11d48', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 8, marginBottom: 20 },
+  submitRatingBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 });

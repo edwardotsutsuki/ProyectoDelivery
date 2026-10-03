@@ -25,6 +25,9 @@ export interface CreatedOrder {
   estado: string;
   total: string;
   fechaCreacion: string;
+  numeroComanda?: string;
+  fecha?: string;
+  mensajeCocina?: string;
 }
 
 export interface CheckoutResult {

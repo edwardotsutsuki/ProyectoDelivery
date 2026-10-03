@@ -50,6 +50,7 @@ import {
   fetchOrderHistory,
   acceptOrder,
   deliverOrder,
+  releaseOrder,
   type BackendOrder,
 } from './src/services/ordersApi';
 
@@ -317,6 +318,37 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     });
   }
 
+  // Handle Driver Release Order (Breakdown / Emergency)
+  function handleReleaseOrder() {
+    if (!activeOrder) return;
+    Alert.alert(
+      'Liberar Pedido por Emergencia',
+      '¿Deseas devolver este pedido a la cola de despacho? Quedará disponible al instante para que otro motorizado en Baba lo recoja.',
+      [
+        { text: 'Volver a la ruta', style: 'cancel' },
+        {
+          text: 'Sí, Liberar Pedido',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              await releaseOrder(currentApi, activeOrder.id, 'Imprevisto de motorizado');
+              Alert.alert('Pedido Liberado 🔄', 'El pedido fue devuelto al radar de despacho.');
+              setActiveOrder(null);
+              setOrderStep('PICKUP');
+              setCheckedItems({});
+              refreshOrders();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'No se pudo liberar el pedido.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   // Calculations for daily wallet
   const daily = wallet ? dailyWallet(wallet, now) : null;
 
@@ -554,6 +586,16 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         <ArrowRight size={20} color="#042f2e" />
                         <Text style={styles.primaryActionText}>CONFIRMAR RECOGIDA E IR AL CLIENTE</Text>
                       </Pressable>
+
+                      {/* Botón para liberar comanda en caso de emergencia */}
+                      <Pressable
+                        style={styles.releaseButton}
+                        onPress={handleReleaseOrder}
+                        disabled={actionLoading}
+                      >
+                        <AlertTriangle size={14} color="#fca5a5" />
+                        <Text style={styles.releaseButtonText}>Liberar Comanda (Avería / Emergencia)</Text>
+                      </Pressable>
                     </View>
                   ) : (
                     // ETAPA 2: ENTREGA AL CLIENTE
@@ -656,6 +698,16 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                             <Text style={styles.deliverButtonText}>CONFIRMAR PEDIDO ENTREGADO</Text>
                           </>
                         )}
+                      </Pressable>
+
+                      {/* Botón para liberar comanda en caso de emergencia */}
+                      <Pressable
+                        style={styles.releaseButton}
+                        onPress={handleReleaseOrder}
+                        disabled={actionLoading}
+                      >
+                        <AlertTriangle size={14} color="#fca5a5" />
+                        <Text style={styles.releaseButtonText}>Liberar Comanda (Avería / Emergencia)</Text>
                       </Pressable>
                     </View>
                   )}
@@ -1532,4 +1584,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   btnSmallText: { color: '#34d399', fontSize: 11, fontWeight: '600' },
+  releaseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#451a03',
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#78350f',
+  },
+  releaseButtonText: { color: '#fca5a5', fontSize: 12, fontWeight: '700' },
 });

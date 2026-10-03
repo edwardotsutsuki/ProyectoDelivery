@@ -323,3 +323,30 @@ ON CONFLICT (codigo) DO UPDATE SET
     tiempo_estimado_min = EXCLUDED.tiempo_estimado_min,
     activa = EXCLUDED.activa;
 
+-- 10. Tabla: calificaciones_pedidos (Evaluaciones del servicio post-entrega)
+CREATE TABLE IF NOT EXISTS calificaciones_pedidos (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    pedido_id UUID NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES usuarios(id),
+    comercio_id UUID NOT NULL REFERENCES comercios(id),
+    repartidor_id UUID REFERENCES usuarios(id),
+    calificacion_comercio INT NOT NULL CHECK (calificacion_comercio BETWEEN 1 AND 5),
+    comentario_comercio TEXT,
+    calificacion_repartidor INT CHECK (calificacion_repartidor BETWEEN 1 AND 5),
+    comentario_repartidor TEXT,
+    fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_calificacion_pedido ON calificaciones_pedidos (pedido_id);
+
+-- 11. Tabla: push_tokens (Registro de dispositivos para notificaciones móviles)
+CREATE TABLE IF NOT EXISTS push_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    push_token VARCHAR(255) NOT NULL,
+    plataforma VARCHAR(30) DEFAULT 'expo',
+    dispositivo VARCHAR(100),
+    fecha_actualizacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_usuario_token UNIQUE (usuario_id, push_token)
+);
+
+

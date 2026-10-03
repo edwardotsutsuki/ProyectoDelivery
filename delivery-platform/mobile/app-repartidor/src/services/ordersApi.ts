@@ -137,3 +137,24 @@ export async function deliverOrder(
   const data = await response.json();
   return data.data;
 }
+
+export async function releaseOrder(
+  apiBaseUrl: string,
+  pedidoId: string,
+  motivo = 'Avería mecánica o emergencia'
+): Promise<boolean> {
+  const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/liberar`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: COMMON_HEADERS,
+    body: JSON.stringify({ motivo }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.message || `No se pudo liberar el pedido #${pedidoId.slice(0, 8)}`);
+  }
+
+  return true;
+}
+

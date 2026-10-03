@@ -1000,3 +1000,136 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
     if (client) client.release();
   }
 });
+
+// 9. Repartidor libera pedido por avería o emergencia (Regresa a 'listo' para otro motorizado)
+orderRouter.patch('/:pedidoId/liberar', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    const { motivo } = req.body;
+
+    const updateQuery = `
+      UPDATE pedidos 
+      SET estado = 'listo', repartidor_id = NULL, notas = COALESCE(notas, '') || ' [Liberado: ' || $1 || ']', fecha_actualizacion = NOW()
+      WHERE id::text = $2 AND estado = 'en_camino'
+      RETURNING id, estado, comercio_id, cliente_id;
+    `;
+    const result = await pgPool.query(updateQuery, [motivo || 'Emergencia motorizado', pedidoId]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'El pedido no se encuentra en camino o ya fue procesado.' });
+    }
+
+    const eventPayload = {
+      event: 'order:status_updated',
+      type: 'ORDER_STATUS_CHANGED',
+      pedidoId,
+      nuevoEstado: 'listo',
+      status: 'listo',
+      comercioId: result.rows[0].comercio_id,
+      merchant_id: result.rows[0].comercio_id,
+      repartidorId: null,
+      motivo: motivo || 'Emergencia de motorizado',
+      timestamp: new Date().toISOString(),
+    };
+    await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    res.json({
+      success: true,
+      message: 'Pedido liberado y devuelto a la cola de despacho en Baba.',
+      data: { pedidoId, estado: 'listo' },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 10. Calificar Pedido (Evaluación del Cliente al Comercio y Repartidor)
+orderRouter.post('/:pedidoId/calificar', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    const {
+      clienteId,
+      calificacionComercio,
+      comentarioComercio,
+      calificacionRepartidor,
+      comentarioRepartidor,
+    } = req.body;
+
+    if (!calificacionComercio || calificacionComercio < 1 || calificacionComercio > 5) {
+      return res.status(400).json({ success: false, message: 'La calificación al comercio debe ser entre 1 y 5 estrellas.' });
+    }
+
+    const orderRes = await pgPool.query('SELECT * FROM pedidos WHERE id::text = $1', [pedidoId]);
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+    }
+    const order = orderRes.rows[0];
+
+    const insertQuery = `
+      INSERT INTO calificaciones_pedidos (
+        pedido_id, cliente_id, comercio_id, repartidor_id,
+        calificacion_comercio, comentario_comercio,
+        calificacion_repartidor, comentario_repartidor
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (pedido_id) DO UPDATE SET
+        calificacion_comercio = EXCLUDED.calificacion_comercio,
+        comentario_comercio = EXCLUDED.comentario_comercio,
+        calificacion_repartidor = EXCLUDED.calificacion_repartidor,
+        comentario_repartidor = EXCLUDED.comentario_repartidor
+      RETURNING id, fecha_creacion;
+    `;
+
+    const califRes = await pgPool.query(insertQuery, [
+      order.id,
+      order.cliente_id,
+      order.comercio_id,
+      order.repartidor_id,
+      calificacionComercio,
+      comentarioComercio || '',
+      calificacionRepartidor || null,
+      comentarioRepartidor || '',
+    ]);
+
+    // Recalcular promedio de estrellas del comercio
+    const avgRes = await pgPool.query(
+      'SELECT ROUND(AVG(calificacion_comercio), 1) as promedio FROM calificaciones_pedidos WHERE comercio_id = $1',
+      [order.comercio_id]
+    );
+    const nuevoPromedio = parseFloat(avgRes.rows[0]?.promedio || '5.0');
+    await pgPool.query('UPDATE comercios SET calificacion = $1 WHERE id = $2', [nuevoPromedio, order.comercio_id]);
+
+    res.json({
+      success: true,
+      message: '¡Gracias por calificar tu pedido! Tu opinión ayuda a la comunidad de Baba.',
+      data: {
+        calificacionId: califRes.rows[0]?.id,
+        nuevoPromedioComercio: nuevoPromedio,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11. Registro de Push Token para Notificaciones Móviles
+orderRouter.post('/push-token', async (req: Request, res: Response) => {
+  try {
+    const { usuarioId, pushToken, plataforma, dispositivo } = req.body;
+    if (!usuarioId || !pushToken) {
+      return res.status(400).json({ success: false, message: 'usuarioId y pushToken son requeridos.' });
+    }
+
+    const upsertQuery = `
+      INSERT INTO push_tokens (usuario_id, push_token, plataforma, dispositivo, fecha_actualizacion)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (usuario_id, push_token) DO UPDATE SET
+        fecha_actualizacion = NOW(),
+        dispositivo = EXCLUDED.dispositivo;
+    `;
+    await pgPool.query(upsertQuery, [usuarioId, pushToken, plataforma || 'expo', dispositivo || 'mobile']);
+
+    res.json({ success: true, message: 'Push token registrado exitosamente.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
