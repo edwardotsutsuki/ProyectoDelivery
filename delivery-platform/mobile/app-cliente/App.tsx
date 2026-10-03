@@ -27,7 +27,12 @@ import {
 import {
   loginClient,
   registerClient,
+  fetchWalletBalance,
+  fetchUserAddresses,
+  fetchClientOrders,
+  topUpWallet,
   type ClientUser,
+  type UserAddress,
 } from './src/services/authClientApi';
 import {
   buildOrderPayload,
@@ -84,6 +89,8 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     role: 'cliente',
     saldoBilletera: 25.50,
   });
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
+  const [authIntentReason, setAuthIntentReason] = useState<string>('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authEmail, setAuthEmail] = useState('edward.otsutsuki@gmail.com');
@@ -92,17 +99,22 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [authPhone, setAuthPhone] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpSuccess, setTopUpSuccess] = useState('');
 
-  // Comercios y Catálogo
+  // Comercios, Catálogo y Búsqueda
   const [comercios, setComercios] = useState<ComercioItem[]>([]);
   const [loadingComercios, setLoadingComercios] = useState(false);
   const [selectedComercio, setSelectedComercio] = useState<ComercioItem | null>(null);
   const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [loadingProductos, setLoadingProductos] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Carrito multi-ítem
+  // Carrito multi-ítem con control de comercio
   const [cart, setCart] = useState<Record<string, CartLine>>({});
+  const [cartStore, setCartStore] = useState<{ id: string; name: string } | null>(null);
+  const [storeConflictModal, setStoreConflictModal] = useState<{ pendingProduct: ProductoItem; pendingStore: ComercioItem } | null>(null);
 
   // Checkout y Entrega
   const [tarifas, setTarifas] = useState<ZonaTarifa[]>([]);
@@ -121,7 +133,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [submitting, setSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<CreatedOrder | null>(null);
 
-  // Telemetría en Vivo e Historial
+  // Telemetría en Vivo e Historial Real
   const [trackingData, setTrackingData] = useState<OrderTrackingEta | null>(null);
   const [pastOrders, setPastOrders] = useState<PastOrder[]>([
     {
@@ -136,6 +148,48 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       estado: 'entregado',
     },
   ]);
+
+  // Cargar datos sincronizados del usuario (direcciones, pedidos, billetera)
+  const loadUserData = async (userId: string) => {
+    try {
+      const [addrs, orders, wallet] = await Promise.all([
+        fetchUserAddresses(apiBaseUrl, userId),
+        fetchClientOrders(apiBaseUrl, userId),
+        fetchWalletBalance(apiBaseUrl, userId),
+      ]);
+      if (addrs && addrs.length > 0) {
+        setSavedAddresses(addrs);
+        const main = addrs.find(a => a.es_principal) || addrs[0];
+        setAddress(main.direccion);
+      }
+      if (orders && orders.length > 0) {
+        const mappedOrders: PastOrder[] = orders.map((o: any) => ({
+          id: o.id,
+          fecha: new Date(o.fecha_creacion).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          total: Number(o.total || 0).toFixed(2),
+          items: Array.isArray(o.items) ? o.items.map((it: any) => ({
+            id: it.id || it.producto_id,
+            name: it.nombre || it.name || 'Producto',
+            quantity: Number(it.cantidad || it.quantity || 1),
+          })) : [],
+          address: o.direccion_entrega || 'Baba',
+          estado: o.estado || 'creado',
+        }));
+        setPastOrders(mappedOrders);
+      }
+      if (wallet != null) {
+        setCurrentUser(u => u ? { ...u, saldoBilletera: wallet } : null);
+      }
+    } catch {
+      // Manejo silencioso en offline
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadUserData(currentUser.id);
+    }
+  }, [currentUser?.id]);
 
   // Carga inicial
   useEffect(() => {
@@ -171,6 +225,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const selectStore = async (store: ComercioItem) => {
     setSelectedComercio(store);
     setSelectedCategory('todos');
+    setSearchQuery('');
     setLoadingProductos(true);
     setScreen('catalog');
     try {
@@ -183,8 +238,17 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     }
   };
 
-  // Operaciones de Carrito
+  // Operaciones de Carrito con Aislamiento de Comercio
   const addToCart = (product: ProductoItem, sizeName?: string, customPrice?: number) => {
+    if (selectedComercio && cartStore && cartStore.id !== selectedComercio.id && cartCount > 0) {
+      setStoreConflictModal({ pendingProduct: product, pendingStore: selectedComercio });
+      return;
+    }
+
+    if (selectedComercio && (!cartStore || cartCount === 0)) {
+      setCartStore({ id: selectedComercio.id, name: selectedComercio.nombre_comercial });
+    }
+
     const finalPrice = Number(customPrice ?? product.precio) || 0;
     const lineKey = sizeName ? `${product.id}__${sizeName}` : product.id;
     const displayName = sizeName ? `${product.nombre} (${sizeName})` : product.nombre;
@@ -246,7 +310,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     setValidatingCoupon(false);
   };
 
-  // Autenticación
+  // Autenticación con Preservación de Carrito
   const handleAuthSubmit = async () => {
     setAuthLoading(true);
     setAuthError('');
@@ -255,6 +319,11 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       if (res.success && res.user) {
         setCurrentUser(res.user);
         setShowAuthModal(false);
+        setAuthIntentReason('');
+        loadUserData(res.user.id);
+        if (cartCount > 0) {
+          setScreen('cart');
+        }
       } else {
         setAuthError(res.message);
       }
@@ -273,6 +342,11 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       if (res.success && res.user) {
         setCurrentUser(res.user);
         setShowAuthModal(false);
+        setAuthIntentReason('');
+        loadUserData(res.user.id);
+        if (cartCount > 0) {
+          setScreen('cart');
+        }
       } else {
         setAuthError(res.message);
       }
@@ -280,8 +354,43 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     setAuthLoading(false);
   };
 
-  // Enviar Pedido
+  // Recarga en Vivo de Billetera Digital
+  const handleTopUp = async (amount: number) => {
+    if (!currentUser) return;
+    setTopUpLoading(true);
+    setTopUpSuccess('');
+    const res = await topUpWallet(apiBaseUrl, currentUser.id, amount, 'Recarga App Móvil DeUna');
+    if (res.success && res.nuevoSaldo !== undefined) {
+      setCurrentUser(u => u ? { ...u, saldoBilletera: res.nuevoSaldo } : null);
+      setTopUpSuccess(`¡Recarga exitosa! Tu saldo ahora es $${res.nuevoSaldo.toFixed(2)}`);
+    } else {
+      setTopUpSuccess(res.message || 'Error al procesar recarga');
+    }
+    setTopUpLoading(false);
+  };
+
+  // Repetir Pedido en 1-Clic
+  const handleRepeatOrder = (order: PastOrder) => {
+    const newCart: Record<string, CartLine> = {};
+    order.items.forEach(it => {
+      newCart[it.id] = {
+        id: it.id,
+        name: it.name,
+        price: 4.50,
+        quantity: it.quantity,
+      };
+    });
+    setCart(newCart);
+    setScreen('cart');
+  };
+
+  // Enviar Pedido con Control de Identidad
   const submitLiveOrder = async () => {
+    if (!currentUser) {
+      setAuthIntentReason('🛒 Inicia sesión o regístrate para confirmar tu pedido. Tu canasta está 100% guardada.');
+      setShowAuthModal(true);
+      return;
+    }
     if (cartCount === 0) {
       setError('Tu canasta está vacía.');
       return;
@@ -377,9 +486,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   }, [screen, confirmedOrder]);
 
   const productCategories = ['todos', ...new Set(productos.map(p => p.categoria || 'Varios'))];
-  const filteredProducts = selectedCategory === 'todos'
-    ? productos
-    : productos.filter(p => (p.categoria || 'Varios') === selectedCategory);
+  const filteredProducts = productos.filter(p => {
+    const matchesCategory = selectedCategory === 'todos' || (p.categoria || 'Varios') === selectedCategory;
+    const matchesSearch = !searchQuery.trim() ||
+      p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.descripcion && p.descripcion.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <SafeAreaProvider>
@@ -413,13 +526,30 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           {/* Barra de Perfil / Sesión */}
           <View style={styles.userBar}>
             {currentUser ? (
-              <Pressable onPress={() => setShowAuthModal(true)} style={styles.userProfileBtn}>
-                <Text style={styles.userProfileText}>
-                  👤 {currentUser.name.split(' ')[0]} · 💰 Saldo: <Text style={{ color: '#16a34a' }}>${(currentUser.saldoBilletera ?? 0).toFixed(2)}</Text>
-                </Text>
-              </Pressable>
+              <View style={styles.userProfileBtnRow}>
+                <Pressable onPress={() => setShowAuthModal(true)} style={styles.userProfileBtn}>
+                  <Text style={styles.userProfileText}>
+                    👤 {currentUser.name.split(' ')[0]} · 💰 Saldo: <Text style={{ color: '#16a34a', fontWeight: '800' }}>${(Number(currentUser.saldoBilletera) || 0).toFixed(2)}</Text>
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setCurrentUser(null);
+                    setSavedAddresses([]);
+                  }}
+                  style={styles.logoutSmallBtn}
+                >
+                  <Text style={styles.logoutSmallBtnText}>Salir</Text>
+                </Pressable>
+              </View>
             ) : (
-              <Pressable onPress={() => setShowAuthModal(true)} style={styles.loginQuickBtn}>
+              <Pressable
+                onPress={() => {
+                  setAuthIntentReason('');
+                  setShowAuthModal(true);
+                }}
+                style={styles.loginQuickBtn}
+              >
                 <Text style={styles.loginQuickText}>👤 Iniciar Sesión / Registrarse</Text>
               </Pressable>
             )}
@@ -445,7 +575,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           )}
 
           <Pressable
-            onPress={() => setScreen('cart')}
+            onPress={() => {
+              if (!currentUser && cartCount > 0) {
+                setAuthIntentReason('🛒 Inicia sesión o regístrate para continuar con tu canasta. Tus artículos están 100% guardados.');
+                setShowAuthModal(true);
+              } else {
+                setScreen('cart');
+              }
+            }}
             style={[styles.navTab, screen === 'cart' && styles.navTabActive]}
           >
             <Text style={[styles.navTabText, screen === 'cart' && styles.navTabTextActive]}>
@@ -543,6 +680,23 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     ⏱️ {selectedComercio.tiempo_entrega_promedio} min · 🛵 Envío ${Number(deliveryFee).toFixed(2)}
                   </Text>
                 </View>
+              </View>
+
+              {/* Buscador de Platos en Tiempo Real */}
+              <View style={styles.searchBarContainer}>
+                <Text style={{ fontSize: 15, marginRight: 6 }}>🔍</Text>
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Buscar platos o bebidas en el menú..."
+                  placeholderTextColor="#94a3b8"
+                  style={styles.searchInput}
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery('')} style={styles.searchClearBtn}>
+                    <Text style={styles.searchClearText}>✕</Text>
+                  </Pressable>
+                )}
               </View>
 
               {productCategories.length > 2 && (
@@ -648,7 +802,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
               {cartCount > 0 && (
                 <Pressable
-                  onPress={() => setScreen('cart')}
+                  onPress={() => {
+                    if (!currentUser) {
+                      setAuthIntentReason('🛒 Inicia sesión o regístrate para confirmar tu pedido. Tu canasta está 100% guardada.');
+                      setShowAuthModal(true);
+                    } else {
+                      setScreen('cart');
+                    }
+                  }}
                   style={styles.floatingCartBar}
                 >
                   <Text style={styles.floatingCartText}>
@@ -677,6 +838,24 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
               ) : (
                 <>
+                  {!currentUser && (
+                    <View style={styles.guestWarningCard}>
+                      <Text style={styles.guestWarningTitle}>👤 Modo Invitado</Text>
+                      <Text style={styles.guestWarningDesc}>
+                        Tus {cartCount} artículos están 100% guardados en tu canasta. Para enviar tu orden al restaurante y pagar con billetera o efectivo, inicia sesión o crea tu cuenta.
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          setAuthIntentReason('🛒 Inicia sesión o regístrate para confirmar tu pedido. Tu canasta está guardada.');
+                          setShowAuthModal(true);
+                        }}
+                        style={styles.guestLoginBtn}
+                      >
+                        <Text style={styles.guestLoginBtnText}>Iniciar Sesión / Registrarme</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
                   {cartLinesArray.map(item => (
                     <View key={item.id + (item.sizeName || '')} style={styles.cartItemCard}>
                       <View style={{ flex: 1 }}>
@@ -718,6 +897,25 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         </Pressable>
                       ))}
                     </View>
+
+                    {savedAddresses.length > 0 && (
+                      <View style={{ marginBottom: 10 }}>
+                        <Text style={styles.inputSubLabel}>Direcciones frecuentes guardadas:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+                          {savedAddresses.map(addr => (
+                            <Pressable
+                              key={addr.id}
+                              onPress={() => setAddress(addr.direccion)}
+                              style={[styles.addressChip, address === addr.direccion && styles.addressChipActive]}
+                            >
+                              <Text style={[styles.addressChipText, address === addr.direccion && styles.addressChipTextActive]}>
+                                📍 {addr.alias}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
 
                     <Text style={styles.inputLabel}>Dirección de entrega:</Text>
                     <TextInput
@@ -912,18 +1110,26 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
               )}
 
-              <Text style={styles.sectionTitle}>Historial de Pedidos</Text>
+              <Text style={styles.sectionTitle}>Historial de Pedidos ({pastOrders.length})</Text>
               {pastOrders.map(order => (
                 <View key={order.id} style={styles.pastOrderCard}>
                   <View style={styles.pastOrderHeader}>
                     <Text style={styles.pastOrderTitle}>Pedido #{order.id.slice(0, 10)}</Text>
                     <Text style={styles.pastOrderTotal}>${order.total}</Text>
                   </View>
-                  <Text style={styles.pastOrderDate}>{order.fecha} · {order.address.slice(0, 30)}...</Text>
+                  <Text style={styles.pastOrderDate}>{order.fecha} · {order.address.slice(0, 32)}...</Text>
                   <View style={{ marginVertical: 6 }}>
                     {order.items.map((it, idx) => (
                       <Text key={idx} style={styles.pastOrderItemText}>• {it.quantity}x {it.name}</Text>
                     ))}
+                  </View>
+                  <View style={styles.pastOrderFooter}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: order.estado === 'entregado' ? '#16a34a' : '#d97706' }}>
+                      {order.estado === 'entregado' ? '🟢 Entregado' : order.estado === 'en_camino' ? '🛵 En camino' : '🍳 En cocina'}
+                    </Text>
+                    <Pressable onPress={() => handleRepeatOrder(order)} style={styles.repeatOrderBtn}>
+                      <Text style={styles.repeatOrderBtnText}>🔁 Repetir pedido</Text>
+                    </Pressable>
                   </View>
                 </View>
               ))}
@@ -955,13 +1161,43 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
                 <View style={styles.walletBox}>
                   <Text style={styles.walletBoxLabel}>Saldo Billetera Digital</Text>
-                  <Text style={styles.walletBoxValue}>${(currentUser.saldoBilletera ?? 0).toFixed(2)}</Text>
-                  <Text style={styles.walletBoxSub}>Disponible para compras con 1 clic</Text>
+                  <Text style={styles.walletBoxValue}>${(Number(currentUser.saldoBilletera) || 0).toFixed(2)}</Text>
+                  <Text style={styles.walletBoxSub}>Disponible para compras con 1 clic en Baba & Babahoyo</Text>
+
+                  <View style={styles.topUpRow}>
+                    <Text style={styles.topUpLabel}>Recarga rápida de saldo (DeUna / Pichincha):</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                      {[5, 10, 20].map(amt => (
+                        <Pressable
+                          key={amt}
+                          onPress={() => handleTopUp(amt)}
+                          disabled={topUpLoading}
+                          style={styles.topUpPill}
+                        >
+                          <Text style={styles.topUpPillText}>+${amt}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {topUpLoading && <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 6 }} />}
+                    {!!topUpSuccess && <Text style={{ fontSize: 11, color: '#16a34a', fontWeight: '700', marginTop: 4 }}>{topUpSuccess}</Text>}
+                  </View>
                 </View>
+
+                {savedAddresses.length > 0 && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={styles.inputSubLabel}>Tus direcciones guardadas ({savedAddresses.length}):</Text>
+                    {savedAddresses.map(a => (
+                      <Text key={a.id} style={{ fontSize: 12, color: '#475569', marginVertical: 2 }}>
+                        📍 <Text style={{ fontWeight: '700' }}>{a.alias}</Text>: {a.direccion}
+                      </Text>
+                    ))}
+                  </View>
+                )}
 
                 <Pressable
                   onPress={() => {
                     setCurrentUser(null);
+                    setSavedAddresses([]);
                     setShowAuthModal(false);
                   }}
                   style={styles.logoutBtn}
@@ -971,6 +1207,21 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
               </View>
             ) : (
               <View style={{ paddingVertical: 8 }}>
+                {!!authIntentReason && (
+                  <View style={styles.authReasonBanner}>
+                    <Text style={styles.authReasonText}>{authIntentReason}</Text>
+                    <Pressable
+                      onPress={() => {
+                        setShowAuthModal(false);
+                        setScreen('cart');
+                      }}
+                      style={styles.guestContinueBtn}
+                    >
+                      <Text style={styles.guestContinueText}>Continuar a ver la canasta como invitado ›</Text>
+                    </Pressable>
+                  </View>
+                )}
+
                 {authMode === 'register' && (
                   <>
                     <Text style={styles.inputLabel}>Nombre y Apellido:</Text>
@@ -1037,6 +1288,52 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </Pressable>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* MODAL DE CONFLICTO DE COMERCIO (CAMBIO DE TIENDA)        */}
+      {/* ======================================================== */}
+      <Modal visible={!!storeConflictModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.conflictCard}>
+            <Text style={styles.conflictEmoji}>⚠️</Text>
+            <Text style={styles.conflictTitle}>¿Deseas cambiar de restaurante?</Text>
+            <Text style={styles.conflictDesc}>
+              Tu canasta ya tiene productos de <Text style={{ fontWeight: '800' }}>{cartStore?.name || 'otro comercio'}</Text>.{'\n'}
+              Un pedido solo puede contener platos de un local a la vez. ¿Deseas vaciar la canasta para pedir en <Text style={{ fontWeight: '800' }}>{storeConflictModal?.pendingStore.nombre_comercial}</Text>?
+            </Text>
+            <View style={styles.conflictBtnRow}>
+              <Pressable
+                onPress={() => setStoreConflictModal(null)}
+                style={styles.conflictCancelBtn}
+              >
+                <Text style={styles.conflictCancelBtnText}>Conservar canasta</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const prod = storeConflictModal.pendingProduct;
+                  const st = storeConflictModal.pendingStore;
+                  setCart({});
+                  setCartStore({ id: st.id, name: st.nombre_comercial });
+                  setStoreConflictModal(null);
+                  const finalPrice = Number(prod.precio) || 0;
+                  setCart({
+                    [prod.id]: {
+                      id: prod.id,
+                      name: prod.nombre,
+                      price: finalPrice,
+                      quantity: 1,
+                      imageUrl: prod.imagen_url,
+                    },
+                  });
+                }}
+                style={styles.conflictConfirmBtn}
+              >
+                <Text style={styles.conflictConfirmBtnText}>Vaciar y cambiar</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1223,4 +1520,49 @@ const styles = StyleSheet.create({
   walletBoxSub: { fontSize: 11, color: '#16a34a' },
   logoutBtn: { backgroundColor: '#fef2f2', paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#fecdd3' },
   logoutBtnText: { color: '#e11d48', fontWeight: '800', fontSize: 13 },
+
+  userProfileBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoutSmallBtn: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' },
+  logoutSmallBtnText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+
+  guestWarningCard: { backgroundColor: '#fffbeb', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#fde68a', marginBottom: 14 },
+  guestWarningTitle: { fontSize: 14, fontWeight: '800', color: '#b45309', marginBottom: 4 },
+  guestWarningDesc: { fontSize: 12, color: '#78350f', lineHeight: 17, marginBottom: 8 },
+  guestLoginBtn: { backgroundColor: '#d97706', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, alignSelf: 'flex-start' },
+  guestLoginBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
+  authReasonBanner: { backgroundColor: '#fef2f2', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#fecdd3', marginBottom: 12 },
+  authReasonText: { fontSize: 12, color: '#b91c1c', fontWeight: '700' },
+  guestContinueBtn: { marginTop: 6, alignSelf: 'flex-start' },
+  guestContinueText: { fontSize: 11, color: '#475569', textDecorationLine: 'underline', fontWeight: '600' },
+
+  inputSubLabel: { fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 8 },
+  addressChip: { backgroundColor: '#f8fafc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1', marginRight: 8 },
+  addressChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  addressChipText: { fontSize: 12, fontWeight: '700', color: '#334155' },
+  addressChipTextActive: { color: '#fff' },
+
+  searchBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 12, marginBottom: 12 },
+  searchInput: { flex: 1, height: 40, fontSize: 13, color: '#0f172a' },
+  searchClearBtn: { padding: 4 },
+  searchClearText: { fontSize: 14, color: '#94a3b8', fontWeight: '800' },
+
+  topUpRow: { width: '100%', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#dcfce7' },
+  topUpLabel: { fontSize: 12, fontWeight: '700', color: '#166534' },
+  topUpPill: { backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 16 },
+  topUpPillText: { fontSize: 12, fontWeight: '800', color: '#15803d' },
+
+  pastOrderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 6 },
+  repeatOrderBtn: { backgroundColor: '#f1f5f9', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 6 },
+  repeatOrderBtnText: { fontSize: 11, fontWeight: '700', color: '#0284c7' },
+
+  conflictCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, width: '90%', alignSelf: 'center', marginBottom: 'auto', marginTop: 'auto', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  conflictEmoji: { fontSize: 36, textAlign: 'center', marginBottom: 8 },
+  conflictTitle: { fontSize: 17, fontWeight: '900', color: '#0f172a', textAlign: 'center', marginBottom: 8 },
+  conflictDesc: { fontSize: 13, color: '#475569', textAlign: 'center', lineHeight: 18, marginBottom: 16 },
+  conflictBtnRow: { flexDirection: 'row', gap: 10 },
+  conflictCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center' },
+  conflictCancelBtnText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  conflictConfirmBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#e11d48', alignItems: 'center' },
+  conflictConfirmBtnText: { fontSize: 13, fontWeight: '800', color: '#fff' },
 });

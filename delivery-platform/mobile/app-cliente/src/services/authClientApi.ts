@@ -180,3 +180,94 @@ export async function fetchWalletBalance(
     return 15.00; // Fallback
   }
 }
+
+export interface UserAddress {
+  id: string;
+  alias: string;
+  direccion: string;
+  canton: string;
+  referencia?: string;
+  es_principal?: boolean;
+}
+
+export async function fetchUserAddresses(
+  apiBaseUrl: string,
+  userId: string,
+  fetchFn = fetch
+): Promise<UserAddress[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+
+  try {
+    const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/users/${userId}/direcciones`;
+    const res = await fetchFn(cleanUrl, {
+      headers: COMMON_AUTH_HEADERS,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data || [];
+  } catch {
+    clearTimeout(timer);
+    return [
+      { id: 'addr-default-1', alias: 'Casa', direccion: 'Barrio San Antonio, Calle Bolívar y Sucre, Baba', canton: 'Baba', es_principal: true },
+      { id: 'addr-default-2', alias: 'Trabajo', direccion: 'Av. Guayaquil y Rocafuerte, Parque Central, Baba', canton: 'Baba' },
+    ];
+  }
+}
+
+export async function fetchClientOrders(
+  apiBaseUrl: string,
+  userId: string,
+  fetchFn = fetch
+): Promise<any[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/orders/cliente/${userId}`;
+    const res = await fetchFn(cleanUrl, {
+      headers: COMMON_AUTH_HEADERS,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data || [];
+  } catch {
+    clearTimeout(timer);
+    return [];
+  }
+}
+
+export async function topUpWallet(
+  apiBaseUrl: string,
+  userId: string,
+  monto: number,
+  referencia = 'Recarga App Móvil DeUna',
+  fetchFn = fetch
+): Promise<{ success: boolean; nuevoSaldo?: number; message?: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+
+  try {
+    const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/users/${userId}/recargar-billetera`;
+    const res = await fetchFn(cleanUrl, {
+      method: 'POST',
+      headers: COMMON_AUTH_HEADERS,
+      body: JSON.stringify({ monto, metodo: 'transferencia', referencia }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      return { success: false, message: json.message || 'Error al procesar recarga' };
+    }
+    return { success: true, nuevoSaldo: Number(json.nuevoSaldo), message: json.message };
+  } catch (err: any) {
+    clearTimeout(timer);
+    return { success: false, message: err.message || 'No se pudo conectar al servidor' };
+  }
+}
+
