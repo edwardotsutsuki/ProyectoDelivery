@@ -1063,3 +1063,203 @@ catalogRouter.delete('/producto/:productoId', async (req: Request, res: Response
   }
 });
 
+// ============================================================================
+// 11. GESTIÓN DE PERSONAL, CAJEROS Y EQUIPO POR COMERCIO (usuarios_comercio)
+// ============================================================================
+
+// 11.a Listar personal de un comercio
+catalogRouter.get('/comercio/:comercioId/usuarios', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+
+    const query = `
+      SELECT id, comercio_id, nombre, email, telefono, rol, pin_acceso, is_activo, ultimo_acceso, fecha_creacion
+      FROM usuarios_comercio
+      WHERE comercio_id::text = $1 OR comercio_id::text = $2
+      ORDER BY 
+        CASE 
+          WHEN rol = 'administrador' THEN 1
+          WHEN rol = 'cajero' THEN 2
+          WHEN rol = 'cocina' THEN 3
+          WHEN rol = 'picker' THEN 4
+          ELSE 5
+        END ASC,
+        nombre ASC;
+    `;
+    const result = await pgPool.query(query, [rawId, targetId]);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11.b Crear nuevo personal / cajero para el comercio
+catalogRouter.post('/comercio/:comercioId/usuarios', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const {
+      nombre,
+      email,
+      telefono = '+5939',
+      rol = 'cajero',
+      pinAcceso = '1234',
+      permisos = {},
+    } = req.body;
+
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ success: false, message: 'El nombre del trabajador es requerido' });
+    }
+
+    const query = `
+      INSERT INTO usuarios_comercio (
+        comercio_id, nombre, email, telefono, rol, pin_acceso, permisos, is_activo
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      RETURNING id, comercio_id, nombre, email, telefono, rol, pin_acceso, is_activo, fecha_creacion;
+    `;
+
+    const result = await pgPool.query(query, [
+      targetId,
+      nombre.trim(),
+      email ? email.trim().toLowerCase() : null,
+      telefono ? telefono.trim() : null,
+      rol.trim().toLowerCase(),
+      pinAcceso ? pinAcceso.trim() : '1234',
+      JSON.stringify(permisos),
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: `Trabajador "${nombre}" creado exitosamente`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11.c Actualizar personal del comercio
+catalogRouter.put('/comercio/:comercioId/usuarios/:usuarioId', async (req: Request, res: Response) => {
+  try {
+    const { usuarioId } = req.params;
+    const { nombre, email, telefono, rol, pinAcceso, isActivo } = req.body;
+
+    const query = `
+      UPDATE usuarios_comercio
+      SET
+        nombre = COALESCE($1, nombre),
+        email = COALESCE($2, email),
+        telefono = COALESCE($3, telefono),
+        rol = COALESCE($4, rol),
+        pin_acceso = COALESCE($5, pin_acceso),
+        is_activo = COALESCE($6, is_activo),
+        fecha_actualizacion = NOW()
+      WHERE id::text = $7
+      RETURNING id, comercio_id, nombre, email, telefono, rol, pin_acceso, is_activo, fecha_actualizacion;
+    `;
+
+    const result = await pgPool.query(query, [
+      nombre !== undefined ? nombre.trim() : null,
+      email !== undefined ? email.trim().toLowerCase() : null,
+      telefono !== undefined ? telefono.trim() : null,
+      rol !== undefined ? rol.trim().toLowerCase() : null,
+      pinAcceso !== undefined ? pinAcceso.trim() : null,
+      isActivo !== undefined ? Boolean(isActivo) : null,
+      usuarioId,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Usuario de comercio no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Datos del personal actualizados',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11.d Alternar estado activo / inactivo de personal
+catalogRouter.patch('/comercio/:comercioId/usuarios/:usuarioId/toggle', async (req: Request, res: Response) => {
+  try {
+    const { usuarioId } = req.params;
+    const query = `
+      UPDATE usuarios_comercio
+      SET is_activo = NOT is_activo, fecha_actualizacion = NOW()
+      WHERE id::text = $1
+      RETURNING id, nombre, rol, is_activo;
+    `;
+    const result = await pgPool.query(query, [usuarioId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+
+    res.json({
+      success: true,
+      message: `Personal "${result.rows[0].nombre}" ${result.rows[0].is_activo ? 'activado' : 'desactivado'}`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11.e Eliminar personal
+catalogRouter.delete('/comercio/:comercioId/usuarios/:usuarioId', async (req: Request, res: Response) => {
+  try {
+    const { usuarioId } = req.params;
+    const result = await pgPool.query('DELETE FROM usuarios_comercio WHERE id::text = $1 RETURNING id, nombre', [usuarioId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+    res.json({
+      success: true,
+      message: `Trabajador "${result.rows[0].nombre}" retirado del comercio`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 11.f Cambio rápido de cajero/personal por PIN (Quick Switch)
+catalogRouter.post('/comercio/:comercioId/usuarios/pin-login', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.comercioId;
+    const targetId = resolveMerchantId(rawId);
+    const { pin } = req.body;
+
+    if (!pin) {
+      return res.status(400).json({ success: false, message: 'Debe ingresar el PIN de 4 dígitos' });
+    }
+
+    const query = `
+      SELECT id, comercio_id, nombre, email, telefono, rol, is_activo
+      FROM usuarios_comercio
+      WHERE (comercio_id::text = $1 OR comercio_id::text = $2)
+        AND pin_acceso = $3
+        AND is_activo = true
+      LIMIT 1;
+    `;
+
+    const result = await pgPool.query(query, [rawId, targetId, pin.trim()]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'PIN incorrecto o usuario inactivo' });
+    }
+
+    const staff = result.rows[0];
+    await pgPool.query('UPDATE usuarios_comercio SET ultimo_acceso = NOW() WHERE id = $1', [staff.id]);
+
+    res.json({
+      success: true,
+      message: `Sesión activa para ${staff.nombre} (${staff.rol})`,
+      data: staff,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+

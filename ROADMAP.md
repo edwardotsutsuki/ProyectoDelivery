@@ -276,6 +276,33 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 - [x] **Panel Comercio (`delivery-frontend-comercio`)**:
   - [x] En `KanbanOrders.tsx`, cada comanda muestra el Total del Pedido y el **Ingreso Neto del Local** calculado en tiempo real.
 
+### Fase 5.16: Administración de Personal, Cajeros, Turnos y Verticales Dinámicas (Panel Comercio)
+- [x] **Base de Datos PostgreSQL PostGIS (`delivery-db-postgis`)**:
+  - [x] Migración `04_usuarios_comercio.sql` creando la tabla `usuarios_comercio` con campos: `id`, `comercio_id`, `nombre`, `email`, `telefono`, `rol` ('admin', 'cajero', 'cocina', 'picker'), `pin_acceso` (PIN de 4 dígitos), `permisos` (JSONB), `is_activo`, `ultimo_acceso`.
+  - [x] Índices optimizados en `comercio_id` y `(comercio_id, pin_acceso)` para autenticación instantánea en mostrador.
+  - [x] Semillas operativas para *Picantería El Buen Sabor* (Admin: Génesis Salvatierra PIN 1111, Cajero: Carlos Mendoza PIN 1234, Cocina: Don Pedro PIN 5678) y *EDEM PESCADOS Y MARISCOS* (Admin PIN 9999, Picker: Javier PIN 4321).
+- [x] **Backend Core (`delivery-backend-core`)**:
+  - [x] Módulo en `catalog.controller.ts` con endpoints REST completos:
+    - `GET /api/v1/catalog/comercio/:comercioId/usuarios`: Listado de colaboradores ordenado por jerarquía.
+    - `POST /api/v1/catalog/comercio/:comercioId/usuarios`: Registro de nuevos colaboradores con validación de PIN.
+    - `PUT /api/v1/catalog/comercio/:comercioId/usuarios/:usuarioId`: Edición de datos, rol, PIN y permisos.
+    - `PATCH /api/v1/catalog/comercio/:comercioId/usuarios/:usuarioId/toggle`: Activación / desactivación rápida de personal.
+    - `DELETE /api/v1/catalog/comercio/:comercioId/usuarios/:usuarioId`: Eliminación de personal del comercio.
+    - `POST /api/v1/catalog/comercio/:comercioId/usuarios/pin-login`: Autenticación por PIN de 4 dígitos con actualización de `ultimo_acceso` para cambio de turno estilo Toast POS.
+- [x] **Frontend Panel Comercio (`delivery-frontend-comercio`)**:
+  - [x] **Barra de Menú Modular de 5 Pestañas Adaptativa**:
+    - *Gastronomía / Restaurantes*: `👨‍🍳 Comandas / Cocina`, `🍽️ Mi Carta & Menú`, `👥 Equipo & Cajeros`, `💵 Caja & Turnos`, `⚙️ Mi Local`.
+    - *Retail / Percha / Supermercados*: `📦 Estación de Picking`, `🏷️ Catálogo & Percha`, `👥 Equipo & Cajeros`, `💵 Caja & Turnos`, `⚙️ Mi Local`.
+  - [x] **PIN Quick-Switcher (Toast / Square POS Style)**:
+    - Botón de operador en cabecera (`[ 👤 Carlos Mendoza (Cajero) ▾ ]`) con teclado numérico táctil en pantalla para cambio inmediato de turno entre cajeros y cocineros sin cerrar la sesión de la tienda.
+    - Control de acceso por rol: El personal de cocina (`cocina`) o recolectores (`picker`) quedan restringidos a la pantalla operativa (KDS / Picking) sin acceso a ventas ni edición de carta.
+  - [x] **Página de Gestión de Personal (`StaffManagement.tsx`)**:
+    - Listado de colaboradores con badges dinámicos según el tipo de local, revelación segura de PIN, buscador en tiempo real y modal de creación con generador aleatorio de PINs.
+  - [x] **Página de Caja & Turnos (`CajaTurnos.tsx`)**:
+    - Cuadre de efectivo en gaveta, desglose de ventas por método de pago (efectivo vs transferencia), base inicial configurable y emisión de **Reporte de Cierre de Caja (Corte Z)** imprimible.
+  - [x] **Página de Configuración del Local (`LocalSettings.tsx`)**:
+    - Switch en vivo de estado Abierto/Cerrado, ajuste de tiempos de preparación y políticas de subsidio de flete para el cliente.
+
 ---
 
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
