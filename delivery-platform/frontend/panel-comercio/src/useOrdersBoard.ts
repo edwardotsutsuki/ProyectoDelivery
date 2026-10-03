@@ -3,8 +3,8 @@ import { advanceOrder, createIncomingOrder, createMockOrders, type Order } from 
 import { ordersApi, type OrdersApi } from './ordersApi';
 import { subscribeMerchant, type RealtimeStatus } from './merchantEvents';
 
-export function useOrdersBoard(source: 'mock' | 'api', merchantId: string, api: OrdersApi = ordersApi) {
-  const [orders, setOrders] = useState<Order[]>(() => source === 'mock' ? createMockOrders() : []);
+export function useOrdersBoard(source: 'mock' | 'api' = 'api', merchantId: string, api: OrdersApi = ordersApi) {
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(source === 'api');
   const [error, setError] = useState('');
   const [pending, setPending] = useState<Set<string>>(new Set());
@@ -22,7 +22,7 @@ export function useOrdersBoard(source: 'mock' | 'api', merchantId: string, api: 
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
     revision.current++; mutationIds.current.clear(); setPending(new Set()); setError(''); setLastSynced(null);
-    setOrders(source === 'mock' ? createMockOrders() : []);
+    setOrders([]);
     setLoading(source === 'api');
     let fetching = false;
     let queued = false;
@@ -85,5 +85,25 @@ export function useOrdersBoard(source: 'mock' | 'api', merchantId: string, api: 
       if (!controller.signal.aborted) { mutationIds.current.delete(order.id); setPending(new Set(mutationIds.current)); flush.current(); }
     }
   }
-  return { orders, loading, error, pending, arrival, lastSynced, realtime, refresh, addMock, advance };
+
+  async function reject(order: Order, motivo: string): Promise<boolean> {
+    if (mutationIds.current.has(order.id)) return false;
+    const controller = lifetime.current;
+    if (!controller || controller.signal.aborted) return false;
+    mutationIds.current.add(order.id); revision.current++;
+    setPending(new Set(mutationIds.current)); setError('');
+    try {
+      await api.reject(order, motivo, controller.signal);
+      if (controller.signal.aborted) return false;
+      setOrders(previous => previous.filter(item => item.id !== order.id));
+      return true;
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No pudimos rechazar el pedido.');
+      return false;
+    } finally {
+      if (!controller.signal.aborted) { mutationIds.current.delete(order.id); setPending(new Set(mutationIds.current)); flush.current(); }
+    }
+  }
+
+  return { orders, loading, error, pending, arrival, lastSynced, realtime, refresh, addMock, advance, reject };
 }

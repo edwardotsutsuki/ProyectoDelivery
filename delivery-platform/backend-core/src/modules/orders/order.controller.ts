@@ -358,12 +358,8 @@ orderRouter.get('/comercio/:comercioId', async (req: Request, res: Response) => 
       console.warn('⚠️ No se pudo consultar la BD para pedidos, usando fallback Baba:', dbErr);
     }
 
-    // Si la base de datos está vacía para este comercio, entregamos los pedidos mock de Baba
-    if (!rows || rows.length === 0) {
-      rows = mockBabaOrders;
-    }
-
-    res.json({ success: true, data: rows });
+    // Entregar únicamente órdenes reales registradas en la base de datos
+    res.json({ success: true, count: rows.length, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -505,6 +501,92 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
 
 orderRouter.patch('/:pedidoId/estado', handleStatusUpdate);
 orderRouter.patch('/:pedidoId/status', handleStatusUpdate);
+
+// 5.1. Rechazar pedido con motivo y reembolso automático (Ledger)
+orderRouter.patch('/:pedidoId/rechazar', async (req: Request, res: Response) => {
+  let client;
+  try {
+    const { pedidoId } = req.params;
+    const { motivo = 'No especificado por el comercio', pausarProductoId } = req.body;
+
+    client = await pgPool.connect();
+    await client.query('BEGIN');
+
+    const updateQuery = `
+      UPDATE pedidos
+      SET estado = 'cancelado', motivo_rechazo = $1, fecha_rechazo = NOW(), fecha_actualizacion = NOW()
+      WHERE id::text = $2
+      RETURNING id, cliente_id, comercio_id, total, metodo_pago;
+    `;
+    const result = await client.query(updateQuery, [motivo, pedidoId]);
+
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
+    }
+
+    const pedido = result.rows[0];
+
+    // Reembolso inmediato si el pago fue con saldo virtual
+    if (pedido.metodo_pago === 'saldo_virtual' && Number(pedido.total) > 0) {
+      const balanceRes = await client.query(
+        'SELECT COALESCE(SUM(monto), 0.00) as saldo FROM transacciones_ledger WHERE usuario_id::text = $1',
+        [pedido.cliente_id]
+      );
+      const saldoActual = parseFloat(balanceRes.rows[0]?.saldo || '0.00');
+      const montoReembolso = parseFloat(pedido.total);
+      const nuevoSaldo = saldoActual + montoReembolso;
+
+      await client.query(
+        `INSERT INTO transacciones_ledger (
+           usuario_id, pedido_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+         ) VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
+        [
+          pedido.cliente_id,
+          pedido.id,
+          montoReembolso,
+          nuevoSaldo,
+          `Reembolso automático por pedido rechazado: ${motivo}`,
+          JSON.stringify({ canal: 'reembolso_cancelacion', motivo }),
+        ]
+      );
+    }
+
+    // Si el local seleccionó un producto para pausar por falta de stock
+    if (pausarProductoId) {
+      await client.query('UPDATE productos SET is_disponible = false WHERE id::text = $1', [pausarProductoId]);
+      await redisClient.set(`catalog:disponibilidad:${pausarProductoId}`, '0');
+    }
+
+    await client.query('COMMIT');
+
+    // Notificar en tiempo real por Redis Pub/Sub
+    const eventPayload = {
+      event: 'order:status_updated',
+      type: 'ORDER_CANCELLED',
+      pedido: {
+        id: pedido.id,
+        estado: 'cancelado',
+        motivoRechazo: motivo,
+        comercioId: pedido.comercio_id,
+        clienteId: pedido.cliente_id,
+      },
+      timestamp: new Date().toISOString(),
+    };
+    await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    res.json({
+      success: true,
+      message: 'Pedido rechazado y cancelado correctamente',
+      data: { id: pedido.id, estado: 'cancelado', motivoRechazo: motivo },
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK');
+    res.status(500).json({ success: false, error: (error as Error).message });
+  } finally {
+    if (client) client.release();
+  }
+});
 
 // 6. Listar pedidos listos para despacho (para la App del Repartidor en Baba)
 orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {

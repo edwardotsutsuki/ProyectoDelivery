@@ -4,6 +4,7 @@ import { BABA_RESTAURANT, elapsedTime, orderTotal, selectOrders, type Order, typ
 import { useOrdersBoard } from '../useOrdersBoard';
 import { useAuth } from '../AuthProvider';
 import type { OrdersApi } from '../ordersApi';
+import { config } from '../config';
 
 const currency = new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' });
 
@@ -22,7 +23,8 @@ const pickingColumns = [
 export interface KanbanOrdersProps { source?: 'mock' | 'api'; merchantId?: string; api?: OrdersApi }
 export default function KanbanOrders({ source = 'api', merchantId, api }: KanbanOrdersProps) {
   const { session } = useAuth();
-  const board = useOrdersBoard(source, merchantId ?? session?.user?.comercioId ?? '', api);
+  const targetMerchantId = merchantId ?? session?.user?.comercioId ?? '55555555-5555-5555-5555-555555555555';
+  const board = useOrdersBoard(source, targetMerchantId, api);
   const { orders } = board;
   const [now, setNow] = useState(Date.now);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -31,8 +33,13 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
   const [query, setQuery] = useState('');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [modoOperacion, setModoOperacion] = useState<'cocina' | 'picking'>('cocina');
+  const [comercioNombre, setComercioNombre] = useState<string>(session?.user?.name || '');
+  const [comercioTipo, setComercioTipo] = useState<string>('');
   const [pickedItems, setPickedItems] = useState<Record<string, boolean>>({});
   const [bultosMap, setBultosMap] = useState<Record<string, number>>({});
+  const [orderToReject, setOrderToReject] = useState<Order | null>(null);
+  const [selectedMotivo, setSelectedMotivo] = useState('Ingrediente o producto agotado');
+  const [customMotivo, setCustomMotivo] = useState('');
   const [soundPreference, setSoundPreference] = useState(() => {
     try { return localStorage.getItem('delivery.comercio.sound') === 'enabled'; } catch { return false; }
   });
@@ -40,6 +47,32 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
   const visibleOrders = selectOrders(orders, query, overdueOnly, now);
   const audio = useRef<AudioContext | null>(null);
   const lastAlert = useRef(0);
+
+  // Detección automática del tipo de negocio para configurar la interfaz sin botones confusos
+  useEffect(() => {
+    async function fetchComercioInfo() {
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/catalog/comercio/${targetMerchantId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            if (json.data.nombre_comercial) setComercioNombre(json.data.nombre_comercial);
+            if (json.data.tipo_comercio_nombre || json.data.categoria) {
+              setComercioTipo(json.data.tipo_comercio_nombre || json.data.categoria);
+            }
+            const isRetail = json.data.tipo_layout === 'grid_ecommerce' ||
+                             ['supermercado', 'farmacia', 'licorera', 'express'].includes(json.data.tipo_comercio_id);
+            setModoOperacion(isRetail ? 'picking' : 'cocina');
+          }
+        }
+      } catch (err) {
+        console.warn('Error detectando vertical del comercio:', err);
+      }
+    }
+    if (targetMerchantId) {
+      fetchComercioInfo();
+    }
+  }, [targetMerchantId]);
 
   const toggleItemPicked = (orderId: string, itemIndex: number) => {
     const key = `${orderId}-${itemIndex}`;
@@ -125,39 +158,27 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
             </span>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-rose-300">DeliveryYa · Comercio</p>
-              <h1 className="mt-1 text-xl font-extrabold sm:text-2xl">{source === 'mock' ? BABA_RESTAURANT : session?.user?.name || 'Comandas de tu negocio'}</h1>
+              <h1 className="mt-1 text-xl font-extrabold sm:text-2xl">{comercioNombre || session?.user?.name || 'Comandas de tu negocio'}</h1>
               <p className="mt-1 flex items-center gap-1 text-xs text-slate-400"><MapPin size={12} aria-hidden="true" />Baba, Los Ríos · Babahoyo: red activa</p>
             </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            {/* Selector de Modo de Operación: Cocina vs Picking Retail */}
-            <div className="flex rounded-xl bg-slate-800 p-1 border border-solid border-slate-700">
-              <button
-                type="button"
-                onClick={() => setModoOperacion('cocina')}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${modoOperacion === 'cocina' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-              >
-                <ChefHat size={15} /> Modo Cocina
-              </button>
-              <button
-                type="button"
-                onClick={() => setModoOperacion('picking')}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${modoOperacion === 'picking' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-              >
-                <ShoppingBag size={15} /> Modo Picking Despensa
-              </button>
-            </div>
+            {/* Indicador Único de Estación según tipo de negocio (sin botones de cambio para evitar confusión) */}
+            {modoOperacion === 'picking' ? (
+              <span className="flex items-center gap-2 rounded-xl bg-emerald-950/80 border border-emerald-700/60 px-3.5 py-2.5 text-xs font-bold text-emerald-300">
+                <ShoppingBag size={15} /> Estación de Picking / Despensa {comercioTipo ? `· ${comercioTipo}` : ''}
+              </span>
+            ) : (
+              <span className="flex items-center gap-2 rounded-xl bg-rose-950/80 border border-rose-700/60 px-3.5 py-2.5 text-xs font-bold text-rose-300">
+                <ChefHat size={15} /> Estación de Cocina {comercioTipo ? `· ${comercioTipo}` : ''}
+              </span>
+            )}
 
             <button type="button" onClick={() => void toggleSound()} aria-pressed={soundEnabled} className="flex items-center gap-2 rounded-xl border border-solid border-slate-600 bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-700">
               {soundEnabled ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
               {soundEnabled ? 'Sonido activado' : soundPreference ? 'Reactivar sonido' : 'Activar sonido'}
             </button>
-            {source === 'mock' && (
-              <button type="button" onClick={receiveOrder} className="flex items-center gap-2 rounded-xl border-0 bg-rose-600 px-4 py-3 text-sm font-bold text-white hover:bg-rose-500">
-                <Plus size={18} aria-hidden="true" />Simular nuevo pedido
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -168,7 +189,7 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
           <div>
             <div className="mb-2 flex items-center gap-3">
               <h2 className="text-2xl font-bold">{modoOperacion === 'picking' ? 'Tablero de Recolección y Picking' : 'Tablero de Comandas de Cocina'}</h2>
-              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">{source === 'mock' ? 'DEMO BABA' : 'API EN VIVO'}</span>
+              <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">OPERACIÓN EN VIVO</span>
             </div>
             <p className="max-w-2xl text-sm text-slate-400">
               {modoOperacion === 'picking'
@@ -369,7 +390,32 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
                           <strong className="text-xl">{currency.format(orderTotal(order))}</strong>
                         </div>
 
-                        {column.action ? (
+                        {order.status === 'PENDING' ? (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={board.pending.has(order.id)}
+                              onClick={() => {
+                                setOrderToReject(order);
+                                setSelectedMotivo('Ingrediente o producto agotado');
+                                setCustomMotivo('');
+                              }}
+                              className="rounded-lg border border-rose-500/50 bg-rose-950/40 px-3 py-3 text-xs font-bold text-rose-300 hover:bg-rose-900/50 disabled:opacity-50"
+                            >
+                              ✕ Rechazar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={board.pending.has(order.id)}
+                              onClick={() => void advance(order)}
+                              aria-label={`${column.action}, pedido ${order.id}`}
+                              className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-0 px-3 py-3 text-sm font-bold ${column.button} disabled:cursor-wait disabled:opacity-50`}
+                            >
+                              {board.pending.has(order.id) ? 'Guardando…' : modoOperacion === 'picking' ? 'Iniciar Picking' : 'Aceptar Comanda'}
+                              <ArrowRight size={16} aria-hidden="true" />
+                            </button>
+                          </div>
+                        ) : column.action ? (
                           <button
                             type="button"
                             disabled={board.pending.has(order.id)}
@@ -394,6 +440,76 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
           })}
         </div>
       </main>
+
+      {/* Modal de Rechazo de Pedido */}
+      {orderToReject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span className="text-rose-400">✕</span> Rechazar Pedido #{orderToReject.id.slice(0, 8)}
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Selecciona el motivo por el cual no puedes preparar o despachar este pedido. Si el cliente pagó con saldo virtual, se le reembolsará de inmediato.
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              {[
+                'Ingrediente o producto agotado',
+                'Cocina saturada / Exceso de pedidos',
+                'Comercio próximo a cerrar / Fuera de horario',
+                'Dirección fuera de cobertura',
+                'Otro motivo',
+              ].map((motivo) => (
+                <label
+                  key={motivo}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer text-xs font-semibold transition-colors ${selectedMotivo === motivo ? 'bg-rose-950/50 border-rose-500 text-rose-200' : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  <input
+                    type="radio"
+                    name="motivoRechazo"
+                    checked={selectedMotivo === motivo}
+                    onChange={() => setSelectedMotivo(motivo)}
+                    className="accent-rose-500"
+                  />
+                  <span>{motivo}</span>
+                </label>
+              ))}
+
+              {selectedMotivo === 'Otro motivo' && (
+                <textarea
+                  rows={2}
+                  value={customMotivo}
+                  onChange={(e) => setCustomMotivo(e.target.value)}
+                  placeholder="Escribe el motivo detallado..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                />
+              )}
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setOrderToReject(null)}
+                className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const motivoFinal = selectedMotivo === 'Otro motivo' ? (customMotivo.trim() || 'No especificado') : selectedMotivo;
+                  await board.reject(orderToReject, motivoFinal);
+                  setAnnouncement(`Pedido ${orderToReject.id} rechazado: ${motivoFinal}.`);
+                  setOrderToReject(null);
+                }}
+                className="flex-1 rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white hover:bg-rose-500 shadow-lg shadow-rose-900/30"
+              >
+                Confirmar Rechazo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

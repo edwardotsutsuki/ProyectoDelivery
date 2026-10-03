@@ -466,7 +466,7 @@ catalogRouter.get('/comercio/:comercioId/productos', async (req: Request, res: R
         COALESCE(p.requiere_receta, false) as requiere_receta
       FROM productos p
       LEFT JOIN categorias_productos cp ON p.categoria_id = cp.id
-      WHERE p.comercio_id::text = $1 OR p.comercio_id::text = $2
+      WHERE (p.comercio_id::text = $1 OR p.comercio_id::text = $2) AND (p.is_eliminado IS NOT TRUE)
       ORDER BY COALESCE(cp.orden, 999) ASC, COALESCE(cp.nombre, p.categoria) ASC, p.nombre ASC;
     `;
 
@@ -1001,22 +1001,35 @@ catalogRouter.put('/producto/:productoId', async (req: Request, res: Response) =
   }
 });
 
-// 10. Eliminar un producto
+// 10. Eliminar un producto (Seguro frente a restricciones de clave foránea)
 catalogRouter.delete('/producto/:productoId', async (req: Request, res: Response) => {
   try {
     const { productoId } = req.params;
-    const query = 'DELETE FROM productos WHERE id::text = $1 RETURNING id, nombre';
-    const result = await pgPool.query(query, [productoId]);
 
-    if (result.rows.length === 0) {
+    // 1. Marcar como eliminado (soft-delete) para ocultar inmediatamente de cartas y paneles
+    const updateRes = await pgPool.query(
+      'UPDATE productos SET is_eliminado = true, is_disponible = false, fecha_actualizacion = NOW() WHERE id::text = $1 RETURNING id, nombre',
+      [productoId]
+    );
+
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+    }
+
+    const prodNombre = updateRes.rows[0].nombre;
+
+    // 2. Intentar borrado físico si no tiene órdenes históricas
+    try {
+      await pgPool.query('DELETE FROM productos WHERE id::text = $1', [productoId]);
+    } catch {
+      // Conservar fila con is_eliminado = true para integridad referencial de pedidos
     }
 
     await redisClient.del(`catalog:disponibilidad:${productoId}`);
 
     res.json({
       success: true,
-      message: `Producto "${result.rows[0].nombre}" eliminado correctamente`,
+      message: `Producto "${prodNombre}" eliminado correctamente`,
       id: productoId,
     });
   } catch (error) {

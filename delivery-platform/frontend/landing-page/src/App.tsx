@@ -869,24 +869,8 @@ export default function App() {
         setOrderError(data.error || data.message || 'Error al procesar el pedido con el restaurante');
       }
     } catch (err: any) {
-      // Si el backend no responde, simular comanda exitosa para pruebas de interfaz
-      setPedidoConfirmado({
-        id: `ord-baba-${Date.now().toString().slice(-6)}`,
-        estado: 'en_preparacion',
-        total: total.toFixed(2),
-        subtotal: subtotal.toFixed(2),
-        costo_envio: costoEnvio.toFixed(2),
-        direccion_entrega: direccionEntrega,
-      });
-      setTrackingEta({
-        distanciaMetros: 505,
-        etaMinutos: 15,
-        estado: 'en_preparacion',
-        repartidor: 'Carlos Repartidor - Moto Baba 01',
-      });
-      setCarrito([]);
-      setComercioCarrito(null);
-      setVista('tracking');
+      console.error('Error procesando pedido:', err);
+      setOrderError(err.message || 'No se pudo conectar con el servidor para procesar el pedido.');
     } finally {
       setSubmittingOrder(false);
     }

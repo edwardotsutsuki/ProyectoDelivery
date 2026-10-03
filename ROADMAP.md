@@ -212,6 +212,29 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 
 ---
 
+### ✅ Fase 5.13: Depuración de Base de Datos, Eliminación Segura de Productos, Flujo de Aceptación/Rechazo y Estación de Trabajo Dedicada (Completada)
+- [x] **Depuración de Base de Datos y Supresión de Modo Demo**:
+  - [x] Limpieza integral de pedidos y transacciones de prueba en PostgreSQL (`pedidos_items`, `pedidos`, `transacciones_ledger`).
+  - [x] Supresión de generación de pedidos mock/simulados tanto en el Backend (`order.controller.ts`) como en el Frontend (`landing-page/src/App.tsx`), garantizando que la plataforma opere exclusivamente con datos reales y reporte errores genuinos.
+- [x] **Eliminación Segura de Productos (Foreign Key & Soft-Delete)**:
+  - [x] Corrección de restricción de clave foránea en base de datos: `pedidos_items_producto_id_fkey` actualizada con `ON DELETE SET NULL` para evitar bloqueos por historial de pedidos.
+  - [x] Implementación de soft-delete en PostgreSQL con columna `is_eliminado BOOLEAN DEFAULT FALSE` y filtrado activo en consultas de catálogo.
+  - [x] En `DELETE /api/v1/catalog/producto/:id`: eliminación física inmediata si el producto no tiene referencias, o desactivación segura con `is_eliminado = true` e invalidación en Redis si está referenciado en comandas históricas.
+- [x] **Flujo Operativo de Aceptación y Rechazo de Pedidos por el Local**:
+  - [x] Endpoint `PATCH /api/v1/orders/:pedidoId/rechazar`: permite al comercio rechazar pedidos pendientes con registro de `motivo_rechazo` y `fecha_rechazo` en la base de datos.
+  - [x] Reembolso automático a la billetera virtual (`transacciones_ledger`) si el pedido rechazado fue cancelado con saldo virtual.
+  - [x] Emisión en tiempo real vía Redis Pub/Sub del evento `order:status_updated` con estado `ORDER_CANCELLED`.
+  - [x] Modal interactivo de rechazo en el Panel del Comercio (`KanbanOrders.tsx`) con causales predefinidas (`Ingrediente o producto agotado`, `Cocina saturada`, `Fuera de horario`, `Fuera de cobertura`, `Otro motivo`).
+  - [x] Botones de acción rápida en tarjetas pendientes: **"✓ Aceptar Comanda"** (inicia preparación/picking) y **"✕ Rechazar"** (despliega modal de causales).
+- [x] **Detección Automática de Vertical y Eliminación del Selector Manual**:
+  - [x] Retiro definitivo del switch dual manual `[Modo Cocina] [Modo Picking Despensa]` para evitar confusión al personal operativo.
+  - [x] Detección contextual y automática de la estación según la vertical del local (`GET /catalog/comercio/:id`):
+    - **Restaurantes y Cafeterías** ➔ Visualizan exclusivamente la **Estación de Cocina** (comandas de platos y preparaciones culinarias).
+    - **Supermercados, Farmacias, Licoreras y Tiendas Express** ➔ Visualizan exclusivamente la **Estación de Picking y Despensa** (canastas de ítems con percha, checklist de recolección y control de fundas/bultos).
+  - [x] Badge estático de identificación de estación en cabecera.
+
+---
+
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
 
 ```

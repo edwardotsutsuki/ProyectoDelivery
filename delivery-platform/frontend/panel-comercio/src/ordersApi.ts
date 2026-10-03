@@ -82,6 +82,17 @@ export function createOrdersApi(request: Request = authClient.authorizedRequest)
       }
       return next;
     },
+    async reject(order: Order, motivo: string, signal?: AbortSignal): Promise<void> {
+      const response = await request(`${ORDERS_PATH}/${encodeURIComponent(order.id)}/rechazar`, {
+        method: 'PATCH',
+        signal,
+        body: JSON.stringify({ motivo }),
+      });
+      if (response.status !== 200 && response.status !== 204) {
+        const body = object(await response.json());
+        if (body.success !== true) throw new Error('El servidor no confirmó el rechazo del pedido.');
+      }
+    },
   };
 }
 export const ordersApi = createOrdersApi();
