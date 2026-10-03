@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pgPool } from '../../config/database';
 import { redisClient } from '../../config/redis';
+import { sendPushToUser, sendPushToDrivers } from '../notifications/push.service';
 
 export const orderRouter = Router();
 
@@ -433,6 +434,13 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
     };
     await redisClient.publish('orders:events', JSON.stringify(eventPayload));
 
+    // Notificar por Push Notification a los motorizados en Baba
+    sendPushToDrivers(
+      '🛵 ¡Nueva orden disponible!',
+      `Pedido #${pedidoCreado.id.slice(0, 8)} por $${total.toFixed(2)}. ¡Toca para aceptar y hacer la entrega!`,
+      { pedidoId: pedidoCreado.id, event: 'order:created' }
+    ).catch(e => console.warn('Push error notify drivers:', e));
+
     res.status(201).json({
       success: true,
       message: 'Pedido creado exitosamente',
@@ -652,6 +660,38 @@ const handleStatusUpdate = async (req: Request, res: Response) => {
       console.warn('⚠️ No se pudo publicar evento a Redis:', redisErr);
     }
 
+    // Notificaciones Push automáticas al cliente y repartidores
+    (async () => {
+      try {
+        const clientRes = await pgPool.query('SELECT cliente_id FROM pedidos WHERE id::text = $1', [pedidoId]);
+        const clienteId = clientRes.rows[0]?.cliente_id;
+        if (nuevoEstado === 'en_preparacion' && clienteId) {
+          await sendPushToUser(
+            clienteId,
+            '👨‍🍳 ¡Tu pedido está en cocina!',
+            'El restaurante ha comenzado a preparar tu orden.',
+            { pedidoId, status: nuevoEstado }
+          );
+        } else if (nuevoEstado === 'listo') {
+          if (clienteId) {
+            await sendPushToUser(
+              clienteId,
+              '🍽️ ¡Tu pedido está listo!',
+              'Tu comida ha sido empaquetada y espera al repartidor.',
+              { pedidoId, status: nuevoEstado }
+            );
+          }
+          await sendPushToDrivers(
+            '📦 ¡Comanda lista para retirar!',
+            `El pedido #${pedidoId.slice(0, 8)} está listo en el local. ¡Acércate a recogerlo!`,
+            { pedidoId, status: nuevoEstado }
+          );
+        }
+      } catch (pushErr) {
+        console.warn('⚠️ Error enviando push en cambio de estado:', pushErr);
+      }
+    })();
+
     res.json({
       success: true,
       message: `Estado de pedido actualizado a ${nuevoEstado}`,
@@ -737,6 +777,16 @@ orderRouter.patch('/:pedidoId/rechazar', async (req: Request, res: Response) => 
       timestamp: new Date().toISOString(),
     };
     await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    // Notificar al cliente que su pedido fue cancelado/rechazado
+    if (pedido.cliente_id) {
+      sendPushToUser(
+        pedido.cliente_id,
+        '❌ Pedido no procesado',
+        `El local no pudo aceptar tu pedido #${pedido.id.slice(0, 8)} (${motivo || 'Cancelado'}). ${pedido.metodo_pago === 'saldo_virtual' ? 'Tu saldo fue reembolsado a tu Billetera.' : ''}`,
+        { pedidoId: pedido.id, status: 'cancelado' }
+      ).catch(() => {});
+    }
 
     res.json({
       success: true,
@@ -889,6 +939,16 @@ orderRouter.patch('/:pedidoId/tomar', async (req: Request, res: Response) => {
     };
     await redisClient.publish('orders:events', JSON.stringify(eventPayload));
 
+    // Notificar al cliente que su repartidor va en camino
+    if (result.rows[0]?.cliente_id) {
+      sendPushToUser(
+        result.rows[0].cliente_id,
+        '🛵 ¡Tu repartidor va en camino!',
+        'Tu pedido ha sido retirado del local y se dirige a tu dirección de entrega.',
+        { pedidoId, status: 'en_camino' }
+      ).catch(() => {});
+    }
+
     res.json({
       success: true,
       message: 'Pedido tomado por el repartidor. Ahora en camino a entrega.',
@@ -984,6 +1044,16 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
     };
     await redisClient.publish('orders:events', JSON.stringify(eventPayload));
 
+    // Notificar al cliente que su orden fue entregada
+    if (order.cliente_id) {
+      sendPushToUser(
+        order.cliente_id,
+        '🎉 ¡Tu pedido ha sido entregado!',
+        '¡Buen provecho! Recuerda calificar el servicio y tu comida en la app ⭐',
+        { pedidoId: order.id, status: 'entregado' }
+      ).catch(() => {});
+    }
+
     res.json({
       success: true,
       message: 'Pedido marcado como entregado y asentado en el ledger contable',
@@ -1032,6 +1102,13 @@ orderRouter.patch('/:pedidoId/liberar', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     };
     await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+
+    // Notificar a los demás motorizados que hay un pedido disponible por liberación
+    sendPushToDrivers(
+      '⚠️ Pedido disponible para entrega',
+      `El pedido #${pedidoId.slice(0, 8)} ha sido liberado por avería y está listo para ser recogido.`,
+      { pedidoId, status: 'listo' }
+    ).catch(() => {});
 
     res.json({
       success: true,

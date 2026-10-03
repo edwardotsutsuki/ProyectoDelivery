@@ -334,6 +334,30 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
   - [x] 14/14 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 
+### Fase 7: Motor OSRM Subregional (Baba, Babahoyo, Montalvo), Gateway Hardening & Notificaciones Push Móviles ✅
+- [x] **Motor Vial OSRM Subregional Autónomo (`infrastructure/osrm`)**:
+  - [x] Extracción y recorte del mapa OpenStreetMap de Ecuador delimitado por la envolvente geográfica de Baba `(-1.7917, -79.6783)`, Babahoyo `(-1.8022, -79.5344)` y Montalvo `(-1.7901, -79.2876)` mediante `osmium extract --bbox -79.78,-1.88,-79.20,-1.70`.
+  - [x] Compilación y generación completa de grafos viales: `osrm-extract` (perfil `car.lua`), `osrm-partition` (bisección multi-nivel) y `osrm-customize` (algoritmo MLD).
+  - [x] Motor OSRM local levantado en puerto 5001 (`osrm-routed --algorithm mld /data/ecuador-latest.osrm`).
+  - [x] Conexión nativa verificada con rutas reales entre Baba y Babahoyo (25.07 km, ~25 min) y Babahoyo y Montalvo (34.63 km, ~27 min) sin depender de servicios externos o cuotas de terceros.
+- [x] **API Gateway Hardening & Enrutamiento Unificado (Nginx)**:
+  - [x] Rate limiting perimetral implementado: zonas de memoria `api_general_limit` (40 req/s, burst 60) y `auth_limit` reforzado (10 req/s, burst 15) protegiendo `/api/v1/auth/` contra ataques de fuerza bruta y abusos de tráfico.
+  - [x] Enrutamiento proxy inverso transparente `/osrm/` conectado al backend OSRM subregional, permitiendo consultas viales tanto en red local como a través de túnel público (`https://delivery-baba-api.loca.lt/osrm/route/v1/...`).
+- [x] **Servicio Transaccional de Notificaciones Push (Expo Push API Worker)**:
+  - [x] Módulo `push.service.ts` en `backend-core` que interactúa con la tabla PostgreSQL `push_tokens` y la API de Expo (`https://exp.host/--/api/v2/push/send`).
+  - [x] Disparadores push automáticos integrados en todo el ciclo de vida del pedido:
+    - *Creación de orden*: Alerta a motorizados en Baba sobre nueva orden disponible con monto a cobrar.
+    - *Cocina en preparación*: Notificación al cliente indicando inicio de elaboración de sus platillos.
+    - *Comanda lista*: Notificación al cliente y alerta a los repartidores para retiro en el local.
+    - *Repartidor en camino*: Notificación al cliente con confirmación de que el motorizado va en tránsito.
+    - *Entrega completada*: Notificación al cliente con recordatorio de calificar el pedido y servicio.
+    - *Liberación por avería*: Alerta a la flota motorizada para reasignación inmediata de la comanda.
+    - *Rechazo / Cancelación*: Aviso inmediato al cliente con motivo y confirmación de reembolso a billetera.
+- [x] **Verificación Integral y Suite de Pruebas**:
+  - [x] App Cliente: 13/13 pruebas unitarias aprobadas, `tsc --noEmit` limpio (0 errores).
+  - [x] App Repartidor: 14/14 pruebas unitarias aprobadas, `tsc --noEmit` limpio (0 errores).
+  - [x] Backend Core: `tsc --noEmit` limpio (0 errores), 9 contenedores Docker saludables y comunicados.
+
 ---
 
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)

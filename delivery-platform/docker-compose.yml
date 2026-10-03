@@ -82,9 +82,12 @@ services:
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:80"
       - "${GATEWAY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - backend-core
       - tracking-service
+      - osrm-backend
     networks:
       - delivery_network
 
