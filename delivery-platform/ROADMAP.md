@@ -195,17 +195,20 @@
   - [x] Emisión directa de comandas a PostgreSQL y Redis Pub/Sub, activando al instante el sonido de comanda en el Panel de Comercio (Kanban en puerto 3003).
   - [x] Radar de seguimiento web con stepper de preparación y datos de telemetría vial.
 - [x] **App Móvil Cliente (`mobile/app-cliente`)**:
-  - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`, `react@19.2.3`), compatible con la última versión de Expo Go.
-  - [x] Conexión en vivo con el Backend Core (`192.168.68.123:8080/api/v1`): descarga dinámica de comercios (`/catalog/comercios`), productos (`/productos`), zonas de entrega (`/config/tarifas`) y validación de cupones (`/promotions/validate`).
-  - [x] Selector geográfico Baba vs Babahoyo y filtro por verticales (Restaurantes, Supermercados, Farmacias, Express).
-  - [x] Renderizado de fotografías reales de productos, categorías del local y soporte para tamaños/variantes multi-precio.
-  - [x] Checkout interactivo con cálculo dinámico de flete, subsidio por el comercio, cupón de descuento y notas al repartidor.
-  - [x] Radar de pedido en tiempo real mostrando etapas (Cocina ➔ En camino ➔ Entrega), distancia en metros y ETA dinámico con OSRM.
-  - [x] Historial de pedidos anteriores y botón "Repetir este pedido (1 Clic)".
+  - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`, `react@19.2.3`), compatible con Expo Go.
+  - [x] Conexión híbrida en vivo y remota vía túnel público (`https://delivery-baba-api.loca.lt/api/v1`): descarga de comercios, productos, tarifas zonales y cupones.
+  - [x] Solución al aislamiento de catálogo: mapeo auténtico e independiente para todos los comercios (Burger & Wings, EDEM Mariscos, EDEM Express, Picantería Baba, El Gran Chef Babahoyo).
+  - [x] Corrección de tipado en números decimales provenientes de PostgreSQL (evitando error `undefined is not a function` en `.toFixed(2)`).
+  - [x] Modo Invitado y Preservación de Carrito: el cliente puede armar su pedido como invitado; al pulsar "Ver Canasta" o confirmar pedido se activa el login/registro sin perder jamás los artículos seleccionados.
+  - [x] Integración de Direcciones Guardadas (`direcciones_usuario` de PostgreSQL): chips de selección rápida (`📍 Casa`, `🏢 Trabajo`) para autocompletar el destino en 1 clic.
+  - [x] Historial real de pedidos desde PostgreSQL (`GET /api/v1/orders/cliente/:id`) con badges de estado y botón `🔁 Repetir pedido`.
+  - [x] Recarga rápida de Billetera Digital en vivo (`+$5`, `+$10`, `+$20`) conectada al Ledger contable.
+  - [x] Buscador de platos en vivo en la carta y selector de categorías.
+  - [x] Prevención y modal de conflicto multitienda al agregar productos de un local distinto.
   - [x] 13/13 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 - [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
   - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`), compatible con Expo Go.
-  - [x] Conexión al API Gateway y WebSocket en red local.
+  - [x] Conexión al API Gateway y WebSocket en red local y remota.
   - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
   - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
   - [x] 14/14 pruebas unitarias aprobadas y bundle Android compilado sin errores.

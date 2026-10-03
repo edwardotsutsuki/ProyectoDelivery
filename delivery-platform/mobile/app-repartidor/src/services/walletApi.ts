@@ -6,7 +6,7 @@ export async function fetchWallet(baseUrl: string, signal: AbortSignal, request:
   signal.addEventListener('abort', abort);
   const timeout = setTimeout(abort, 15000);
   try {
-    const response = await request(`${baseUrl.replace(/\/$/, '')}/ledger/billetera/usr-repartidor-01`, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    const response = await request(`${baseUrl.replace(/\/$/, '')}/ledger/billetera/usr-repartidor-01`, { signal: controller.signal, headers: { Accept: 'application/json', 'Bypass-Tunnel-Reminder': 'true' } });
     if (!response.ok) throw new Error(`No pudimos cargar la billetera (HTTP ${response.status}).`);
     return parseWallet(await response.json());
   } finally { clearTimeout(timeout); signal.removeEventListener('abort', abort); }

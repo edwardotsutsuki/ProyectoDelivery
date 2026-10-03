@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, SafeAreaView, ScrollView, Switch, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Platform } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationLauncher } from './src/services/navigationLauncher';
 import { initialShift, setAvailability, transition, RESTAURANT, type Action, type Status } from './src/courierModel';
 import { dailyWallet, money, type Wallet } from './src/walletModel';
 import { fetchWallet } from './src/services/walletApi';
 import { TelemetryTransmitter } from './src/services/telemetryTransmitter';
 
-const DEFAULT_API = 'http://192.168.68.123:8080/api/v1'; // IP local del PC en la red WiFi
+const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1'; // Endpoint público de desarrollo vía localtunnel
 const labels: Record<Status, string> = { READY_FOR_PICKUP: 'Listo para despacho', ACCEPTED: 'Aceptado · recoger en restaurante', ON_THE_WAY: 'En camino al cliente', DELIVERED: 'Entregado' };
 const actions: Partial<Record<Status, { action: Action; label: string }>> = { READY_FOR_PICKUP: { action: 'ACCEPT', label: 'Aceptar' }, ACCEPTED: { action: 'START', label: 'En Camino' }, ON_THE_WAY: { action: 'DELIVER', label: 'Entregado' } };
 
@@ -61,8 +62,10 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo completar la acción.'); }
   }
   const daily = wallet ? dailyWallet(wallet, now) : null;
-  return <SafeAreaView style={styles.screen}>
-    <View style={styles.header}><Text style={styles.brand}>Tu turno en Baba 🛵</Text><Text style={styles.muted}>Moto Baba 01 · Los Ríos · Babahoyo: expansión</Text>
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.header}><Text style={styles.brand}>Tu turno en Baba 🛵</Text><Text style={styles.muted}>Moto Baba 01 · Los Ríos · Babahoyo: expansión</Text>
       <View style={styles.row}><View><Text style={styles.title}>{shift.online ? 'Online · Turno activo' : 'Offline · Fuera de turno'}</Text><Text style={styles.muted}>GPS simulado: {!shift.online ? 'desconectado' : gpsReady ? 'conectado · Baba Centro' : 'buscando señal…'}</Text></View><Switch accessibilityLabel="Disponibilidad Online / Offline" value={shift.online} onValueChange={online => update(() => setAvailability(current.current, online))} trackColor={{ false: '#64748b', true: '#059669' }} /></View>
     </View>
     <View style={styles.tabs}>{([{ id: 'orders', label: 'Comandas' }, { id: 'wallet', label: 'Billetera' }] as const).map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: tab === item.id }} onPress={() => { setTab(item.id); setError(''); }} style={[styles.tab, tab === item.id && styles.selected]}><Text style={styles.title}>{item.label}</Text></Pressable>)}</View>
@@ -102,7 +105,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         </>}
       </>}
     </ScrollView>
-  </SafeAreaView>;
+  </SafeAreaView>
+</SafeAreaProvider>
+);
 }
 
 const styles = StyleSheet.create({
