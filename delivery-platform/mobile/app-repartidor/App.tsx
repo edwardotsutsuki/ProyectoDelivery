@@ -191,7 +191,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     setWalletLoading(true);
     setWalletError('');
     try {
-      const data = await fetchWallet(currentApi, controller.signal);
+      const data = await fetchWallet(currentApi, controller.signal, courierId);
       setWallet(data);
       setSyncedWallet(new Date());
     } catch (err: any) {
@@ -202,7 +202,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       setWalletLoading(false);
     }
     return () => controller.abort();
-  }, [currentApi]);
+  }, [currentApi, courierId]);
 
   // Fetch Available and Active Orders
   const refreshOrders = useCallback(async () => {
@@ -510,18 +510,18 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
               onPress={() => setIsDriverSelectorOpen(true)}
             >
               <View style={styles.avatarPill}>
-                <Truck color="#10b981" size={20} />
+                <Truck color="#10b981" size={18} />
               </View>
-              <View>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.driverTitle}>
+                  <Text style={styles.driverTitle} numberOfLines={1} ellipsizeMode="tail">
                     {selectedDriver ? selectedDriver.nombre : 'Moto Baba 01 🛵'}
                   </Text>
                   <View style={styles.badgeSelector}>
                     <Text style={styles.badgeSelectorText}>Cambiar (10)</Text>
                   </View>
                 </View>
-                <Text style={styles.driverLocation}>
+                <Text style={styles.driverLocation} numberOfLines={1} ellipsizeMode="tail">
                   {selectedDriver
                     ? `${selectedDriver.ciudad} · ${selectedDriver.tipo_vehiculo || 'Moto'} · ${selectedDriver.calificacion_promedio || '5.0'} ★`
                     : 'Cantón Baba · Los Ríos, Ecuador'}
@@ -547,8 +547,12 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           <View style={styles.telemetryBar}>
             <View style={styles.telemetryItem}>
               <Activity size={13} color={isOnline ? '#10b981' : '#64748b'} />
-              <Text style={styles.telemetryText}>
-                {!isOnline ? 'GPS Inactivo (Fuera de turno)' : gpsReady ? '📡 GPS Baba Centro (-1.7925, -79.6790)' : 'Buscando satélites…'}
+              <Text style={styles.telemetryText} numberOfLines={1} ellipsizeMode="tail">
+                {!isOnline
+                  ? 'GPS Inactivo (Fuera de turno)'
+                  : gpsReady
+                  ? `📡 GPS ${selectedDriver?.ciudad || 'Los Ríos'} (${Number(selectedDriver?.lat || -1.7925).toFixed(4)}, ${Number(selectedDriver?.lon || -79.6790).toFixed(4)})`
+                  : 'Buscando satélites…'}
               </Text>
             </View>
             {isOnline && (
@@ -586,9 +590,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             style={[styles.tabButton, activeTab === 'orders' && styles.tabButtonActive]}
             onPress={() => setActiveTab('orders')}
           >
-            <Compass size={16} color={activeTab === 'orders' ? '#10b981' : '#94a3b8'} />
-            <Text style={[styles.tabText, activeTab === 'orders' && styles.tabTextActive]}>
-              {activeOrder ? 'Misión Activa' : 'Despacho'}
+            <Compass size={15} color={activeTab === 'orders' ? '#10b981' : '#94a3b8'} />
+            <Text style={[styles.tabText, activeTab === 'orders' && styles.tabTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              {activeOrder ? 'Misión' : 'Despacho'}
             </Text>
             {activeOrder && <View style={styles.tabBadge} />}
           </Pressable>
@@ -597,24 +601,30 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             style={[styles.tabButton, activeTab === 'wallet' && styles.tabButtonActive]}
             onPress={() => setActiveTab('wallet')}
           >
-            <WalletIcon size={16} color={activeTab === 'wallet' ? '#10b981' : '#94a3b8'} />
-            <Text style={[styles.tabText, activeTab === 'wallet' && styles.tabTextActive]}>Billetera</Text>
+            <WalletIcon size={15} color={activeTab === 'wallet' ? '#10b981' : '#94a3b8'} />
+            <Text style={[styles.tabText, activeTab === 'wallet' && styles.tabTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              Billetera
+            </Text>
           </Pressable>
 
           <Pressable
             style={[styles.tabButton, activeTab === 'history' && styles.tabButtonActive]}
             onPress={() => setActiveTab('history')}
           >
-            <Clock size={16} color={activeTab === 'history' ? '#10b981' : '#94a3b8'} />
-            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>Historial</Text>
+            <Clock size={15} color={activeTab === 'history' ? '#10b981' : '#94a3b8'} />
+            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              Historial
+            </Text>
           </Pressable>
 
           <Pressable
             style={[styles.tabButton, activeTab === 'profile' && styles.tabButtonActive]}
             onPress={() => setActiveTab('profile')}
           >
-            <User size={16} color={activeTab === 'profile' ? '#10b981' : '#94a3b8'} />
-            <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]}>Perfil</Text>
+            <User size={15} color={activeTab === 'profile' ? '#10b981' : '#94a3b8'} />
+            <Text style={[styles.tabText, activeTab === 'profile' && styles.tabTextActive]} numberOfLines={1} ellipsizeMode="tail">
+              Perfil
+            </Text>
           </Pressable>
         </View>
 
@@ -880,8 +890,10 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 <View>
                   {/* Encabezado del Radar */}
                   <View style={styles.radarHeader}>
-                    <View>
-                      <Text style={styles.sectionHeading}>Pedidos Listos en Baba</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.sectionHeading} numberOfLines={1} ellipsizeMode="tail">
+                        Pedidos Listos en {selectedDriver ? selectedDriver.ciudad : 'la Zona'}
+                      </Text>
                       <Text style={styles.sectionSub}>Órdenes esperando despacho por motorizado</Text>
                     </View>
                     <Pressable
@@ -1196,19 +1208,35 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 <Text style={styles.cardTitle}>Ficha del Repartidor</Text>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Identificador:</Text>
-                  <Text style={styles.profileValue}>{COURIER_ID}</Text>
+                  <Text style={styles.profileValue}>{selectedDriver ? `${selectedDriver.id.slice(0, 8)}...` : courierId}</Text>
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Nombre:</Text>
-                  <Text style={styles.profileValue}>Moto Baba 01 (Carlos Repartidor)</Text>
+                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.nombre : 'Carlos Mendoza'}</Text>
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Vehículo:</Text>
-                  <Text style={styles.profileValue}>Motocicleta 150cc · Placa EC-BABA-01</Text>
+                  <Text style={styles.profileValue}>
+                    {selectedDriver
+                      ? `${selectedDriver.modelo_vehiculo || selectedDriver.tipo_vehiculo || 'Moto'} · Placa ${selectedDriver.placa_vehiculo || 'S/P'}`
+                      : 'Honda GL 150cc · Placa GR-891A'}
+                  </Text>
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Base Operativa:</Text>
-                  <Text style={styles.profileValue}>Cantón Baba (Parque Central)</Text>
+                  <Text style={styles.profileValue}>
+                    {selectedDriver ? `Cantón ${selectedDriver.ciudad} (Los Ríos)` : 'Cantón Baba (Parque Central)'}
+                  </Text>
+                </View>
+                <View style={styles.profileRow}>
+                  <Text style={styles.profileLabel}>Teléfono Móvil:</Text>
+                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.telefono : '+593981112233'}</Text>
+                </View>
+                <View style={styles.profileRow}>
+                  <Text style={styles.profileLabel}>Desempeño:</Text>
+                  <Text style={[styles.profileValue, { color: '#fbbf24' }]}>
+                    ⭐ {selectedDriver ? `${selectedDriver.calificacion_promedio} (${selectedDriver.cant_entregas_completadas} viajes)` : '5.0'}
+                  </Text>
                 </View>
               </View>
 
@@ -1258,14 +1286,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           <View style={styles.selectorModalOverlay}>
             <View style={styles.selectorModalContent}>
               <View style={styles.selectorHeader}>
-                <View>
-                  <Text style={styles.selectorTitle}>Cambiar Perfil de Repartidor</Text>
-                  <Text style={styles.selectorSubtitle}>
+                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                  <Text style={styles.selectorTitle} numberOfLines={1}>Cambiar Perfil de Repartidor</Text>
+                  <Text style={styles.selectorSubtitle} numberOfLines={1} ellipsizeMode="tail">
                     10 Repartidores activos en Baba, Babahoyo y Montalvo
                   </Text>
                 </View>
                 <Pressable
-                  style={styles.selectorCloseBtn}
+                  style={[styles.selectorCloseBtn, { flexShrink: 0 }]}
                   onPress={() => setIsDriverSelectorOpen(false)}
                 >
                   <X size={20} color="#94a3b8" />
@@ -1289,21 +1317,21 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       onPress={() => handleSelectDriver(driver)}
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                           <View
                             style={[
                               styles.driverIconPill,
-                              { backgroundColor: isCurrent ? '#059669' : '#1e293b' },
+                              { backgroundColor: isCurrent ? '#059669' : '#1e293b', flexShrink: 0 },
                             ]}
                           >
                             <Truck size={18} color={isCurrent ? '#ffffff' : '#94a3b8'} />
                           </View>
-                          <View>
-                            <Text style={styles.driverOptionName}>{driver.nombre}</Text>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.driverOptionName} numberOfLines={1} ellipsizeMode="tail">{driver.nombre}</Text>
                             <Text style={styles.driverOptionPhone}>{driver.telefono}</Text>
                           </View>
                         </View>
-                        <View style={[styles.cityBadge, { borderColor: cityColor }]}>
+                        <View style={[styles.cityBadge, { borderColor: cityColor, flexShrink: 0, marginLeft: 6 }]}>
                           <Text style={[styles.cityBadgeText, { color: cityColor }]}>
                             {driver.ciudad}
                           </Text>
@@ -1356,14 +1384,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           <View style={styles.selectorModalOverlay}>
             <View style={[styles.selectorModalContent, { maxHeight: '92%' }]}>
               <View style={styles.selectorHeader}>
-                <View>
-                  <Text style={styles.selectorTitle}>Finalizar Entrega de Pedido</Text>
-                  <Text style={styles.selectorSubtitle}>
+                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                  <Text style={styles.selectorTitle} numberOfLines={1}>Finalizar Entrega de Pedido</Text>
+                  <Text style={styles.selectorSubtitle} numberOfLines={1} ellipsizeMode="tail">
                     Pedido #{activeOrder?.id.slice(0, 8)} · {activeOrder?.cliente_nombre || 'Cliente'}
                   </Text>
                 </View>
                 <Pressable
-                  style={styles.selectorCloseBtn}
+                  style={[styles.selectorCloseBtn, { flexShrink: 0 }]}
                   onPress={() => setIsDeliveryModalOpen(false)}
                 >
                   <X size={20} color="#94a3b8" />
@@ -1582,17 +1610,20 @@ const styles = StyleSheet.create({
   pulseDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#10b981' },
   pulseText: { color: '#34d399', fontSize: 10, fontWeight: '700' },
 
-  statsRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  statsRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
   statCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: '#1e293b',
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
+    alignItems: 'center',
   },
-  statLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '600' },
-  statValue: { color: '#f8fafc', fontSize: 16, fontWeight: '800', marginTop: 2 },
+  statLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  statValue: { color: '#f8fafc', fontSize: 14, fontWeight: '800', marginTop: 2, textAlign: 'center' },
 
   tabsContainer: {
     flexDirection: 'row',
@@ -1602,15 +1633,17 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+    gap: 4,
+    paddingVertical: 11,
+    paddingHorizontal: 2,
     position: 'relative',
   },
   tabButtonActive: { borderBottomWidth: 2, borderBottomColor: '#10b981' },
-  tabText: { color: '#94a3b8', fontSize: 13, fontWeight: '600' },
+  tabText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
   tabTextActive: { color: '#34d399', fontWeight: '800' },
   tabBadge: {
     width: 6,

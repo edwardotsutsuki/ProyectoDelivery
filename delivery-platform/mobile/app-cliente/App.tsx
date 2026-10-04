@@ -69,6 +69,7 @@ interface PastOrder {
   items: Array<{ id: string; name: string; quantity: number; price?: number }>;
   address: string;
   estado: string;
+  pin_entrega?: string;
 }
 
 interface ChatMessage {
@@ -211,6 +212,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           })) : [],
           address: o.direccion_entrega || 'Montalvo Centro',
           estado: o.estado || 'creado',
+          pin_entrega: o.pin_entrega,
         }));
         setPastOrders(mappedOrders);
       }
@@ -700,9 +702,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         {/* Cabecera Principal */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
               <Text style={styles.brand}>Delivery<Text style={styles.brandAccent}>Ya</Text></Text>
-              <Text style={styles.headerSubtitle}>Los Ríos · Baba · Babahoyo · Montalvo</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail">Los Ríos · Baba · Babahoyo · Montalvo</Text>
             </View>
 
             {/* Selector de Ciudad */}
@@ -1366,6 +1368,17 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     </Text>
                   </View>
 
+                  {/* Código PIN de Seguridad para Entregar */}
+                  <View style={styles.radarPinBox}>
+                    <Text style={styles.radarPinTitle}>🔢 CÓDIGO PIN DE ENTREGA</Text>
+                    <Text style={styles.radarPinCode}>
+                      {confirmedOrder.pin_entrega || confirmedOrder.id.replace(/\D/g, '').slice(-4) || '1234'}
+                    </Text>
+                    <Text style={styles.radarPinHelper}>
+                      Muestra este PIN de 4 dígitos al motorizado al recibir tu pedido para validar la entrega.
+                    </Text>
+                  </View>
+
                   <Pressable
                     onPress={() => setShowChatModal(true)}
                     style={styles.chatOpenBtn}
@@ -1410,6 +1423,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                               numeroComanda: order.id.slice(0, 8),
                               fecha: order.fecha,
                               mensajeCocina: 'Tu comanda está siendo atendida en Baba.',
+                              pin_entrega: order.pin_entrega,
                             });
                             setScreen('tracking');
                           }}
@@ -1809,11 +1823,40 @@ const styles = StyleSheet.create({
   brand: { fontSize: 24, fontWeight: '900', color: '#0f172a' },
   brandAccent: { color: '#e11d48' },
   headerSubtitle: { fontSize: 11, color: '#64748b', fontWeight: '500' },
-  citySelector: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 3 },
-  cityButton: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 6 },
+  citySelector: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 3, flexShrink: 0 },
+  cityButton: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
   cityButtonActive: { backgroundColor: '#e11d48' },
-  cityButtonText: { fontSize: 12, fontWeight: '700', color: '#475569' },
+  cityButtonText: { fontSize: 11, fontWeight: '700', color: '#475569' },
   cityButtonTextActive: { color: '#fff' },
+
+  radarPinBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+  },
+  radarPinTitle: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  radarPinCode: {
+    color: '#38bdf8',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 6,
+    marginVertical: 4,
+  },
+  radarPinHelper: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
 
   userBar: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   userProfileBtn: { backgroundColor: '#f8fafc', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', alignSelf: 'flex-start' },

@@ -128,19 +128,19 @@ export function OrderOfferModal({
         <View style={styles.modalContainer}>
           {/* Header con Timer de 30 segundos */}
           <View style={styles.headerBar}>
-            <View style={[styles.verticalBadge, { backgroundColor: vInfo.bg }]}>
+            <View style={[styles.verticalBadge, { backgroundColor: vInfo.bg, flex: 1, minWidth: 0, marginRight: 8 }]}>
               <VerticalIcon size={16} color={vInfo.color} />
-              <Text style={[styles.verticalBadgeText, { color: vInfo.color }]}>
+              <Text style={[styles.verticalBadgeText, { color: vInfo.color, flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
                 {vInfo.label}
               </Text>
             </View>
 
-            <View style={styles.timerBadge}>
+            <View style={[styles.timerBadge, { flexShrink: 0 }]}>
               <Clock size={14} color="#f59e0b" />
               <Text style={styles.timerText}>{secondsLeft}s</Text>
             </View>
 
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable onPress={onClose} style={[styles.closeBtn, { flexShrink: 0, marginLeft: 6 }]}>
               <X size={18} color="#94a3b8" />
             </Pressable>
           </View>

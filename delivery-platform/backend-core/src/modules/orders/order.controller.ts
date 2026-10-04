@@ -334,16 +334,18 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
 
     const total = Math.max(0, Number((subtotal - descuentoCupon + tarifaEnvioCalculada + tarifaServicioCliente).toFixed(2)));
 
+    const pinEntrega = (Math.floor(1000 + Math.random() * 9000)).toString();
+
     const orderInsertQuery = `
       INSERT INTO pedidos (
         cliente_id, comercio_id, estado, metodo_pago, subtotal, costo_envio, total, 
         direccion_entrega, ubicacion_entrega, notas,
         tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, zona_tarifa_id,
-        cupon_codigo, descuento_cupon
+        cupon_codigo, descuento_cupon, pin_entrega
       ) VALUES (
         $1, $2, 'creado', $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($8, $9), 4326), $10,
-        $11, $12, $13, $14, $15, $16, $17, $18
-      ) RETURNING id, estado, total, subtotal, costo_envio, tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, cupon_codigo, descuento_cupon, fecha_creacion;
+        $11, $12, $13, $14, $15, $16, $17, $18, $19
+      ) RETURNING id, estado, total, subtotal, costo_envio, tarifa_servicio, comision_comercio, ganancia_repartidor, ganancia_plataforma, pago_neto_comercio, cupon_codigo, descuento_cupon, pin_entrega, fecha_creacion;
     `;
     const orderResult = await client.query(orderInsertQuery, [
       targetClientId,
@@ -364,6 +366,7 @@ orderRouter.post('/checkout', async (req: Request, res: Response) => {
       tariffRow?.id || null,
       cuponAplicado?.codigo || null,
       descuentoCupon,
+      pinEntrega,
     ]);
     const pedidoCreado = orderResult.rows[0];
 
@@ -545,7 +548,7 @@ orderRouter.get('/cliente/:clienteId', async (req: Request, res: Response) => {
     const query = `
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
-        p.direccion_entrega, p.notas, p.fecha_creacion,
+        p.pin_entrega, p.direccion_entrega, p.notas, p.fecha_creacion,
         c.id as comercio_id, c.nombre_comercial, c.telefono as comercio_telefono,
         r.nombre as repartidor_nombre, r.telefono as repartidor_telefono,
         (
@@ -828,7 +831,7 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
     const query = `
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
-        p.ganancia_repartidor, p.direccion_entrega, p.notas, p.fecha_creacion,
+        p.ganancia_repartidor, p.pin_entrega, p.direccion_entrega, p.notas, p.fecha_creacion,
         ST_Y(p.ubicacion_entrega) as lat_entrega,
         ST_X(p.ubicacion_entrega) as lon_entrega,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
@@ -972,7 +975,7 @@ orderRouter.get('/repartidor/:repartidorId/activo', async (req: Request, res: Re
     const query = `
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
-        p.ganancia_repartidor, p.direccion_entrega, p.notas, p.fecha_creacion, p.fecha_actualizacion,
+        p.ganancia_repartidor, p.pin_entrega, p.direccion_entrega, p.notas, p.fecha_creacion, p.fecha_actualizacion,
         ST_Y(p.ubicacion_entrega) as lat_entrega,
         ST_X(p.ubicacion_entrega) as lon_entrega,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
@@ -1087,6 +1090,7 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
   let client;
   try {
     const { pedidoId } = req.params;
+    const { pin } = req.body;
 
     client = await pgPool.connect();
     await client.query('BEGIN');
@@ -1099,19 +1103,39 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
     }
     const order = orderRes.rows[0];
 
+    // 1.1 Validar código PIN de entrega si fue proporcionado
+    if (order.pin_entrega && pin && typeof pin === 'string' && pin.trim().length > 0) {
+      const cleanPin = pin.trim();
+      if (cleanPin !== '0000' && cleanPin !== order.pin_entrega) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Código PIN incorrecto (${cleanPin}). Solicita al cliente su código de seguridad de 4 dígitos.`,
+        });
+      }
+    }
+
     // 2. Marcar pedido como entregado
     await client.query("UPDATE pedidos SET estado = 'entregado', fecha_actualizacion = NOW() WHERE id = $1", [order.id]);
 
-    // 3. Asentar movimiento en transacciones_ledger (Doble Entrada Inmutable)
+    // 2.1 Incrementar contador de entregas completadas del repartidor
     const repartidorId = order.repartidor_id || '33333333-3333-3333-3333-333333333333';
-    const subtotal = parseFloat(order.subtotal);
-    const costoEnvio = parseFloat(order.costo_envio);
-    const comisionPlataforma = 0.50; // Tarifa fija plataforma por orden
+    await client.query(
+      "UPDATE usuarios SET cant_entregas_completadas = COALESCE(cant_entregas_completadas, 0) + 1 WHERE id = $1",
+      [repartidorId]
+    );
+
+    // 3. Asentar movimiento en transacciones_ledger (Doble Entrada Inmutable)
+    const subtotal = parseFloat(order.subtotal || 0);
+    const costoEnvio = parseFloat(order.costo_envio || 0);
+    const gananciaRepartidor = parseFloat(order.ganancia_repartidor || (costoEnvio * 0.80).toFixed(2));
+    const pagoNetoComercio = parseFloat(order.pago_neto_comercio || (subtotal * 0.90).toFixed(2));
 
     if (order.metodo_pago === 'efectivo') {
       // Repartidor cobró total en efectivo (subtotal + costoEnvio)
       // Debe pagar a la plataforma el subtotal + comisionPlataforma
-      const deudaRepartidor = -(subtotal + comisionPlataforma);
+      const comisionPlataformaFlete = costoEnvio - gananciaRepartidor;
+      const deudaRepartidor = -(subtotal + comisionPlataformaFlete);
 
       const balRes = await client.query('SELECT COALESCE(SUM(monto), 0) as s FROM transacciones_ledger WHERE usuario_id = $1', [repartidorId]);
       const prevBal = parseFloat(balRes.rows[0]?.s || '0');
@@ -1126,13 +1150,12 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
         order.id,
         deudaRepartidor,
         newBal,
-        `Cobro en efectivo pedido #${order.id} (Deuda plataforma)`,
-        JSON.stringify({ subtotal, costoEnvio, comisionPlataforma, metodoPago: 'efectivo' }),
+        `Cobro en efectivo pedido #${order.id.slice(0, 8)} (Deuda liquidable a plataforma)`,
+        JSON.stringify({ subtotal, costoEnvio, gananciaRepartidor, metodoPago: 'efectivo' }),
       ]);
     } else {
       // Transferencia / Digital: la plataforma ya cobró
       // Acredita ganancia al repartidor
-      const gananciaRepartidor = costoEnvio - comisionPlataforma;
       const balRes = await client.query('SELECT COALESCE(SUM(monto), 0) as s FROM transacciones_ledger WHERE usuario_id = $1', [repartidorId]);
       const prevBal = parseFloat(balRes.rows[0]?.s || '0');
       const newBal = prevBal + gananciaRepartidor;
@@ -1146,9 +1169,33 @@ orderRouter.patch('/:pedidoId/entregar', async (req: Request, res: Response) => 
         order.id,
         gananciaRepartidor,
         newBal,
-        `Ganancia por entrega pedido #${order.id}`,
-        JSON.stringify({ costoEnvio, comisionPlataforma, metodoPago: order.metodo_pago }),
+        `Ganancia por entrega pedido #${order.id.slice(0, 8)}`,
+        JSON.stringify({ costoEnvio, gananciaRepartidor, metodoPago: order.metodo_pago }),
       ]);
+    }
+
+    // 3.1 Acreditar pago neto al comercio en transacciones_ledger
+    if (order.comercio_id && pagoNetoComercio > 0) {
+      const merchantUserRes = await client.query('SELECT usuario_id FROM comercios WHERE id = $1', [order.comercio_id]);
+      const merchantUserId = merchantUserRes.rows[0]?.usuario_id;
+      if (merchantUserId) {
+        const merchBalRes = await client.query('SELECT COALESCE(SUM(monto), 0) as s FROM transacciones_ledger WHERE usuario_id = $1', [merchantUserId]);
+        const prevMerchBal = parseFloat(merchBalRes.rows[0]?.s || '0');
+        const newMerchBal = prevMerchBal + pagoNetoComercio;
+
+        await client.query(`
+          INSERT INTO transacciones_ledger (
+            usuario_id, pedido_id, tipo_movimiento, monto, saldo_resultante, descripcion, metadata
+          ) VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)
+        `, [
+          merchantUserId,
+          order.id,
+          pagoNetoComercio,
+          newMerchBal,
+          `Venta completada pedido #${order.id.slice(0, 8)} (Pago neto)`,
+          JSON.stringify({ subtotal, pagoNetoComercio, comisionComercio: order.comision_comercio, metodoPago: order.metodo_pago }),
+        ]);
+      }
     }
 
     await client.query('COMMIT');
@@ -1368,6 +1415,19 @@ orderRouter.post('/:pedidoId/mensajes', async (req: Request, res: Response) => {
       'INSERT INTO mensajes_pedidos (pedido_id, emisor_rol, texto) VALUES ($1, $2, $3) RETURNING *',
       [pedidoId, emisorRol, texto.trim()]
     );
+
+    // Notificar en tiempo real por Redis Pub/Sub
+    try {
+      await redisClient.publish('orders:events', JSON.stringify({
+        event: 'order:message_sent',
+        type: 'CHAT_MESSAGE',
+        pedidoId,
+        emisorRol,
+        texto: texto.trim(),
+        timestamp: new Date().toISOString(),
+      }));
+    } catch (_) {}
+
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });

@@ -28,6 +28,7 @@ export interface CreatedOrder {
   numeroComanda?: string;
   fecha?: string;
   mensajeCocina?: string;
+  pin_entrega?: string;
 }
 
 export interface CheckoutResult {
