@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -37,6 +38,8 @@ import {
   FileText,
   Store,
   Layers,
+  Zap,
+  X,
 } from 'lucide-react-native';
 
 import { NavigationLauncher } from './src/services/navigationLauncher';
@@ -51,8 +54,12 @@ import {
   acceptOrder,
   deliverOrder,
   releaseOrder,
+  rejectOffer,
+  fetchDriversList,
   type BackendOrder,
+  type DriverProfile,
 } from './src/services/ordersApi';
+import { OrderOfferModal } from './src/components/OrderOfferModal';
 
 const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1';
 const COURIER_ID = 'usr-repartidor-01';
@@ -78,6 +85,16 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Gestión de 10 Repartidores y Selector de Pruebas
+  const [courierId, setCourierId] = useState(COURIER_ID);
+  const [driversList, setDriversList] = useState<DriverProfile[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
+  const [isDriverSelectorOpen, setIsDriverSelectorOpen] = useState(false);
+
+  // Modal de Oferta y Ruteo Pre-Aceptación (2 Tramos)
+  const [selectedOrderForModal, setSelectedOrderForModal] = useState<BackendOrder | null>(null);
+  const [isOfferModalVisible, setIsOfferModalVisible] = useState(false);
+
   // Wallet state
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
@@ -94,14 +111,31 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   // Telemetry Transmitter (WebSocket)
   const transmitter = useRef<TelemetryTransmitter | null>(null);
 
+  // Cargar lista de los 10 repartidores para pruebas al iniciar
+  useEffect(() => {
+    fetchDriversList(currentApi)
+      .then((drivers) => {
+        setDriversList(drivers);
+        if (drivers.length > 0) {
+          const defaultDriver = drivers.find((d) => d.id === '33333333-3333-3333-3333-333333333333') || drivers[0];
+          setSelectedDriver(defaultDriver);
+          setCourierId(defaultDriver.id);
+        }
+      })
+      .catch((err) => console.warn('Error fetching drivers list:', err));
+  }, [currentApi]);
+
   // Initialize Telemetry
   useEffect(() => {
     const wsUrl = currentApi.replace(/^http/, 'ws').replace(/\/api\/v1$/, '/ws');
-    transmitter.current = new TelemetryTransmitter(wsUrl, COURIER_ID);
+    transmitter.current = new TelemetryTransmitter(wsUrl, courierId);
+    if (isOnline) {
+      transmitter.current.startOnlineTransmission();
+    }
     return () => {
       transmitter.current?.stopTransmission();
     };
-  }, [currentApi]);
+  }, [currentApi, courierId, isOnline]);
 
   // Turno Online/Offline effect
   useEffect(() => {
@@ -161,13 +195,26 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     setLoadingOrders(true);
     try {
       // 1. Consultar pedido activo del repartidor
-      const active = await fetchActiveOrder(currentApi, COURIER_ID);
+      const active = await fetchActiveOrder(currentApi, courierId);
       setActiveOrder(active);
 
-      // Si no hay activo, consultar disponibles
+      // Si no hay activo, consultar disponibles pasando coordenadas del repartidor seleccionado
       if (!active) {
-        const disponibles = await fetchAvailableOrders(currentApi, includePending);
+        const disponibles = await fetchAvailableOrders(
+          currentApi,
+          includePending,
+          selectedDriver ? Number(selectedDriver.lat) : undefined,
+          selectedDriver ? Number(selectedDriver.lon) : undefined,
+          courierId
+        );
         setAvailableOrders(disponibles);
+
+        // Si hay una comanda de oferta prioritaria exclusiva y el modal no está abierto, abrirlo automáticamente
+        const priorityOffer = disponibles.find((o) => o.es_oferta_prioritaria);
+        if (priorityOffer && !isOfferModalVisible && !activeOrder) {
+          setSelectedOrderForModal(priorityOffer);
+          setIsOfferModalVisible(true);
+        }
       } else {
         setAvailableOrders([]);
       }
@@ -177,17 +224,17 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     } finally {
       setLoadingOrders(false);
     }
-  }, [currentApi, isOnline, includePending]);
+  }, [currentApi, isOnline, includePending, courierId, selectedDriver, isOfferModalVisible, activeOrder]);
 
   // Fetch History
   const refreshHistory = useCallback(async () => {
     try {
-      const history = await fetchOrderHistory(currentApi, COURIER_ID);
+      const history = await fetchOrderHistory(currentApi, courierId);
       setOrderHistory(history);
     } catch (err: any) {
       console.warn('Error fetching history:', err.message);
     }
-  }, [currentApi]);
+  }, [currentApi, courierId]);
 
   // Auto-polling when online
   useEffect(() => {
@@ -229,6 +276,32 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     }
   }
 
+  // Abrir Modal de Oferta y Ruteo Pre-Aceptación
+  function handleOpenOfferModal(order: BackendOrder) {
+    setSelectedOrderForModal(order);
+    setIsOfferModalVisible(true);
+  }
+
+  // Rechazar Oferta Previa (Libera la orden al Pool General)
+  async function handleRejectOffer(order: BackendOrder) {
+    try {
+      await rejectOffer(currentApi, order.id);
+      setAvailableOrders((prev) => prev.filter((o) => o.id !== order.id));
+      setIsOfferModalVisible(false);
+      setSelectedOrderForModal(null);
+    } catch (err: any) {
+      console.warn('Error rejecting offer:', err.message);
+      setIsOfferModalVisible(false);
+    }
+  }
+
+  // Aceptar desde el Modal de Oferta
+  async function handleAcceptFromModal(order: BackendOrder) {
+    setIsOfferModalVisible(false);
+    setSelectedOrderForModal(null);
+    await handleAcceptOrder(order);
+  }
+
   // Handle Accepting Order
   async function handleAcceptOrder(order: BackendOrder) {
     if (!isOnline) {
@@ -238,11 +311,11 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     setActionLoading(true);
     setErrorMessage('');
     try {
-      await acceptOrder(currentApi, order.id, COURIER_ID);
+      await acceptOrder(currentApi, order.id, courierId);
       setActiveOrder(order);
       setOrderStep('PICKUP');
       setCheckedItems({});
-      setAvailableOrders(prev => prev.filter(o => o.id !== order.id));
+      setAvailableOrders((prev) => prev.filter((o) => o.id !== order.id));
       Alert.alert(
         '¡Pedido Asignado! 🛵',
         `Dirígete a ${order.comercio_nombre} para retirar el pedido #${order.id.slice(0, 8)}.`,
@@ -349,6 +422,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     );
   }
 
+  // Handle Selecting One of the 10 Drivers
+  function handleSelectDriver(driver: DriverProfile) {
+    setSelectedDriver(driver);
+    setCourierId(driver.id);
+    setIsDriverSelectorOpen(false);
+  }
+
   // Calculations for daily wallet
   const daily = wallet ? dailyWallet(wallet, now) : null;
 
@@ -358,15 +438,29 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         {/* Cabecera Principal / Driver Status Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View style={styles.driverInfo}>
+            <Pressable
+              style={styles.driverInfo}
+              onPress={() => setIsDriverSelectorOpen(true)}
+            >
               <View style={styles.avatarPill}>
                 <Truck color="#10b981" size={20} />
               </View>
               <View>
-                <Text style={styles.driverTitle}>Moto Baba 01 🛵</Text>
-                <Text style={styles.driverLocation}>Cantón Baba · Los Ríos, Ecuador</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.driverTitle}>
+                    {selectedDriver ? selectedDriver.nombre : 'Moto Baba 01 🛵'}
+                  </Text>
+                  <View style={styles.badgeSelector}>
+                    <Text style={styles.badgeSelectorText}>Cambiar (10)</Text>
+                  </View>
+                </View>
+                <Text style={styles.driverLocation}>
+                  {selectedDriver
+                    ? `${selectedDriver.ciudad} · ${selectedDriver.tipo_vehiculo || 'Moto'} · ${selectedDriver.calificacion_promedio || '5.0'} ★`
+                    : 'Cantón Baba · Los Ríos, Ecuador'}
+                </Text>
               </View>
-            </View>
+            </Pressable>
 
             {/* Switch Online/Offline con Radar Visual */}
             <View style={styles.switchWrapper}>
@@ -766,50 +860,111 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       </Pressable>
                     </View>
                   ) : (
-                    availableOrders.map(order => (
-                      <View key={order.id} style={styles.orderCard}>
-                        <View style={styles.orderCardTop}>
-                          <View style={styles.badgeOrder}>
-                            <Store size={14} color="#10b981" />
-                            <Text style={styles.badgeOrderText}>{order.comercio_nombre}</Text>
-                          </View>
-                          <Text style={styles.earningTag}>
-                            +${Number(order.ganancia_repartidor || 0.80).toFixed(2)} ganancia
-                          </Text>
-                        </View>
+                    availableOrders.map(order => {
+                      const isExclusive = Boolean(order.es_oferta_prioritaria);
+                      const vertical = order.tipo_comercio_id || 'restaurante';
+                      const verticalLabel =
+                        vertical === 'supermercado' ? 'Supermercado 🛒' :
+                        vertical === 'farmacia' ? 'Farmacia 💊' :
+                        vertical === 'licoreria' ? 'Licorería 🍷' : 'Restaurante 🍽️';
 
-                        <Text style={styles.orderCardAddress}>
-                          📍 Recoger en: {order.comercio_direccion || 'Baba Centro'}
-                        </Text>
-                        <Text style={styles.orderCardAddress}>
-                          🏁 Entregar a: {order.cliente_nombre} ({order.direccion_entrega})
-                        </Text>
+                      const distRecogida = order.distancia_al_comercio_km !== undefined
+                        ? `${Number(order.distancia_al_comercio_km).toFixed(1)} km`
+                        : null;
+                      const distEntrega = order.distancia_entrega_km !== undefined
+                        ? `${Number(order.distancia_entrega_km).toFixed(1)} km`
+                        : null;
+                      const distTotal = order.distancia_total_km !== undefined
+                        ? `${Number(order.distancia_total_km).toFixed(1)} km`
+                        : null;
 
-                        <View style={styles.orderMetaRow}>
-                          <View style={styles.paymentPill}>
-                            <Text style={styles.paymentPillText}>
-                              {order.metodo_pago === 'efectivo'
-                                ? `💵 Cobro Efectivo: $${Number(order.total).toFixed(2)}`
-                                : `💳 Pagado Transferencia ($${Number(order.total).toFixed(2)})`}
-                            </Text>
-                          </View>
-                          {order.items && (
-                            <Text style={styles.itemCountText}>
-                              {order.items.reduce((acc, i) => acc + i.cantidad, 0)} ítems
-                            </Text>
+                      return (
+                        <View key={order.id} style={[styles.orderCard, isExclusive && styles.orderCardExclusive]}>
+                          {isExclusive && (
+                            <View style={styles.exclusiveBanner}>
+                              <Zap size={14} color="#f59e0b" />
+                              <Text style={styles.exclusiveBannerText}>OFERTA PRIORITARIA EXCLUSIVA (30s)</Text>
+                            </View>
                           )}
-                        </View>
 
-                        <Pressable
-                          style={[styles.acceptButton, actionLoading && styles.disabledBtn]}
-                          disabled={actionLoading}
-                          onPress={() => handleAcceptOrder(order)}
-                        >
-                          <Truck size={18} color="#042f2e" />
-                          <Text style={styles.acceptButtonText}>ACEPTAR PEDIDO</Text>
-                        </Pressable>
-                      </View>
-                    ))
+                          <View style={styles.orderCardTop}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <View style={styles.badgeOrder}>
+                                <Store size={14} color="#10b981" />
+                                <Text style={styles.badgeOrderText}>{order.comercio_nombre}</Text>
+                              </View>
+                              <View style={styles.verticalTag}>
+                                <Text style={styles.verticalTagText}>{verticalLabel}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.earningTag}>
+                              +${Number(order.ganancia_repartidor || 0.80).toFixed(2)} ganancia
+                            </Text>
+                          </View>
+
+                          {/* Métricas de 2 Tramos */}
+                          <View style={styles.routePillsRow}>
+                            <View style={styles.routePill}>
+                              <Text style={styles.routePillLabel}>🛵 Al local:</Text>
+                              <Text style={styles.routePillValue}>{distRecogida || '1.2 km'}</Text>
+                            </View>
+                            <Text style={styles.routePillArrow}>→</Text>
+                            <View style={styles.routePill}>
+                              <Text style={styles.routePillLabel}>🏁 Entrega:</Text>
+                              <Text style={styles.routePillValue}>{distEntrega || '2.0 km'}</Text>
+                            </View>
+                            <View style={[styles.routePill, styles.routePillTotal]}>
+                              <Text style={styles.routePillTotalText}>Total: {distTotal || '3.2 km'}</Text>
+                            </View>
+                          </View>
+
+                          <Text style={styles.orderCardAddress} numberOfLines={1}>
+                            🏬 Recoger: {order.comercio_direccion || 'Baba Centro'}
+                          </Text>
+                          <Text style={styles.orderCardAddress} numberOfLines={1}>
+                            📍 Entregar: {order.cliente_nombre} ({order.direccion_entrega})
+                          </Text>
+
+                          <View style={styles.orderMetaRow}>
+                            <View style={styles.paymentPill}>
+                              <Text style={styles.paymentPillText}>
+                                {order.metodo_pago === 'efectivo'
+                                  ? `💵 Cobro Efectivo: $${Number(order.total).toFixed(2)}`
+                                  : `💳 Pagado Transferencia ($${Number(order.total).toFixed(2)})`}
+                              </Text>
+                            </View>
+                            {order.items && (
+                              <Text style={styles.itemCountText}>
+                                {order.items.reduce((acc, i) => acc + i.cantidad, 0)} ítems
+                              </Text>
+                            )}
+                          </View>
+
+                          {/* Botones: Ver Mapa Completo & Aceptar */}
+                          <View style={styles.cardActionsRow}>
+                            <Pressable
+                              style={styles.btnInspectMap}
+                              onPress={() => {
+                                setSelectedOrderForModal(order);
+                                setIsOfferModalVisible(true);
+                              }}
+                            >
+                              <Compass size={16} color="#38bdf8" />
+                              <Text style={styles.btnInspectMapText}>VER RUTA & DETALLES</Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={[styles.acceptButtonCompact, actionLoading && styles.disabledBtn]}
+                              disabled={actionLoading}
+                              onPress={() => handleAcceptOrder(order)}
+                            >
+                              <Truck size={16} color="#042f2e" />
+                              <Text style={styles.acceptButtonCompactText}>ACEPTAR</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      );
+                    })
                   )}
                 </View>
               )}
@@ -1016,6 +1171,104 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             </View>
           )}
         </ScrollView>
+
+        {/* Modal de Selección de Repartidor de Pruebas (10 repartidores) */}
+        <Modal
+          visible={isDriverSelectorOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setIsDriverSelectorOpen(false)}
+        >
+          <View style={styles.selectorModalOverlay}>
+            <View style={styles.selectorModalContent}>
+              <View style={styles.selectorHeader}>
+                <View>
+                  <Text style={styles.selectorTitle}>Cambiar Perfil de Repartidor</Text>
+                  <Text style={styles.selectorSubtitle}>
+                    10 Repartidores activos en Baba, Babahoyo y Montalvo
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.selectorCloseBtn}
+                  onPress={() => setIsDriverSelectorOpen(false)}
+                >
+                  <X size={20} color="#94a3b8" />
+                </Pressable>
+              </View>
+
+              <ScrollView style={styles.selectorList}>
+                {driversList.map((driver) => {
+                  const isCurrent = driver.id === courierId;
+                  const isBaba = driver.ciudad.toLowerCase().includes('baba') && !driver.ciudad.toLowerCase().includes('babahoyo');
+                  const isBabahoyo = driver.ciudad.toLowerCase().includes('babahoyo');
+                  const cityColor = isBaba ? '#10b981' : isBabahoyo ? '#38bdf8' : '#a855f7';
+
+                  return (
+                    <Pressable
+                      key={driver.id}
+                      style={[
+                        styles.driverOptionCard,
+                        isCurrent && styles.driverOptionCardActive,
+                      ]}
+                      onPress={() => handleSelectDriver(driver)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View
+                            style={[
+                              styles.driverIconPill,
+                              { backgroundColor: isCurrent ? '#059669' : '#1e293b' },
+                            ]}
+                          >
+                            <Truck size={18} color={isCurrent ? '#ffffff' : '#94a3b8'} />
+                          </View>
+                          <View>
+                            <Text style={styles.driverOptionName}>{driver.nombre}</Text>
+                            <Text style={styles.driverOptionPhone}>{driver.telefono}</Text>
+                          </View>
+                        </View>
+                        <View style={[styles.cityBadge, { borderColor: cityColor }]}>
+                          <Text style={[styles.cityBadgeText, { color: cityColor }]}>
+                            {driver.ciudad}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.driverOptionMeta}>
+                        <Text style={styles.driverOptionMetaText}>
+                          🛵 {driver.tipo_vehiculo || 'Moto'} {driver.placa_vehiculo ? `(${driver.placa_vehiculo})` : ''}
+                        </Text>
+                        <Text style={styles.driverOptionMetaText}>
+                          ⭐ {driver.calificacion_promedio} ({driver.cant_entregas_completadas} entregas)
+                        </Text>
+                        <Text style={styles.driverOptionMetaText}>
+                          📍 {Number(driver.lat).toFixed(4)}, {Number(driver.lon).toFixed(4)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal de Oferta y Ruteo Pre-Aceptación (2 Tramos + SVG + Waze/Google Maps + Temporizador) */}
+        <OrderOfferModal
+          visible={isOfferModalVisible}
+          order={selectedOrderForModal}
+          onAccept={(order) => {
+            setIsOfferModalVisible(false);
+            handleAcceptOrder(order);
+          }}
+          onReject={(order) => {
+            handleRejectOffer(order);
+          }}
+          onClose={() => {
+            setIsOfferModalVisible(false);
+            setSelectedOrderForModal(null);
+          }}
+        />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -1597,4 +1850,221 @@ const styles = StyleSheet.create({
     borderColor: '#78350f',
   },
   releaseButtonText: { color: '#fca5a5', fontSize: 12, fontWeight: '700' },
+
+  // Selector & Exclusive & 2-Stage Route Styles
+  badgeSelector: {
+    backgroundColor: '#064e3b',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  badgeSelectorText: {
+    color: '#34d399',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  orderCardExclusive: {
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
+  },
+  exclusiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  exclusiveBannerText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  verticalTag: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verticalTagText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  routePillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 8,
+    flexWrap: 'wrap',
+  },
+  routePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  routePillLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+  },
+  routePillValue: {
+    color: '#f8fafc',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  routePillArrow: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  routePillTotal: {
+    backgroundColor: '#064e3b',
+    borderColor: '#059669',
+    borderWidth: 1,
+  },
+  routePillTotalText: {
+    color: '#34d399',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  btnInspectMap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1e293b',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0284c7',
+  },
+  btnInspectMapText: {
+    color: '#38bdf8',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  acceptButtonCompact: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#34d399',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  acceptButtonCompactText: {
+    color: '#042f2e',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+
+  // Selector Modal
+  selectorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+  },
+  selectorModalContent: {
+    backgroundColor: '#0f172a',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '85%',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  selectorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  selectorTitle: {
+    color: '#f8fafc',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  selectorSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  selectorCloseBtn: {
+    padding: 6,
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+  },
+  selectorList: {
+    marginBottom: 20,
+  },
+  driverOptionCard: {
+    backgroundColor: '#1e293b',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  driverOptionCardActive: {
+    borderColor: '#10b981',
+    backgroundColor: '#064e3b22',
+  },
+  driverIconPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverOptionName: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  driverOptionPhone: {
+    color: '#94a3b8',
+    fontSize: 11,
+  },
+  cityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  cityBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  driverOptionMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  driverOptionMetaText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+  },
 });

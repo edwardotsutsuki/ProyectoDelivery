@@ -69,6 +69,7 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 | **Fase 5** | Billetera Virtual y Ledger Inmutable | **Completada ✅** | Antigravity (Ledger SQL + UI Billetera) |
 | **Fase 5.11** | Arquitectura Multi-Vertical, Categorías y Stock Opcional | **Completada ✅** | Antigravity |
 | **Fase 5.12** | Experiencia Especializada Retail & Modo Picking Operativo | **Completada ✅** | Antigravity |
+| **Fase 5.13** | Despacho Inteligente de Repartidores, Ruteo en 2 Tramos y Multi-Vertical | **Completada ✅** | Antigravity |
 
 ---
 
@@ -357,6 +358,31 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
   - [x] App Cliente: 13/13 pruebas unitarias aprobadas, `tsc --noEmit` limpio (0 errores).
   - [x] App Repartidor: 14/14 pruebas unitarias aprobadas, `tsc --noEmit` limpio (0 errores).
   - [x] Backend Core: `tsc --noEmit` limpio (0 errores), 9 contenedores Docker saludables y comunicados.
+
+---
+
+### 🛵 Fase 5.13: Despacho Inteligente de Repartidores, Ruteo en 2 Tramos y Multi-Vertical (Completada ✅)
+- [x] **Migración de Base de Datos y Población de Flota (10 Repartidores)**:
+  - [x] Migración `06_repartidores_y_despacho.sql` ejecutada: agregadas columnas para tracking de vehículos (`tipo_vehiculo`, `modelo_vehiculo`, `placa_vehiculo`, `cant_entregas_completadas`, `calificacion_promedio`) y metadatos de vertical y despacho (`preferencia_sustitucion`, `numero_bultos`, `receta_url`, `requiere_receta`, `control_edad_18`, `repartidor_asignado_inicial`, `fecha_expiracion_oferta`).
+  - [x] 10 Repartidores reales creados y geoposicionados estratégicamente en Los Ríos:
+    - *Cantón Baba (4)*: Carlos Mendoza (Honda GL 150), Anthony Vera (Yamaha FZ 150), David Barzola (Bajaj Boxer), Jhonny Moreira (Bici Carga).
+    - *Cantón Babahoyo (4)*: Bryan Coello (Suzuki GN 125), Washington Silva (Daytona Wolf), Félix Macías (E-Bike Urbana), Darwin Quintana (Shineray Custom).
+    - *Cantón Montalvo (2)*: Cristian Morán (Pulsar NS 200), Jonathan Vargas (Honda Storm).
+- [x] **Motor de Despacho y Cálculo de Métricas en 2 Tramos**:
+  - [x] `GET /api/v1/orders/disponibles/reparto` enriquecido con coordenadas del conductor (`?lat=&lon=&repartidorId=`): calcula automáticamente la distancia y ETA al local (`distancia_al_comercio_km`, `eta_recogida_min`), la distancia y ETA al cliente (`distancia_entrega_km`, `eta_entrega_min`) y la distancia total del recorrido.
+  - [x] Mecánica de oferta exclusiva con temporizador de 30 segundos: si el pedido tiene un repartidor prioritario y la oferta no ha expirado, sólo ese repartidor puede ver y aceptar la oferta.
+  - [x] Fallback automático al Pool General: al expirar los 30 segundos o al rechazar la oferta (`PATCH /:pedidoId/rechazar-oferta`), la orden queda disponible para todos los repartidores activos de la zona mediante broadcast Redis Pub/Sub.
+  - [x] Protección contra condiciones de carrera: bloqueo concurrente en `PATCH /:pedidoId/tomar` retornando `409 Conflict` si otro repartidor ya tomó la orden.
+- [x] **Pantalla y Modal de Oferta en App Repartidor (`OrderOfferModal.tsx`)**:
+  - [x] Temporizador visual con barra de progreso regresiva de 30 segundos (estilo PedidosYa / Uber Eats).
+  - [x] Mapa de ruta vectorial interactivo en SVG renderizado dentro de la app: visualiza la posición del motorizado (🛵), el comercio (🏬) y el cliente (📍), con trazo cyan para recogida y trazo esmeralda para entrega.
+  - [x] Enlaces de navegación externa instantánea: botones dedicados para abrir directamente en Google Maps y Waze.
+  - [x] Ficha de orden adaptativa por vertical de negocio:
+    - *Restaurantes*: Alerta de comida caliente, no volcar sopas/caldos, mochila térmica obligatoria.
+    - *Supermercados*: Indicador de bultos/fundas de víveres, preferencia de sustitución con llamada al cliente.
+    - *Farmacias*: Verificación de recetas médicas obligatorias.
+    - *Licorerías*: Protocolo de verificación de cédula (+18 años).
+  - [x] Selector interactivo en la cabecera para alternar al instante entre los 10 repartidores y comprobar cómo cambian las distancias, órdenes y rutas según el motorizado seleccionado.
 
 ---
 

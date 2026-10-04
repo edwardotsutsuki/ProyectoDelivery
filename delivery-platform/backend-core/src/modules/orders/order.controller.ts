@@ -802,12 +802,27 @@ orderRouter.patch('/:pedidoId/rechazar', async (req: Request, res: Response) => 
 });
 
 // 6. Listar pedidos listos para despacho (para la App del Repartidor en Baba)
+// 6. Listar pedidos listos para despacho (para la App del Repartidor en Baba, Babahoyo y Montalvo)
 orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
   try {
     const includePending = req.query.includePending === 'true';
+    const rawDriverId = req.query.repartidorId as string;
+    const driverId = rawDriverId ? resolveDriverId(rawDriverId) : null;
+    const rawLat = req.query.lat as string;
+    const rawLon = req.query.lon as string;
+
+    const hasCoords = rawLat !== undefined && rawLon !== undefined && !isNaN(parseFloat(rawLat)) && !isNaN(parseFloat(rawLon));
+    const driverLat = hasCoords ? parseFloat(rawLat) : null;
+    const driverLon = hasCoords ? parseFloat(rawLon) : null;
+
     const statusClause = includePending
       ? `p.estado::text IN ('listo', 'READY_FOR_PICKUP', 'creado', 'preparando')`
       : `p.estado::text IN ('listo', 'READY_FOR_PICKUP')`;
+
+    const params: any[] = [];
+    if (hasCoords) {
+      params.push(driverLon, driverLat);
+    }
 
     const query = `
       SELECT 
@@ -817,12 +832,43 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
         ST_X(p.ubicacion_entrega) as lon_entrega,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
         c.nombre_comercial as comercio_nombre, c.direccion as comercio_direccion,
+        c.telefono as comercio_telefono,
         ST_Y(c.ubicacion) as comercio_lat, ST_X(c.ubicacion) as comercio_lon,
+        c.tipo_comercio_id,
+        COALESCE(tc.nombre, 'Restaurante') as tipo_negocio_nombre,
+        COALESCE(tc.tipo_layout, 'restaurante') as vertical_layout,
+        COALESCE(tc.requiere_cocina, true) as requiere_cocina,
+        COALESCE(tc.permite_recetas, false) as permite_recetas,
+        COALESCE(tc.control_edad_18, false) as control_edad_18,
+        COALESCE(p.preferencia_sustitucion, 'reemplazar_similar') as preferencia_sustitucion,
+        COALESCE(p.numero_bultos, 1) as numero_bultos,
+        p.receta_url,
+        COALESCE(p.requiere_receta, false) as pedido_requiere_receta,
+        COALESCE(p.control_edad_18, false) as pedido_control_edad_18,
+        p.repartidor_asignado_inicial,
+        p.fecha_expiracion_oferta,
+        CASE 
+          WHEN p.repartidor_asignado_inicial IS NOT NULL AND p.fecha_expiracion_oferta > NOW() THEN true
+          ELSE false
+        END as es_oferta_prioritaria,
+        ${hasCoords 
+          ? `ROUND((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) / 1000.0)::numeric, 2) as distancia_al_comercio_km,` 
+          : `0.80 as distancia_al_comercio_km,`}
+        ROUND((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0)::numeric, 2) as distancia_entrega_km,
+        ${hasCoords 
+          ? `ROUND(((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) + ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega)) / 1000.0)::numeric, 2) as distancia_total_km,` 
+          : `ROUND((0.80 + (ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0))::numeric, 2) as distancia_total_km,`}
+        ${hasCoords 
+          ? `GREATEST(1, ROUND(((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) / 1000.0) / 25.0 * 60)::numeric, 0)) as eta_recogida_min,` 
+          : `3 as eta_recogida_min,`}
+        GREATEST(1, ROUND(((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0) / 25.0 * 60)::numeric, 0)) as eta_entrega_min,
         (
           SELECT json_agg(json_build_object(
-            'producto', COALESCE(pr.nombre, 'Plato especial'),
+            'producto', COALESCE(pr.nombre, 'Ítem'),
             'cantidad', pi.cantidad,
-            'precio_unitario', pi.precio_unitario
+            'precio_unitario', pi.precio_unitario,
+            'unidad_medida', COALESCE(pr.unidad_medida, 'unidad'),
+            'requiere_receta', COALESCE(pr.requiere_receta, false)
           ))
           FROM pedidos_items pi
           LEFT JOIN productos pr ON pr.id = pi.producto_id
@@ -831,8 +877,34 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
       FROM pedidos p
       JOIN usuarios u ON u.id = p.cliente_id
       JOIN comercios c ON c.id = p.comercio_id
+      LEFT JOIN tipos_comercio tc ON tc.id = c.tipo_comercio_id
       WHERE ${statusClause} AND p.repartidor_id IS NULL
-      ORDER BY p.fecha_creacion ASC;
+        AND (
+          p.repartidor_asignado_inicial IS NULL 
+          OR p.fecha_expiracion_oferta IS NULL 
+          OR p.fecha_expiracion_oferta <= NOW()
+          ${driverId ? `OR p.repartidor_asignado_inicial::text = '${driverId}'` : ''}
+        )
+      ORDER BY ${hasCoords ? 'distancia_al_comercio_km ASC, ' : ''}p.fecha_creacion ASC;
+    `;
+    const result = await pgPool.query(query, params);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 6.01 Listar los 10 repartidores del ecosistema (para pruebas y torre de control)
+orderRouter.get('/repartidores/lista', async (_req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        id, nombre, email, telefono, tipo_vehiculo, modelo_vehiculo, placa_vehiculo,
+        cant_entregas_completadas, calificacion_promedio, estado_activo,
+        ST_Y(ubicacion) as lat, ST_X(ubicacion) as lon
+      FROM usuarios
+      WHERE rol = 'repartidor' AND estado_activo = true
+      ORDER BY nombre ASC;
     `;
     const result = await pgPool.query(query);
     res.json({ success: true, count: result.rows.length, data: result.rows });
@@ -841,10 +913,52 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
   }
 });
 
-// Helper para resolver ID de repartidor
+// 6.02 Rechazar o ignorar oferta prioritaria (Abre la orden inmediatamente al Pool General)
+orderRouter.patch('/:pedidoId/rechazar-oferta', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    await pgPool.query(
+      `UPDATE pedidos 
+       SET repartidor_asignado_inicial = NULL, fecha_expiracion_oferta = NULL 
+       WHERE id::text = $1 AND repartidor_id IS NULL`,
+      [pedidoId]
+    );
+
+    // Emitir evento por Redis Pub/Sub para que todos los repartidores se enteren
+    const eventPayload = {
+      event: 'order:pool_opened',
+      type: 'ORDER_AVAILABLE_POOL',
+      pedidoId,
+      timestamp: new Date().toISOString(),
+    };
+    try {
+      await redisClient.publish('orders:events', JSON.stringify(eventPayload));
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Oferta liberada. El pedido ahora está disponible en el Pool General para todos.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Mapeo y resolución de alias para los 10 repartidores del ecosistema
+const DRIVER_ALIASES: Record<string, string> = {
+  'usr-repartidor-01': '33333333-3333-3333-3333-333333333333',
+  'rep-baba-01': '33333333-3333-3333-3333-333333333333',
+  'rep-baba-02': '33333333-3333-3333-3333-333333333332',
+  'rep-baba-03': '33333333-3333-3333-3333-333333333334',
+  'rep-baba-04': '33333333-3333-3333-3333-333333333335',
+  'rep-bba-05': '33333333-3333-3333-3333-333333333336',
+  'rep-bba-06': '33333333-3333-3333-3333-333333333337',
+  'rep-bba-07': '33333333-3333-3333-3333-333333333338',
+  'rep-bba-08': '33333333-3333-3333-3333-333333333339',
+  'rep-mont-09': '33333333-3333-3333-3333-333333333340',
+  'rep-mont-10': '33333333-3333-3333-3333-333333333341',
+};
+
 function resolveDriverId(id: string): string {
-  if (id === 'usr-repartidor-01' || id === 'rep-baba-01') {
-    return '33333333-3333-3333-3333-333333333333';
+  if (DRIVER_ALIASES[id]) {
+    return DRIVER_ALIASES[id];
   }
   return id;
 }
@@ -920,10 +1034,17 @@ orderRouter.patch('/:pedidoId/tomar', async (req: Request, res: Response) => {
     const updateQuery = `
       UPDATE pedidos 
       SET estado = 'en_camino', repartidor_id = $1, fecha_actualizacion = NOW()
-      WHERE id::text = $2
+      WHERE id::text = $2 AND (repartidor_id IS NULL OR repartidor_id = $1)
       RETURNING id, estado, comercio_id, cliente_id;
     `;
     const result = await pgPool.query(updateQuery, [repartidorId, pedidoId]);
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Lo sentimos, este pedido ya fue tomado por otro compañero repartidor.',
+      });
+    }
 
     // Publicar evento en Redis Pub/Sub
     const eventPayload = {

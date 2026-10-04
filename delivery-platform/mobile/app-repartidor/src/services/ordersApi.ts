@@ -1,9 +1,11 @@
-// Servicio de integración API de Pedidos y Despacho para Repartidores en Baba y Babahoyo
+// Servicio de integración API de Pedidos y Despacho para Repartidores en Baba, Babahoyo y Montalvo
 
 export interface OrderItem {
   producto: string;
   cantidad: number;
   precio_unitario: number;
+  unidad_medida?: string;
+  requiere_receta?: boolean;
 }
 
 export interface BackendOrder {
@@ -22,11 +24,48 @@ export interface BackendOrder {
   cliente_telefono?: string;
   comercio_nombre: string;
   comercio_direccion: string;
+  comercio_telefono?: string;
   comercio_lat: number;
   comercio_lon: number;
   items?: OrderItem[];
   fecha_creacion?: string;
   fecha_actualizacion?: string;
+  // Campos de Vertical de Negocio
+  tipo_comercio_id?: string;
+  tipo_negocio_nombre?: string;
+  vertical_layout?: string;
+  requiere_cocina?: boolean;
+  permite_recetas?: boolean;
+  control_edad_18?: boolean;
+  preferencia_sustitucion?: string;
+  numero_bultos?: number;
+  receta_url?: string;
+  pedido_requiere_receta?: boolean;
+  pedido_control_edad_18?: boolean;
+  // Ruteo y Tiempos de Despacho
+  repartidor_asignado_inicial?: string;
+  fecha_expiracion_oferta?: string;
+  es_oferta_prioritaria?: boolean;
+  distancia_al_comercio_km?: number;
+  distancia_entrega_km?: number;
+  distancia_total_km?: number;
+  eta_recogida_min?: number;
+  eta_entrega_min?: number;
+}
+
+export interface DriverProfile {
+  id: string;
+  nombre: string;
+  email: string;
+  telefono: string;
+  tipo_vehiculo: string;
+  modelo_vehiculo: string;
+  placa_vehiculo: string;
+  cant_entregas_completadas: number;
+  calificacion_promedio: string | number;
+  lat: number;
+  lon: number;
+  ciudad: string;
 }
 
 const COMMON_HEADERS = {
@@ -38,9 +77,19 @@ const COMMON_HEADERS = {
 export async function fetchAvailableOrders(
   apiBaseUrl: string,
   includePending = true,
+  driverLat?: number,
+  driverLon?: number,
+  repartidorId?: string,
   signal?: AbortSignal
 ): Promise<BackendOrder[]> {
-  const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/disponibles/reparto?includePending=${includePending}`;
+  let url = `${apiBaseUrl.replace(/\/$/, '')}/orders/disponibles/reparto?includePending=${includePending}`;
+  if (driverLat !== undefined && driverLon !== undefined && !isNaN(driverLat) && !isNaN(driverLon)) {
+    url += `&lat=${driverLat}&lon=${driverLon}`;
+  }
+  if (repartidorId) {
+    url += `&repartidorId=${encodeURIComponent(repartidorId)}`;
+  }
+
   const response = await fetch(url, {
     method: 'GET',
     headers: COMMON_HEADERS,
@@ -158,3 +207,47 @@ export async function releaseOrder(
   return true;
 }
 
+export async function rejectOffer(
+  apiBaseUrl: string,
+  pedidoId: string
+): Promise<boolean> {
+  const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/rechazar-oferta`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: COMMON_HEADERS,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.message || `No se pudo rechazar la oferta del pedido #${pedidoId.slice(0, 8)}`);
+  }
+
+  return true;
+}
+
+export async function fetchDriversList(apiBaseUrl: string): Promise<DriverProfile[]> {
+  const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/repartidores/lista`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: COMMON_HEADERS,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error ${response.status} al consultar lista de repartidores.`);
+  }
+
+  const data = await response.json();
+  if (data.success && Array.isArray(data.data)) {
+    return data.data.map((d: any) => {
+      let ciudad = 'Baba';
+      const n = (d.nombre || '').toLowerCase();
+      if (n.includes('babahoyo')) ciudad = 'Babahoyo';
+      else if (n.includes('montalvo')) ciudad = 'Montalvo';
+      return {
+        ...d,
+        ciudad,
+      };
+    });
+  }
+  return [];
+}
