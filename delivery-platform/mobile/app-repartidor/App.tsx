@@ -490,6 +490,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   function handleSelectDriver(driver: DriverProfile) {
     setSelectedDriver(driver);
     setCourierId(driver.id);
+    if (driver.lat && driver.lon) {
+      transmitter.current?.setLocation(Number(driver.lat), Number(driver.lon));
+    }
     setIsDriverSelectorOpen(false);
   }
 

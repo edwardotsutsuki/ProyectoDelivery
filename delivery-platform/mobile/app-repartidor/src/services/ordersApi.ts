@@ -241,8 +241,12 @@ export async function fetchDriversList(apiBaseUrl: string): Promise<DriverProfil
     return data.data.map((d: any) => {
       let ciudad = 'Baba';
       const n = (d.nombre || '').toLowerCase();
-      if (n.includes('babahoyo')) ciudad = 'Babahoyo';
-      else if (n.includes('montalvo')) ciudad = 'Montalvo';
+      const lon = parseFloat(d.lon);
+      if (n.includes('babahoyo') || (lon > -79.60 && lon < -79.40)) {
+        ciudad = 'Babahoyo';
+      } else if (n.includes('montalvo') || (lon > -79.40 && lon < -79.10)) {
+        ciudad = 'Montalvo';
+      }
       return {
         ...d,
         ciudad,
