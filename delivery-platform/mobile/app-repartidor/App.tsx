@@ -434,7 +434,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
         {/* Cabecera Principal / Driver Status Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
@@ -950,7 +950,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                               }}
                             >
                               <Compass size={16} color="#38bdf8" />
-                              <Text style={styles.btnInspectMapText}>VER RUTA & DETALLES</Text>
+                              <Text style={styles.btnInspectMapText} numberOfLines={1}>VER RUTA</Text>
                             </Pressable>
 
                             <Pressable
@@ -959,7 +959,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                               onPress={() => handleAcceptOrder(order)}
                             >
                               <Truck size={16} color="#042f2e" />
-                              <Text style={styles.acceptButtonCompactText}>ACEPTAR</Text>
+                              <Text style={styles.acceptButtonCompactText} numberOfLines={1}>ACEPTAR</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -1360,7 +1360,7 @@ const styles = StyleSheet.create({
     right: 12,
   },
 
-  contentContainer: { padding: 16, paddingBottom: 40 },
+  contentContainer: { padding: 16, paddingBottom: 80 },
 
   errorBanner: {
     flexDirection: 'row',
@@ -1985,6 +1985,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
+    paddingBottom: 28,
     maxHeight: '85%',
     borderTopWidth: 1,
     borderTopColor: '#334155',
@@ -2014,7 +2015,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   selectorList: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   driverOptionCard: {
     backgroundColor: '#1e293b',

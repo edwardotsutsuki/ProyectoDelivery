@@ -386,10 +386,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    height: '92%',
     maxHeight: '92%',
-    paddingBottom: 24,
     borderWidth: 1,
     borderColor: '#334155',
+    display: 'flex',
+    flexDirection: 'column',
   },
   headerBar: {
     flexDirection: 'row',
@@ -444,6 +446,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f59e0b',
   },
   scrollContent: {
+    flex: 1,
     paddingHorizontal: 20,
   },
   earningCard: {
@@ -505,9 +508,11 @@ const styles = StyleSheet.create({
   mapActionRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   navExternalBtn: {
     flex: 1,
+    minWidth: 120,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -516,7 +521,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(56, 189, 248, 0.3)',
     borderRadius: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   navExternalText: {
     color: '#38bdf8',
@@ -672,14 +677,17 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
+    gap: 10,
+    paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 24,
     borderTopWidth: 1,
     borderTopColor: '#1e293b',
+    backgroundColor: '#0f172a',
   },
   rejectBtn: {
     flex: 1,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -688,7 +696,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.4)',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   rejectBtnText: {
     color: '#ef4444',
@@ -697,17 +705,18 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     flex: 2,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#10b981',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   acceptBtnText: {
     color: '#042f2e',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
     letterSpacing: 0.5,
   },

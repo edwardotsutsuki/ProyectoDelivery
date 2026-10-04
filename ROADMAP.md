@@ -383,6 +383,19 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
     - *Farmacias*: Verificación de recetas médicas obligatorias.
     - *Licorerías*: Protocolo de verificación de cédula (+18 años).
   - [x] Selector interactivo en la cabecera para alternar al instante entre los 10 repartidores y comprobar cómo cambian las distancias, órdenes y rutas según el motorizado seleccionado.
+- [x] **Corrección de Viewports y Botones Desbordados en Dispositivos Móviles**:
+  - [x] Solucionado desbordamiento inferior en `OrderOfferModal.tsx`: contenedor reestructurado con `height: '92%'`, `display: 'flex'`, `flexDirection: 'column'` y `scrollContent: { flex: 1 }` para que la botonera de decisión ("Rechazar" / "ACEPTAR PEDIDO") permanezca anclada de forma fija en la base sin salirse de la pantalla física.
+  - [x] `SafeAreaView` ajustado con `edges={['top', 'left', 'right', 'bottom']}` y `contentContainer` con `paddingBottom: 80` protegiendo los controles frente a la barra de navegación táctil de Android y el home indicator de iOS.
+  - [x] Botones de inspección de tarjetas ("VER RUTA" y "ACEPTAR") compactados con `numberOfLines={1}` evitando solapamientos en pantallas angostas.
+  - [x] Enlaces a Waze y Google Maps asegurados con `flexWrap: 'wrap'` y anchos mínimos responsivos.
+- [x] **Expansión Operativa al Cantón Montalvo (Piloto en Vivo)**:
+  - [x] Migración `08_comercios_montalvo.sql` aplicada:
+    - *Asadero & Picantería El Rincón Montalvino* (Restaurante en Parque Central de Montalvo, `-1.7905, -79.2880`).
+    - *Supermercado & Víveres San Vicente Montalvo* (Supermercado en Calle Babahoyo, `-1.7898, -79.2865`).
+    - *Farmacia Comunitaria Montalvo Salud* (Farmacia frente al Subcentro, `-1.7912, -79.2875`).
+    - *Depósito y Licorería Montalvo Nights* (Licorera en Malecón del Río Cristal, `-1.7918, -79.2895`).
+  - [x] Catálogo completo de 10 productos y 4 categorías insertados con precios y unidades de medida.
+  - [x] 3 Pedidos de prueba listos para entrega en Montalvo, con prioridad de despacho geodésico para `rep-mont-09` (Cristian Morán) a solo 60 metros de distancia del local.
 
 ---
 
