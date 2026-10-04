@@ -546,10 +546,11 @@ orderRouter.get('/cliente/:clienteId', async (req: Request, res: Response) => {
       SELECT 
         p.id, p.estado, p.metodo_pago, p.subtotal, p.costo_envio, p.total,
         p.direccion_entrega, p.notas, p.fecha_creacion,
-        c.nombre_comercial, c.telefono as comercio_telefono,
+        c.id as comercio_id, c.nombre_comercial, c.telefono as comercio_telefono,
         r.nombre as repartidor_nombre, r.telefono as repartidor_telefono,
         (
           SELECT json_agg(json_build_object(
+            'id', pi.producto_id,
             'producto', COALESCE(pr.nombre, 'Plato especial'),
             'cantidad', pi.cantidad,
             'precio_unitario', pi.precio_unitario
@@ -1296,9 +1297,18 @@ orderRouter.post('/:pedidoId/calificar', async (req: Request, res: Response) => 
     const nuevoPromedio = parseFloat(avgRes.rows[0]?.promedio || '5.0');
     await pgPool.query('UPDATE comercios SET calificacion = $1 WHERE id = $2', [nuevoPromedio, order.comercio_id]);
 
+    if (order.repartidor_id && calificacionRepartidor) {
+      const avgDriverRes = await pgPool.query(
+        'SELECT ROUND(AVG(calificacion_repartidor), 1) as promedio FROM calificaciones_pedidos WHERE repartidor_id = $1',
+        [order.repartidor_id]
+      );
+      const nuevoPromedioDriver = parseFloat(avgDriverRes.rows[0]?.promedio || '5.0');
+      await pgPool.query('UPDATE usuarios SET calificacion_promedio = $1 WHERE id = $2', [nuevoPromedioDriver, order.repartidor_id]);
+    }
+
     res.json({
       success: true,
-      message: '¡Gracias por calificar tu pedido! Tu opinión ayuda a la comunidad de Baba.',
+      message: '¡Gracias por calificar tu pedido! Tu opinión ayuda a la comunidad.',
       data: {
         calificacionId: califRes.rows[0]?.id,
         nuevoPromedioComercio: nuevoPromedio,
@@ -1327,6 +1337,37 @@ orderRouter.post('/push-token', async (req: Request, res: Response) => {
     await pgPool.query(upsertQuery, [usuarioId, pushToken, plataforma || 'expo', dispositivo || 'mobile']);
 
     res.json({ success: true, message: 'Push token registrado exitosamente.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// 12. Chat en Vivo de Pedidos (Cliente <-> Repartidor)
+orderRouter.get('/:pedidoId/mensajes', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    const result = await pgPool.query(
+      'SELECT id, pedido_id, emisor_rol, texto, leido, fecha_creacion FROM mensajes_pedidos WHERE pedido_id = $1 ORDER BY fecha_creacion ASC',
+      [pedidoId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+orderRouter.post('/:pedidoId/mensajes', async (req: Request, res: Response) => {
+  try {
+    const { pedidoId } = req.params;
+    const { emisorRol, texto } = req.body;
+    if (!emisorRol || !texto || !texto.trim()) {
+      return res.status(400).json({ success: false, message: 'emisorRol y texto son requeridos.' });
+    }
+    const result = await pgPool.query(
+      'INSERT INTO mensajes_pedidos (pedido_id, emisor_rol, texto) VALUES ($1, $2, $3) RETURNING *',
+      [pedidoId, emisorRol, texto.trim()]
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

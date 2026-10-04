@@ -70,6 +70,8 @@ app.use('/api/v1/catalog', catalogRouter);
 app.use('/api/catalog', catalogRouter);
 app.use('/api/v1/ledger', ledgerRouter);
 app.use('/api/ledger', ledgerRouter);
+app.use('/api/v1/finance', ledgerRouter);
+app.use('/api/finance', ledgerRouter);
 app.use('/api/v1/tracking', trackingRouter);
 app.use('/api/tracking', trackingRouter);
 app.use('/api/v1/users', userRouter);

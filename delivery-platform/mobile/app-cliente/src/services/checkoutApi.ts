@@ -10,7 +10,7 @@ export interface OrderSubmissionPayload {
   comercioId: string;
   items: Array<{ id: string; cantidad: number; precio: number }>;
   direccionEntrega: string;
-  metodoPago: 'efectivo' | 'transferencia';
+  metodoPago: 'efectivo' | 'transferencia' | 'tarjeta_credito';
   latEntrega: number;
   lonEntrega: number;
   costoEnvio: number;
@@ -49,7 +49,7 @@ export interface BuildOrderOptions {
 export function buildOrderPayload(
   items: CheckoutItem[],
   address: string,
-  payment: 'efectivo' | 'transferencia',
+  payment: 'efectivo' | 'transferencia' | 'tarjeta_credito',
   comercioId = '55555555-5555-5555-5555-555555555555',
   clienteId = 'usr-cliente-01',
   options?: BuildOrderOptions

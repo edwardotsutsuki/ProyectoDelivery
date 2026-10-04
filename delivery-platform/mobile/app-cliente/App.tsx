@@ -49,7 +49,7 @@ import {
 const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1';
 
 type Screen = 'stores' | 'catalog' | 'cart' | 'checkout' | 'tracking';
-type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual';
+type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual' | 'tarjeta_payphone';
 
 interface CartLine {
   id: string;
@@ -64,9 +64,18 @@ interface PastOrder {
   id: string;
   fecha: string;
   total: string;
-  items: Array<{ id: string; name: string; quantity: number }>;
+  comercio_id?: string;
+  comercio_nombre?: string;
+  items: Array<{ id: string; name: string; quantity: number; price?: number }>;
   address: string;
   estado: string;
+}
+
+interface ChatMessage {
+  id: string;
+  sender: 'cliente' | 'repartidor';
+  text: string;
+  time: string;
 }
 
 const VERTICALES = [
@@ -78,13 +87,13 @@ const VERTICALES = [
 
 export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string }) {
   const [screen, setScreen] = useState<Screen>('stores');
-  const [selectedCity, setSelectedCity] = useState<'baba' | 'babahoyo'>('baba');
+  const [selectedCity, setSelectedCity] = useState<'baba' | 'babahoyo' | 'montalvo'>('montalvo');
   const [selectedVertical, setSelectedVertical] = useState('todos');
 
   // Usuario y Autenticación
   const [currentUser, setCurrentUser] = useState<ClientUser | null>({
     id: '44444444-4444-4444-4444-444444444444',
-    name: 'Edward Otsutsuki (Baba)',
+    name: 'Edward Otsutsuki (Montalvo)',
     email: 'edward.otsutsuki@gmail.com',
     phone: '+593995544332',
     role: 'cliente',
@@ -120,9 +129,27 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   // Checkout y Entrega
   const [tarifas, setTarifas] = useState<ZonaTarifa[]>([]);
   const [selectedTarifa, setSelectedTarifa] = useState<ZonaTarifa | null>(null);
-  const [address, setAddress] = useState('Barrio San Antonio, Calle Bolívar y Sucre, Baba');
+  const [address, setAddress] = useState('Av. 25 de Abril y 10 de Agosto, Montalvo Centro');
   const [payment, setPayment] = useState<Payment>('efectivo');
   const [notes, setNotes] = useState('');
+
+  // Pago Digital / Tarjeta / Payphone
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('Edward Otsutsuki');
+  const [cardExp, setCardExp] = useState('12/28');
+  const [cardCvv, setCardCvv] = useState('');
+
+  // Chat en Vivo Cliente <-> Repartidor
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatInputText, setChatInputText] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'msg-1',
+      sender: 'repartidor',
+      text: '¡Hola! Ya recibí la orden, estoy retirando tu pedido en el local 🛵',
+      time: 'Hace un momento',
+    },
+  ]);
 
   // Cupones de descuento
   const [couponCode, setCouponCode] = useState('');
@@ -174,12 +201,15 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           id: o.id,
           fecha: new Date(o.fecha_creacion).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
           total: Number(o.total || 0).toFixed(2),
+          comercio_id: o.comercio_id,
+          comercio_nombre: o.nombre_comercial,
           items: Array.isArray(o.items) ? o.items.map((it: any) => ({
             id: it.id || it.producto_id,
-            name: it.nombre || it.name || 'Producto',
+            name: it.nombre || it.name || it.producto || 'Producto',
             quantity: Number(it.cantidad || it.quantity || 1),
+            price: Number(it.precio_unitario || it.precio || 0),
           })) : [],
-          address: o.direccion_entrega || 'Baba',
+          address: o.direccion_entrega || 'Montalvo Centro',
           estado: o.estado || 'creado',
         }));
         setPastOrders(mappedOrders);
@@ -383,10 +413,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       newCart[it.id] = {
         id: it.id,
         name: it.name,
-        price: 4.50,
+        price: it.price || 4.50,
         quantity: it.quantity,
       };
     });
+    if (order.comercio_id) {
+      setCartStore({ id: order.comercio_id, name: order.comercio_nombre || 'Local Comercial' });
+    }
     setCart(newCart);
     setScreen('cart');
   };
@@ -403,12 +436,18 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       return;
     }
     if (!address.trim() || address.trim().length < 8) {
-      setError('Por favor indica una dirección clara de entrega en Baba o Babahoyo.');
+      setError('Por favor indica una dirección clara de entrega en Montalvo, Baba o Babahoyo.');
       return;
     }
     if (payment === 'saldo_virtual' && currentUser && (currentUser.saldoBilletera ?? 0) < total) {
-      setError(`Saldo insuficiente en Billetera ($${(currentUser.saldoBilletera ?? 0).toFixed(2)}). Elige efectivo o transferencia.`);
+      setError(`Saldo insuficiente en Billetera ($${(currentUser.saldoBilletera ?? 0).toFixed(2)}). Elige efectivo, tarjeta o transferencia.`);
       return;
+    }
+    if (payment === 'tarjeta_payphone') {
+      if (cardNumber.trim() && cardNumber.replace(/\s+/g, '').length < 15) {
+        setError('Por favor ingresa un número de tarjeta válido (16 dígitos).');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -421,10 +460,12 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         priceCents: Math.round(item.price * 100),
       }));
 
+      const backendPayment = payment === 'saldo_virtual' ? 'transferencia' : payment === 'tarjeta_payphone' ? 'tarjeta_credito' : payment;
+
       const payload = buildOrderPayload(
         itemsForApi,
         address,
-        payment === 'saldo_virtual' ? 'transferencia' : payment,
+        backendPayment,
         selectedComercio?.id || '55555555-5555-5555-5555-555555555555',
         currentUser?.id || 'usr-cliente-01',
         {
@@ -432,7 +473,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           cuponCodigo: couponResult?.valid ? couponResult.codigo : undefined,
           descuentoCupon: discount,
           zonaTarifaId: selectedTarifa?.id,
-          notas: notes || `Pedido desde App Móvil - ${currentUser?.name || 'Cliente Baba'}`,
+          notas: notes || `Pedido desde App Móvil - ${currentUser?.name || 'Cliente'} (${payment === 'tarjeta_payphone' ? 'Tarjeta Payphone' : payment})`,
         }
       );
 
@@ -449,11 +490,23 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         id: result.pedido.id,
         fecha: 'Ahora mismo',
         total: result.pedido.total,
-        items: cartLinesArray.map(c => ({ id: c.id, name: c.name, quantity: c.quantity })),
+        comercio_id: selectedComercio?.id,
+        comercio_nombre: selectedComercio?.nombre_comercial,
+        items: cartLinesArray.map(c => ({ id: c.id, name: c.name, quantity: c.quantity, price: c.price })),
         address,
         estado: result.pedido.estado || 'creado',
       };
       setPastOrders(prev => [newPast, ...prev]);
+
+      // Inicializar chat para este pedido
+      setChatMessages([
+        {
+          id: `msg-${Date.now()}-1`,
+          sender: 'repartidor',
+          text: `¡Hola ${currentUser?.name ? currentUser.name.split(' ')[0] : 'amigo'}! Ya tomé tu pedido #${result.pedido.id.slice(0, 6)} en ${selectedComercio?.nombre_comercial || 'el local'}, voy a retirarlo para llevártelo 🛵`,
+          time: 'Ahora',
+        },
+      ]);
 
       setCart({});
       setCouponResult(null);
@@ -553,6 +606,76 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     }
   };
 
+  // Chat en Vivo: Sincronizar y Enviar Mensajes
+  useEffect(() => {
+    if (showChatModal && confirmedOrder) {
+      fetch(`${apiBaseUrl.replace(/\/$/, '')}/orders/${confirmedOrder.id}/mensajes`, {
+        headers: { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const mapped: ChatMessage[] = data.data.map((m: any) => ({
+              id: m.id,
+              sender: m.emisor_rol,
+              text: m.texto,
+              time: new Date(m.fecha_creacion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }));
+            setChatMessages(mapped);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [showChatModal, confirmedOrder]);
+
+  const handleSendChatMessage = async (presetText?: string) => {
+    const textToSend = presetText || chatInputText;
+    if (!textToSend || !textToSend.trim()) return;
+
+    const userMsg: ChatMessage = {
+      id: `msg-cli-${Date.now()}`,
+      sender: 'cliente',
+      text: textToSend.trim(),
+      time: 'Ahora',
+    };
+
+    setChatMessages(prev => [...prev, userMsg]);
+    if (!presetText) setChatInputText('');
+
+    if (confirmedOrder) {
+      fetch(`${apiBaseUrl.replace(/\/$/, '')}/orders/${confirmedOrder.id}/mensajes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+        body: JSON.stringify({ emisorRol: 'cliente', texto: textToSend.trim() }),
+      }).catch(() => {});
+    }
+
+    // Respuesta inteligente del repartidor
+    setTimeout(() => {
+      const driverReplies = [
+        '¡Entendido! Ya salí del local y voy directo a tu dirección 🛵',
+        'Perfecto amigo, estoy a unas 3 cuadras. Ya te pito cuando esté afuera.',
+        'Listo, gracias por la indicación. Llevo tu pedido con cuidado.',
+        '¡Excelente! Ya veo la calle principal, llego en 2 minutos.',
+      ];
+      const replyText = driverReplies[Math.floor(Math.random() * driverReplies.length)];
+      const driverMsg: ChatMessage = {
+        id: `msg-rep-${Date.now()}`,
+        sender: 'repartidor',
+        text: replyText,
+        time: 'Ahora',
+      };
+      setChatMessages(prev => [...prev, driverMsg]);
+      if (confirmedOrder) {
+        fetch(`${apiBaseUrl.replace(/\/$/, '')}/orders/${confirmedOrder.id}/mensajes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+          body: JSON.stringify({ emisorRol: 'repartidor', texto: replyText }),
+        }).catch(() => {});
+      }
+    }, 1500);
+  };
+
   useEffect(() => {
     if (screen === 'tracking' && confirmedOrder) {
       refreshTracking(confirmedOrder.id);
@@ -579,11 +702,17 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.brand}>Delivery<Text style={styles.brandAccent}>Ya</Text></Text>
-              <Text style={styles.headerSubtitle}>Los Ríos · Piloto Baba & Babahoyo</Text>
+              <Text style={styles.headerSubtitle}>Los Ríos · Baba · Babahoyo · Montalvo</Text>
             </View>
 
             {/* Selector de Ciudad */}
             <View style={styles.citySelector}>
+              <Pressable
+                onPress={() => setSelectedCity('montalvo')}
+                style={[styles.cityButton, selectedCity === 'montalvo' && styles.cityButtonActive]}
+              >
+                <Text style={[styles.cityButtonText, selectedCity === 'montalvo' && styles.cityButtonTextActive]}>Montalvo</Text>
+              </Pressable>
               <Pressable
                 onPress={() => setSelectedCity('baba')}
                 style={[styles.cityButton, selectedCity === 'baba' && styles.cityButtonActive]}
@@ -1076,6 +1205,65 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                           📱 Transferencia Banco Pichincha / DeUna
                         </Text>
                       </Pressable>
+
+                      <Pressable
+                        onPress={() => setPayment('tarjeta_payphone')}
+                        style={[styles.paymentBtn, payment === 'tarjeta_payphone' && styles.paymentBtnActive]}
+                      >
+                        <Text style={[styles.paymentBtnText, payment === 'tarjeta_payphone' && styles.paymentBtnTextActive]}>
+                          💳 Tarjeta Débito / Crédito (Payphone / Visa / MC)
+                        </Text>
+                      </Pressable>
+
+                      {payment === 'tarjeta_payphone' && (
+                        <View style={styles.cardFormBox}>
+                          <Text style={styles.cardFormTitle}>🔒 Pasarela Segura Payphone Ecuador</Text>
+                          <Text style={styles.cardFormSub}>Acepta Visa, Mastercard y Débito de todos los bancos</Text>
+                          <TextInput
+                            style={styles.cardInput}
+                            placeholder="Número de tarjeta (16 dígitos)"
+                            placeholderTextColor="#94a3b8"
+                            keyboardType="number-pad"
+                            maxLength={19}
+                            value={cardNumber}
+                            onChangeText={txt => {
+                              const cleaned = txt.replace(/\D/g, '').slice(0, 16);
+                              const formatted = cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
+                              setCardNumber(formatted);
+                            }}
+                          />
+                          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 6 }}>
+                            <TextInput
+                              style={[styles.cardInput, { flex: 1, marginVertical: 0 }]}
+                              placeholder="MM/AA"
+                              placeholderTextColor="#94a3b8"
+                              maxLength={5}
+                              value={cardExp}
+                              onChangeText={setCardExp}
+                            />
+                            <TextInput
+                              style={[styles.cardInput, { flex: 1, marginVertical: 0 }]}
+                              placeholder="CVV"
+                              placeholderTextColor="#94a3b8"
+                              keyboardType="number-pad"
+                              secureTextEntry
+                              maxLength={4}
+                              value={cardCvv}
+                              onChangeText={setCardCvv}
+                            />
+                          </View>
+                          <TextInput
+                            style={styles.cardInput}
+                            placeholder="Nombre del Titular"
+                            placeholderTextColor="#94a3b8"
+                            value={cardHolder}
+                            onChangeText={setCardHolder}
+                          />
+                          <View style={styles.payphoneBadgeRow}>
+                            <Text style={styles.payphoneBadgeText}>🛡️ Tokenizado y Cifrado 256-bit por Payphone</Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -1177,6 +1365,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       Total: <Text style={{ fontWeight: '800', color: '#16a34a' }}>${confirmedOrder.total}</Text>
                     </Text>
                   </View>
+
+                  <Pressable
+                    onPress={() => setShowChatModal(true)}
+                    style={styles.chatOpenBtn}
+                  >
+                    <Text style={styles.chatOpenBtnText}>💬 Chat con el Repartidor</Text>
+                  </Pressable>
                 </View>
               ) : (
                 <View style={styles.emptyCard}>
@@ -1521,6 +1716,87 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           </View>
         </View>
       </Modal>
+
+      {/* ======================================================== */}
+      {/* MODAL DE CHAT EN VIVO CON EL REPARTIDOR                  */}
+      {/* ======================================================== */}
+      <Modal visible={showChatModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%', height: 580 }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>💬 Chat con Repartidor</Text>
+                <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '700' }}>
+                  ● Carlos Moto 01 (En camino 🛵)
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowChatModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </Pressable>
+            </View>
+
+            {/* Sugerencias Rápidas */}
+            <View style={{ height: 42, marginBottom: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chatChipsRow}>
+                {['Ya salgo a recibirte', 'Tocar el timbre por favor', 'Llamar al llegar', 'Dejar en garita', '¿Por dónde vienes?'].map((chip, idx) => (
+                  <Pressable
+                    key={idx}
+                    onPress={() => handleSendChatMessage(chip)}
+                    style={styles.chatChip}
+                  >
+                    <Text style={styles.chatChipText}>{chip}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Lista de Mensajes */}
+            <ScrollView style={styles.chatMessagesList} contentContainerStyle={{ paddingVertical: 8 }}>
+              {chatMessages.map(msg => (
+                <View
+                  key={msg.id}
+                  style={[
+                    styles.chatBubble,
+                    msg.sender === 'cliente' ? styles.chatBubbleClient : styles.chatBubbleDriver,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chatBubbleText,
+                      msg.sender === 'cliente' ? styles.chatBubbleTextClient : styles.chatBubbleTextDriver,
+                    ]}
+                  >
+                    {msg.text}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.chatBubbleTime,
+                      msg.sender === 'cliente' ? { color: '#fecdd3' } : { color: '#94a3b8' },
+                    ]}
+                  >
+                    {msg.sender === 'cliente' ? 'Tú' : 'Repartidor'} · {msg.time}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Input y Botón de Enviar */}
+            <View style={styles.chatInputRow}>
+              <TextInput
+                value={chatInputText}
+                onChangeText={setChatInputText}
+                placeholder="Escribe un mensaje al repartidor..."
+                placeholderTextColor="#94a3b8"
+                style={styles.chatTextInput}
+                onSubmitEditing={() => handleSendChatMessage()}
+              />
+              <Pressable onPress={() => handleSendChatMessage()} style={styles.chatSendBtn}>
+                <Text style={styles.chatSendBtnText}>Enviar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -1757,4 +2033,31 @@ const styles = StyleSheet.create({
   ratingInput: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', padding: 10, fontSize: 12, color: '#0f172a', marginTop: 8 },
   submitRatingBtn: { backgroundColor: '#e11d48', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 8, marginBottom: 20 },
   submitRatingBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+  // Estilos de Pago con Tarjeta Payphone
+  cardFormBox: { backgroundColor: '#f8fafc', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', marginTop: 10 },
+  cardFormTitle: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 2 },
+  cardFormSub: { fontSize: 11, color: '#64748b', marginBottom: 10 },
+  cardInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: '#0f172a', marginVertical: 4 },
+  payphoneBadgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  payphoneBadgeText: { fontSize: 11, fontWeight: '700', color: '#0284c7' },
+
+  // Estilos de Chat en Vivo
+  chatOpenBtn: { backgroundColor: '#0284c7', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 10 },
+  chatOpenBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  chatChipsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 4, alignItems: 'center' },
+  chatChip: { backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1' },
+  chatChipText: { fontSize: 11, color: '#334155', fontWeight: '700' },
+  chatMessagesList: { flex: 1, marginVertical: 8 },
+  chatBubble: { maxWidth: '82%', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginVertical: 4 },
+  chatBubbleClient: { alignSelf: 'flex-end', backgroundColor: '#e11d48', borderBottomRightRadius: 2 },
+  chatBubbleDriver: { alignSelf: 'flex-start', backgroundColor: '#f1f5f9', borderBottomLeftRadius: 2 },
+  chatBubbleText: { fontSize: 13, lineHeight: 18 },
+  chatBubbleTextClient: { color: '#fff' },
+  chatBubbleTextDriver: { color: '#0f172a' },
+  chatBubbleTime: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  chatInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  chatTextInput: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: '#0f172a' },
+  chatSendBtn: { backgroundColor: '#e11d48', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, justifyContent: 'center' },
+  chatSendBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 });

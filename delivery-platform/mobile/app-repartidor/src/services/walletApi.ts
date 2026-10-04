@@ -11,3 +11,34 @@ export async function fetchWallet(baseUrl: string, signal: AbortSignal, request:
     return parseWallet(await response.json());
   } finally { clearTimeout(timeout); signal.removeEventListener('abort', abort); }
 }
+
+export async function settleDebt(
+  baseUrl: string,
+  repartidorId: string,
+  monto: number,
+  comprobante: string,
+  notas?: string,
+  request: typeof fetch = fetch
+) {
+  const response = await request(`${baseUrl.replace(/\/$/, '')}/finance/liquidar-caja`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
+    },
+    body: JSON.stringify({
+      repartidorId,
+      monto,
+      comprobante,
+      notas: notas || 'Liquidación desde App Móvil Repartidor',
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || `Error al procesar liquidación (HTTP ${response.status})`);
+  }
+
+  return response.json();
+}

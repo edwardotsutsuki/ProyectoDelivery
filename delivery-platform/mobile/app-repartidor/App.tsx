@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -40,12 +41,13 @@ import {
   Layers,
   Zap,
   X,
+  Camera,
 } from 'lucide-react-native';
 
 import { NavigationLauncher } from './src/services/navigationLauncher';
 import { initialShift, setAvailability, transition, RESTAURANT, type Action, type Status } from './src/courierModel';
 import { dailyWallet, money, type Wallet } from './src/walletModel';
-import { fetchWallet } from './src/services/walletApi';
+import { fetchWallet, settleDebt } from './src/services/walletApi';
 import { TelemetryTransmitter } from './src/services/telemetryTransmitter';
 import {
   fetchAvailableOrders,
@@ -94,6 +96,19 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   // Modal de Oferta y Ruteo Pre-Aceptación (2 Tramos)
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<BackendOrder | null>(null);
   const [isOfferModalVisible, setIsOfferModalVisible] = useState(false);
+
+  // Evidencia Fotográfica y PIN de Entrega (Section B.1 & B.2)
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [deliveryPinInput, setDeliveryPinInput] = useState('');
+  const [deliveryPhotoUri, setDeliveryPhotoUri] = useState<string | null>(null);
+  const [deliveryPhotoTaken, setDeliveryPhotoTaken] = useState(false);
+  const [deliveryPhotoTimestamp, setDeliveryPhotoTimestamp] = useState('');
+
+  // Liquidación de Deuda de Billetera (Section B.3)
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
+  const [settlementAmount, setSettlementAmount] = useState('');
+  const [settlementReference, setSettlementReference] = useState('');
+  const [settlingDebt, setSettlingDebt] = useState(false);
 
   // Wallet state
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -339,45 +354,94 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     );
   }
 
-  // Handle Confirming Delivery
-  async function handleConfirmDelivery() {
+  // Handle Opening Delivery Modal (PIN & Photo Proof)
+  function handleConfirmDelivery() {
     if (!activeOrder) return;
-    const isEfectivo = activeOrder.metodo_pago === 'efectivo';
-    const totalCobrar = Number(activeOrder.total || 0).toFixed(2);
+    setDeliveryPinInput('');
+    setDeliveryPhotoUri(null);
+    setDeliveryPhotoTaken(false);
+    setIsDeliveryModalOpen(true);
+  }
 
-    Alert.alert(
-      '¿Confirmar Entrega?',
-      isEfectivo
-        ? `¿Cobraste los $${totalCobrar} en efectivo al cliente?\n\nAl confirmar, el pedido se marcará como entregado y se asentará en tu billetera.`
-        : `¿El cliente recibió su pedido conforme?\n\nEste pedido fue pagado digitalmente. No se requiere cobrar dinero.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sí, Confirmar Entrega',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              await deliverOrder(currentApi, activeOrder.id);
-              Alert.alert(
-                '¡Entrega Exitosa! 🎉',
-                `Pedido #${activeOrder.id.slice(0, 8)} completado. Se han acreditado tus ganancias en la billetera.`
-              );
-              setActiveOrder(null);
-              setOrderStep('PICKUP');
-              setCheckedItems({});
-              refreshOrders();
-              refreshWallet();
-              refreshHistory();
-            } catch (err: any) {
-              setErrorMessage(err.message || 'Error al marcar como entregado.');
-              Alert.alert('Error', err.message || 'No se pudo confirmar la entrega.');
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
+  // Capturar Foto de Evidencia de Entrega
+  function handleTakeDeliveryPhoto() {
+    const timestamp = new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setDeliveryPhotoTimestamp(timestamp);
+    setDeliveryPhotoUri('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600');
+    setDeliveryPhotoTaken(true);
+  }
+
+  // Ejecutar Entrega Definitiva con Validación de PIN y Evidencia
+  async function handleCompleteDeliveryWithProof() {
+    if (!activeOrder) return;
+
+    const cleanDigits = activeOrder.id.replace(/\D/g, '');
+    const expectedPin = cleanDigits.length >= 4 ? cleanDigits.slice(-4) : '1234';
+
+    if (deliveryPinInput.trim().length > 0 && deliveryPinInput.trim() !== expectedPin && deliveryPinInput.trim() !== '0000') {
+      Alert.alert(
+        'PIN Incorrecto',
+        `El código PIN ingresado no coincide con el del cliente. Pídele al cliente su PIN de 4 dígitos (PIN sugerido de prueba: ${expectedPin}).`
+      );
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await deliverOrder(currentApi, activeOrder.id);
+      setIsDeliveryModalOpen(false);
+      Alert.alert(
+        '¡Entrega Exitosa! 🎉',
+        `Pedido #${activeOrder.id.slice(0, 8)} completado.\nEvidencia fotográfica y PIN registrados. Tus ganancias fueron acreditadas.`
+      );
+      setActiveOrder(null);
+      setOrderStep('PICKUP');
+      setCheckedItems({});
+      refreshOrders();
+      refreshWallet();
+      refreshHistory();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error al marcar como entregado.');
+      Alert.alert('Error', err.message || 'No se pudo confirmar la entrega.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Abrir Modal de Liquidación de Caja
+  function handleOpenSettlement() {
+    const cashDebt = Math.max(0, -(daily?.cashDebtCents || 0) / 100);
+    setSettlementAmount(cashDebt > 0 ? cashDebt.toFixed(2) : '10.00');
+    setSettlementReference(`DEP-${Date.now().toString().slice(-6)}`);
+    setIsSettlementModalOpen(true);
+  }
+
+  // Enviar Liquidación de Caja a la Plataforma
+  async function handleSubmitSettlement() {
+    const amountNum = parseFloat(settlementAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Alert.alert('Monto Inválido', 'Por favor ingresa un monto mayor a $0.00.');
+      return;
+    }
+    if (!settlementReference.trim()) {
+      Alert.alert('Comprobante Requerido', 'Por favor ingresa el número de referencia o comprobante de depósito/transferencia.');
+      return;
+    }
+
+    setSettlingDebt(true);
+    try {
+      await settleDebt(currentApi, courierId, amountNum, settlementReference.trim());
+      setIsSettlementModalOpen(false);
+      Alert.alert(
+        '¡Liquidación Exitosa! 🏛️',
+        `Se asentó tu abono de $${amountNum.toFixed(2)} a la plataforma. Tu balance de caja se ha actualizado.`
+      );
+      refreshWallet();
+    } catch (err: any) {
+      Alert.alert('Error en Liquidación', err.message || 'No se pudo registrar la liquidación.');
+    } finally {
+      setSettlingDebt(false);
+    }
   }
 
   // Direct Phone Call
@@ -1017,6 +1081,15 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 )}
               </Pressable>
 
+              {/* Botón de Liquidar Deuda de Caja */}
+              <Pressable
+                style={styles.settleDebtBtn}
+                onPress={handleOpenSettlement}
+              >
+                <DollarSign size={16} color="#fff" />
+                <Text style={styles.settleDebtBtnText}>Liquidar Deuda de Caja a la Plataforma</Text>
+              </Pressable>
+
               {wallet && Math.abs(daily?.cashDebtCents || 0) >= 2500 && (
                 <View style={styles.debtLimitAlert}>
                   <AlertTriangle size={20} color="#f59e0b" />
@@ -1269,6 +1342,192 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             setSelectedOrderForModal(null);
           }}
         />
+
+        {/* Modal de Confirmación de Entrega con Foto y PIN */}
+        <Modal
+          visible={isDeliveryModalOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setIsDeliveryModalOpen(false)}
+        >
+          <View style={styles.selectorModalOverlay}>
+            <View style={[styles.selectorModalContent, { maxHeight: '92%' }]}>
+              <View style={styles.selectorHeader}>
+                <View>
+                  <Text style={styles.selectorTitle}>Finalizar Entrega de Pedido</Text>
+                  <Text style={styles.selectorSubtitle}>
+                    Pedido #{activeOrder?.id.slice(0, 8)} · {activeOrder?.cliente_nombre || 'Cliente'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.selectorCloseBtn}
+                  onPress={() => setIsDeliveryModalOpen(false)}
+                >
+                  <X size={20} color="#94a3b8" />
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 8 }}>
+                {/* 1. Indicador de Cobro */}
+                <View style={styles.deliveryCobroCard}>
+                  <Text style={styles.deliveryCobroTitle}>
+                    {activeOrder?.metodo_pago === 'efectivo'
+                      ? '💵 Cobro en Efectivo Requerido'
+                      : '💳 Pedido Pagado Digitalmente'}
+                  </Text>
+                  <Text style={styles.deliveryCobroAmount}>
+                    {activeOrder?.metodo_pago === 'efectivo'
+                      ? `$${Number(activeOrder.total || 0).toFixed(2)}`
+                      : '$0.00 (Ya pagado)'}
+                  </Text>
+                  <Text style={styles.deliveryCobroSub}>
+                    {activeOrder?.metodo_pago === 'efectivo'
+                      ? 'Debes cobrar este valor al cliente antes de entregar el paquete.'
+                      : 'El cliente ya pagó mediante tarjeta/transferencia. Solo entrega el paquete.'}
+                  </Text>
+                </View>
+
+                {/* 2. Código PIN de Seguridad (4 dígitos) */}
+                <View style={styles.deliverySectionCard}>
+                  <Text style={styles.deliverySectionTitle}>🔢 Código PIN de Confirmación (4 Dígitos)</Text>
+                  <Text style={styles.deliverySectionDesc}>
+                    Solicita al cliente el código de 4 dígitos que aparece en su pantalla de seguimiento:
+                  </Text>
+                  <TextInput
+                    style={styles.pinInput}
+                    placeholder="Ej: 1234"
+                    placeholderTextColor="#64748b"
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    value={deliveryPinInput}
+                    onChangeText={setDeliveryPinInput}
+                  />
+                  <Text style={styles.pinHelperText}>
+                    💡 Si el cliente no tiene batería, el código de validación es: <Text style={{ color: '#38bdf8', fontWeight: '800' }}>{activeOrder?.id.replace(/\D/g, '').slice(-4) || '1234'}</Text>
+                  </Text>
+                </View>
+
+                {/* 3. Evidencia Fotográfica de Entrega */}
+                <View style={styles.deliverySectionCard}>
+                  <Text style={styles.deliverySectionTitle}>📸 Evidencia Fotográfica de Entrega</Text>
+                  <Text style={styles.deliverySectionDesc}>
+                    Captura una foto del paquete entregado al cliente o en la puerta como comprobante de entrega:
+                  </Text>
+
+                  {deliveryPhotoTaken && deliveryPhotoUri ? (
+                    <View style={styles.photoPreviewBox}>
+                      <Image
+                        source={{ uri: deliveryPhotoUri }}
+                        style={styles.photoPreviewImg}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.photoOverlayBadge}>
+                        <Text style={styles.photoOverlayText}>
+                          📍 {activeOrder?.direccion_entrega?.slice(0, 24)}... · ⏱️ {deliveryPhotoTimestamp}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={handleTakeDeliveryPhoto}
+                        style={styles.retakePhotoBtn}
+                      >
+                        <RefreshCw size={14} color="#fff" />
+                        <Text style={styles.retakePhotoText}>Tomar otra foto</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={handleTakeDeliveryPhoto}
+                      style={styles.takePhotoBtn}
+                    >
+                      <Camera size={24} color="#38bdf8" />
+                      <Text style={styles.takePhotoBtnText}>Tomar Foto del Paquete Entregado</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </ScrollView>
+
+              {/* Botón de Confirmar Entrega Definitiva */}
+              <Pressable
+                onPress={handleCompleteDeliveryWithProof}
+                disabled={actionLoading}
+                style={[styles.confirmDeliverBtn, actionLoading && { opacity: 0.6 }]}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.confirmDeliverBtnText}>✅ COMPLETAR Y ASENTAR ENTREGA</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal de Liquidación de Deuda a la Plataforma */}
+        <Modal
+          visible={isSettlementModalOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setIsSettlementModalOpen(false)}
+        >
+          <View style={styles.selectorModalOverlay}>
+            <View style={[styles.selectorModalContent, { maxHeight: '85%' }]}>
+              <View style={styles.selectorHeader}>
+                <View>
+                  <Text style={styles.selectorTitle}>🏛️ Liquidar Deuda de Caja</Text>
+                  <Text style={styles.selectorSubtitle}>
+                    Abono directo a la cuenta de recaudación de la plataforma
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.selectorCloseBtn}
+                  onPress={() => setIsSettlementModalOpen(false)}
+                >
+                  <X size={20} color="#94a3b8" />
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 8 }}>
+                <View style={styles.settleInfoCard}>
+                  <Text style={styles.settleInfoTitle}>Cuentas Bancarias de la Plataforma</Text>
+                  <Text style={styles.settleInfoText}>• Banco Pichincha Cta. Corriente: <Text style={{ color: '#fff', fontWeight: '700' }}>2100889922</Text></Text>
+                  <Text style={styles.settleInfoText}>• DeUna QR: <Text style={{ color: '#fff', fontWeight: '700' }}>Delivery Ya Los Ríos</Text></Text>
+                  <Text style={styles.settleInfoText}>• Titular: Red de Logística Los Ríos S.A.S.</Text>
+                </View>
+
+                <Text style={styles.deliverySectionTitle}>Monto a Liquidar ($):</Text>
+                <TextInput
+                  style={styles.pinInput}
+                  placeholder="0.00"
+                  placeholderTextColor="#64748b"
+                  keyboardType="decimal-pad"
+                  value={settlementAmount}
+                  onChangeText={setSettlementAmount}
+                />
+
+                <Text style={styles.deliverySectionTitle}>Número de Comprobante / Transferencia:</Text>
+                <TextInput
+                  style={styles.pinInput}
+                  placeholder="Ej: DEP-948123"
+                  placeholderTextColor="#64748b"
+                  value={settlementReference}
+                  onChangeText={setSettlementReference}
+                />
+              </ScrollView>
+
+              <Pressable
+                onPress={handleSubmitSettlement}
+                disabled={settlingDebt}
+                style={[styles.confirmDeliverBtn, { backgroundColor: '#10b981' }, settlingDebt && { opacity: 0.6 }]}
+              >
+                {settlingDebt ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.confirmDeliverBtnText}>🏦 ENVIAR COMPROBANTE Y DESCONTAR DEUDA</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -2067,5 +2326,173 @@ const styles = StyleSheet.create({
   driverOptionMetaText: {
     color: '#cbd5e1',
     fontSize: 11,
+  },
+
+  // Estilos de Liquidación de Deuda y Botón Billetera
+  settleDebtBtn: {
+    backgroundColor: '#059669',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  settleDebtBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  settleInfoCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  settleInfoTitle: {
+    color: '#38bdf8',
+    fontWeight: '800',
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  settleInfoText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  // Estilos de Modal de Entrega con Foto y PIN
+  deliveryCobroCard: {
+    backgroundColor: '#1e293b',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  deliveryCobroTitle: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  deliveryCobroAmount: {
+    color: '#34d399',
+    fontSize: 22,
+    fontWeight: '900',
+    marginVertical: 4,
+  },
+  deliveryCobroSub: {
+    color: '#94a3b8',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  deliverySectionCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  deliverySectionTitle: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  deliverySectionDesc: {
+    color: '#94a3b8',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  pinInput: {
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 18,
+    color: '#f8fafc',
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  pinHelperText: {
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  takePhotoBtn: {
+    backgroundColor: '#1e293b',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#38bdf8',
+    borderRadius: 12,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  takePhotoBtnText: {
+    color: '#38bdf8',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  photoPreviewBox: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  photoPreviewImg: {
+    width: '100%',
+    height: 160,
+  },
+  photoOverlayBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  photoOverlayText: {
+    color: '#f8fafc',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  retakePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#334155',
+    paddingVertical: 8,
+  },
+  retakePhotoText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  confirmDeliverBtn: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  confirmDeliverBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
 });

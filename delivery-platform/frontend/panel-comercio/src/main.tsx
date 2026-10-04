@@ -3,12 +3,13 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { 
   ChefHat, UtensilsCrossed, LogOut, Store, Users, DollarSign, 
-  Settings, Package, KeyRound, ChevronDown, Check, Shield, AlertCircle, X, RefreshCw
+  Settings, Package, KeyRound, ChevronDown, Check, Shield, AlertCircle, X, RefreshCw, TrendingUp
 } from 'lucide-react';
 import KanbanOrders from './pages/KanbanOrders';
 import MenuManagement from './pages/MenuManagement';
 import StaffManagement from './pages/StaffManagement';
 import CajaTurnos from './pages/CajaTurnos';
+import ReportsManagement from './pages/ReportsManagement';
 import LocalSettings from './pages/LocalSettings';
 import Login from './pages/Login';
 import TrackingDemo from './pages/TrackingDemo';
@@ -30,7 +31,7 @@ function ProtectedPortal() {
   const { status, client, session } = useAuth();
   const comercioId = session?.user?.comercioId ?? '55555555-5555-5555-5555-555555555555';
   
-  const [activeTab, setActiveTab] = useState<'kanban' | 'menu' | 'staff' | 'caja' | 'settings'>('kanban');
+  const [activeTab, setActiveTab] = useState<'kanban' | 'menu' | 'staff' | 'caja' | 'reports' | 'settings'>('kanban');
   const [isRetail, setIsRetail] = useState(false);
   const [comercioNombre, setComercioNombre] = useState<string>(session?.user?.name || 'Local Aliado');
   const [comercioTipo, setComercioTipo] = useState<string>('');
@@ -290,7 +291,22 @@ function ProtectedPortal() {
             </button>
           )}
 
-          {/* Tab 5: Mi Local (Configuración) */}
+          {/* Tab 5: Reportes & Liquidaciones */}
+          {!isOperativeOnly && (
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all shrink-0 ${
+                activeTab === 'reports'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              <TrendingUp size={14} />
+              <span>Reportes & Liquidación</span>
+            </button>
+          )}
+
+          {/* Tab 6: Mi Local (Configuración) */}
           {isAdmin && (
             <button
               onClick={() => setActiveTab('settings')}
@@ -364,6 +380,12 @@ function ProtectedPortal() {
             comercioId={comercioId} 
             comercioNombre={comercioNombre} 
             currentOperator={currentOperator} 
+          />
+        )}
+        {activeTab === 'reports' && (
+          <ReportsManagement 
+            comercioId={comercioId} 
+            comercioNombre={comercioNombre} 
           />
         )}
         {activeTab === 'settings' && (

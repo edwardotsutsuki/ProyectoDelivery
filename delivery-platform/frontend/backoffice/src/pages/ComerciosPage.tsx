@@ -78,7 +78,7 @@ export default function ComerciosPage({
   const [verticales, setVerticales] = useState<{ id: string; nombre: string; icono: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [cityFilter, setCityFilter] = useState<'all' | 'baba' | 'babahoyo'>('all');
+  const [cityFilter, setCityFilter] = useState<'all' | 'baba' | 'babahoyo' | 'montalvo'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'aprobado' | 'pendiente' | 'rechazado'>('all');
 
   // Modal State
@@ -102,7 +102,7 @@ export default function ComerciosPage({
   const [formTipoComercioId, setFormTipoComercioId] = useState('restaurante');
   const [formManejaInventario, setFormManejaInventario] = useState(false);
   const [formPhone, setFormPhone] = useState('+5939');
-  const [formCity, setFormCity] = useState<'baba' | 'babahoyo'>('baba');
+  const [formCity, setFormCity] = useState<'baba' | 'babahoyo' | 'montalvo'>('baba');
   const [formLat, setFormLat] = useState(-1.7917);
   const [formLon, setFormLon] = useState(-79.6783);
   const [formBaseFee, setFormBaseFee] = useState(1.50);
@@ -263,6 +263,13 @@ export default function ComerciosPage({
     setFormLat(-1.8022);
     setFormLon(-79.5344);
     if (!formAddress) setFormAddress('Av. 9 de Octubre y Malecón, Babahoyo');
+  };
+
+  const setCoordinatesMontalvo = () => {
+    setFormCity('montalvo');
+    setFormLat(-1.7915);
+    setFormLon(-79.2882);
+    if (!formAddress) setFormAddress('Av. 25 de Abril y Calle 10 de Agosto, Montalvo');
   };
 
   const handleOpenCreate = () => {
@@ -453,6 +460,8 @@ export default function ComerciosPage({
       if (!c.direccion.toLowerCase().includes('baba') && Math.abs(c.lat - -1.7917) >= 0.05) return false;
     } else if (cityFilter === 'babahoyo') {
       if (!c.direccion.toLowerCase().includes('babahoyo') && Math.abs(c.lat - -1.8022) >= 0.05) return false;
+    } else if (cityFilter === 'montalvo') {
+      if (!c.direccion.toLowerCase().includes('montalvo') && Math.abs(c.lat - -1.7901) >= 0.05) return false;
     }
 
     if (statusFilter !== 'all') {
@@ -821,6 +830,21 @@ export default function ComerciosPage({
                 }}
               >
                 📍 Babahoyo
+              </button>
+              <button
+                onClick={() => setCityFilter('montalvo')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: `1px solid ${cityFilter === 'montalvo' ? '#e11d48' : '#334155'}`,
+                  background: cityFilter === 'montalvo' ? '#e11d48' : '#1e293b',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                📍 Montalvo
               </button>
             </div>
           </div>
@@ -1363,7 +1387,7 @@ export default function ComerciosPage({
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: '#cbd5e1' }}>
                           Cantón / Zona Operativa *
                         </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                           <button
                             type="button"
                             onClick={setCoordinatesBaba}
@@ -1397,6 +1421,23 @@ export default function ComerciosPage({
                             }}
                           >
                             📍 Babahoyo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={setCoordinatesMontalvo}
+                            style={{
+                              padding: '10px',
+                              borderRadius: '10px',
+                              border: `1px solid ${formCity === 'montalvo' ? '#a855f7' : '#334155'}`,
+                              background: formCity === 'montalvo' ? '#581c87' : '#1e293b',
+                              color: '#fff',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            📍 Montalvo
                           </button>
                         </div>
                       </div>

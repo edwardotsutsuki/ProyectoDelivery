@@ -106,6 +106,34 @@ const ZONAS_FALLBACK: ZonaTarifa[] = [
     tiempo_estimado_min: 35,
     is_activa: true,
     orden: 5,
+  },
+  {
+    id: 'e38a5b21-4d33-4f18-b80c-7b29a32c918a',
+    canton: 'Montalvo',
+    zona_nombre: 'Montalvo Urbano Central',
+    descripcion: 'Casco urbano, Parque Central, Mercado Municipal, Av. 25 de Abril',
+    radio_max_km: 3.50,
+    tarifa_envio: 1.25,
+    comision_repartidor_pct: 80.00,
+    comision_plataforma_pct: 20.00,
+    tarifa_servicio_cliente: 0.00,
+    tiempo_estimado_min: 20,
+    is_activa: true,
+    orden: 6,
+  },
+  {
+    id: 'f49b6c32-5e44-4029-c91d-8c30b43da29b',
+    canton: 'Montalvo',
+    zona_nombre: 'Montalvo Balnearios & Río Cristal',
+    descripcion: 'Vía a La Esmeralda, Río Cristal, Piscinas y Balnearios turísticos',
+    radio_max_km: 7.00,
+    tarifa_envio: 1.75,
+    comision_repartidor_pct: 80.00,
+    comision_plataforma_pct: 20.00,
+    tarifa_servicio_cliente: 0.25,
+    tiempo_estimado_min: 35,
+    is_activa: true,
+    orden: 7,
   }
 ];
 
@@ -349,7 +377,7 @@ export default function ZonasTarifasPage() {
           const flete = Number(z.tarifa_envio).toFixed(2);
           const riderSplit = ((Number(z.tarifa_envio) * Number(z.comision_repartidor_pct)) / 100).toFixed(2);
           const platformSplit = ((Number(z.tarifa_envio) * Number(z.comision_plataforma_pct)) / 100).toFixed(2);
-          const badgeColor = z.canton === 'Baba' ? '#10b981' : '#38bdf8';
+          const badgeColor = z.canton === 'Baba' ? '#10b981' : z.canton === 'Babahoyo' ? '#38bdf8' : '#a855f7';
 
           return (
             <div

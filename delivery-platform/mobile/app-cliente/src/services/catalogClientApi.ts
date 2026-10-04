@@ -145,6 +145,66 @@ export const FALLBACK_COMERCIOS: ComercioItem[] = [
     tipo_comercio_icono: '🍤',
     categoria: 'Mariscos y Carnes',
   },
+  {
+    id: '88888888-0001-4000-8000-000000000001',
+    nombre_comercial: 'Asadero & Picantería El Rincón Montalvino',
+    descripcion: 'Pollo asado al carbón, menestras criollas, secos y platos a la carta típicos',
+    direccion: 'Av. 25 de Abril y 10 de Agosto (Frente al Parque Central), Montalvo',
+    ciudad: 'montalvo',
+    tiempo_entrega_promedio: 25,
+    costo_base_envio: 1.25,
+    subsidia_envio: false,
+    is_abierto: true,
+    tipo_comercio_id: 'restaurante',
+    tipo_comercio_nombre: 'Restaurantes & Cafeterías',
+    tipo_comercio_icono: '🍗',
+    categoria: 'Asados & Platos Típicos',
+  },
+  {
+    id: '88888888-0002-4000-8000-000000000002',
+    nombre_comercial: 'Supermercado & Víveres San Vicente Montalvo',
+    descripcion: 'Abarrotes, víveres frescos, lácteos, embutidos y artículos de primera necesidad',
+    direccion: 'Calle Babahoyo y Av. 25 de Abril, Montalvo',
+    ciudad: 'montalvo',
+    tiempo_entrega_promedio: 30,
+    costo_base_envio: 1.50,
+    subsidia_envio: false,
+    is_abierto: true,
+    tipo_comercio_id: 'supermercado',
+    tipo_comercio_nombre: 'Supermercados & Abarrotes',
+    tipo_comercio_icono: '🛒',
+    categoria: 'Víveres y Canasta Básica',
+  },
+  {
+    id: '88888888-0003-4000-8000-000000000003',
+    nombre_comercial: 'Farmacia Comunitaria Montalvo Salud',
+    descripcion: 'Medicamentos generales, analgésicos, cuidado infantil, sueros y primeros auxilios',
+    direccion: 'Calle 10 de Agosto frente al Subcentro de Salud, Montalvo',
+    ciudad: 'montalvo',
+    tiempo_entrega_promedio: 20,
+    costo_base_envio: 1.00,
+    subsidia_envio: false,
+    is_abierto: true,
+    tipo_comercio_id: 'express',
+    tipo_comercio_nombre: 'Farmacia & Primeros Auxilios',
+    tipo_comercio_icono: '💊',
+    categoria: 'Medicinas y Cuidado',
+  },
+  {
+    id: '88888888-0004-4000-8000-000000000004',
+    nombre_comercial: 'Depósito y Licorería Montalvo Nights',
+    descripcion: 'Cervezas heladas, rones, vinos, hielo en cubos y snacks (+18)',
+    direccion: 'Malecón del Río Cristal y 25 de Abril, Montalvo',
+    ciudad: 'montalvo',
+    tiempo_entrega_promedio: 20,
+    costo_base_envio: 1.25,
+    subsidia_envio: false,
+    is_abierto: true,
+    tipo_comercio_id: 'express',
+    tipo_comercio_nombre: 'Licores & Bebidas Heladas',
+    tipo_comercio_icono: '🍻',
+    categoria: 'Licores y Cervezas',
+  },
 ];
 
 // Fallback de Productos INDIVIDUAL por cada Local Comercial
@@ -393,6 +453,116 @@ export const FALLBACK_PRODUCTS_BY_STORE: Record<string, ProductoItem[]> = {
       categoria: 'Bebidas',
     },
   ],
+
+  // 6. Asadero & Picantería El Rincón Montalvino
+  '88888888-0001-4000-8000-000000000001': [
+    {
+      id: '99999999-0001-4000-8000-000000000001',
+      nombre: 'Medio Pollo Asado con Menestra y Patacones',
+      descripcion: '1/2 Pollo marinado con finas hierbas al carbón, menestra de lenteja casera y patacones crujientes',
+      precio: 4.50,
+      imagen_url: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=500',
+      is_disponible: true,
+      categoria: 'Asados & Especialidades',
+      tamanos: [
+        { nombre: '1/2 Pollo Completo', precio: 4.50 },
+        { nombre: 'Pollo Entero Familiar', precio: 8.50 },
+      ],
+    },
+    {
+      id: '99999999-0002-4000-8000-000000000002',
+      nombre: 'Seco de Gallina Criolla Montalvina',
+      descripcion: 'Tradicional seco de gallina cocinado a fuego lento con cerveza y culantro, arroz amarillo y maduro frito',
+      precio: 4.00,
+      imagen_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500',
+      is_disponible: true,
+      categoria: 'Asados & Especialidades',
+    },
+    {
+      id: '99999999-0003-4000-8000-000000000001',
+      nombre: 'Jarra de Jugo de Naranja Natural 1L',
+      descripcion: 'Jugo 100% natural recién exprimido con naranjas dulces de la zona de Montalvo',
+      precio: 2.50,
+      imagen_url: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=500',
+      is_disponible: true,
+      categoria: 'Bebidas',
+    },
+  ],
+
+  // 7. Supermercado & Víveres San Vicente Montalvo
+  '88888888-0002-4000-8000-000000000002': [
+    {
+      id: '99999999-0004-4000-8000-000000000002',
+      nombre: 'Arroz Flor Seleccionado 5kg',
+      descripcion: 'Funda de arroz grano largo seleccionado de primera calidad',
+      precio: 4.80,
+      imagen_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=500',
+      is_disponible: true,
+      categoria: 'Despensa y Granos',
+    },
+    {
+      id: '99999999-0005-4000-8000-000000000002',
+      nombre: 'Aceite La Favorita 1 Litro',
+      descripcion: 'Aceite vegetal puro ideal para cocina y frituras',
+      precio: 2.60,
+      imagen_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500',
+      is_disponible: true,
+      categoria: 'Despensa y Granos',
+    },
+    {
+      id: '99999999-0006-4000-8000-000000000002',
+      nombre: 'Cubeta de Huevos Frescos x30',
+      descripcion: 'Huevos frescos de granja seleccionados tamaño grande',
+      precio: 3.80,
+      imagen_url: 'https://images.unsplash.com/photo-1506976785307-8732e854ad03?w=500',
+      is_disponible: true,
+      categoria: 'Despensa y Granos',
+    },
+  ],
+
+  // 8. Farmacia Comunitaria Montalvo Salud
+  '88888888-0003-4000-8000-000000000003': [
+    {
+      id: '99999999-0007-4000-8000-000000000003',
+      nombre: 'Paracetamol 500mg (Caja 20 Tabletas)',
+      descripcion: 'Analgésico y antipirético para el alivio del dolor de cabeza y fiebre',
+      precio: 2.00,
+      imagen_url: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500',
+      is_disponible: true,
+      categoria: 'Botiquín & Salud',
+    },
+    {
+      id: '99999999-0008-4000-8000-000000000003',
+      nombre: 'Electrolit Suero Oral 625ml',
+      descripcion: 'Bebida rehidratante para recuperación física y calor tropical',
+      precio: 2.25,
+      imagen_url: 'https://images.unsplash.com/photo-1527661591475-527312dd65f5?w=500',
+      is_disponible: true,
+      categoria: 'Botiquín & Salud',
+    },
+  ],
+
+  // 9. Depósito y Licorería Montalvo Nights
+  '88888888-0004-4000-8000-000000000004': [
+    {
+      id: '99999999-0009-4000-8000-000000000004',
+      nombre: 'Six Pack Cerveza Club Platino 330ml',
+      descripcion: '6 latas bien heladas de Club Platino',
+      precio: 6.50,
+      imagen_url: 'https://images.unsplash.com/photo-1608270546103-ac6888db6282?w=500',
+      is_disponible: true,
+      categoria: 'Bebidas & Cervezas Heladas',
+    },
+    {
+      id: '99999999-0010-4000-8000-000000000004',
+      nombre: 'Funda de Hielo Purificado en Cubos 3kg',
+      descripcion: 'Hielo en cubos purificado para fiestas y reuniones familiares',
+      precio: 1.50,
+      imagen_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=500',
+      is_disponible: true,
+      categoria: 'Bebidas & Cervezas Heladas',
+    },
+  ],
 };
 
 export async function fetchComercios(
@@ -512,6 +682,8 @@ export async function fetchTarifas(
       { id: 'z3', canton: 'Baba', zona_nombre: 'Recintos y Zonas Rurales Baba', tarifa_envio: 2.50, tiempo_estimado_min: 45, is_activa: true },
       { id: 'z4', canton: 'Babahoyo', zona_nombre: 'Babahoyo Urbano Central', tarifa_envio: 1.50, tiempo_estimado_min: 25, is_activa: true },
       { id: 'z5', canton: 'Babahoyo', zona_nombre: 'Babahoyo Periferia y El Salto', tarifa_envio: 2.00, tiempo_estimado_min: 35, is_activa: true },
+      { id: 'z6', canton: 'Montalvo', zona_nombre: 'Montalvo Urbano Central', tarifa_envio: 1.25, tiempo_estimado_min: 20, is_activa: true },
+      { id: 'z7', canton: 'Montalvo', zona_nombre: 'Montalvo Río Cristal y Periferia', tarifa_envio: 1.75, tiempo_estimado_min: 30, is_activa: true },
     ];
   }
 }
