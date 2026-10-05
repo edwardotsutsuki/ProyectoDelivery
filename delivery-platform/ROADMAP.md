@@ -240,15 +240,24 @@
 - [x] **Seguridad y Rate Limiting en API Gateway (Completada ✅)**:
   - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) para login/auth y `api_general_limit` (40 r/s con burst 60).
   - [x] Encabezados de proxy inverso, timeouts y WebSockets `/ws/` asegurados.
-- [ ] **🔔 Sprint 7.1: Notificaciones Push Nativas (Expo Notifications / FCM)**:
+- [ ] **🔔 Sprint 7.1: Notificaciones Push Nativas Multi-Vertical (Expo Notifications / FCM)**:
   - [ ] Endpoints en Backend Core: `POST /api/v1/notifications/push-token` y `DELETE /push-token` sobre tabla `push_tokens` de PostgreSQL.
   - [ ] Servicio emisor `pushNotification.service.ts` conectado a la API de Expo Push con manejo de respuestas y reintentos.
-  - [ ] Disparadores automáticos en ciclo de vida del pedido: comanda creada (alerta a cocina), en preparación (alerta a cliente), comanda lista (alerta a motorizados), en camino (alerta a cliente), entrega final (alerta y ganancia de cashback).
+  - [ ] **Matriz de Notificaciones Contextuales por Vertical**:
+    - *Restaurantes / Comedores:* Avisos de cocción ("Comida en el fogón") y alerta a motorizados ("Comida caliente, mantener horizontal").
+    - *Licoreras & Bebidas:* Avisos de enfriado ("Bebidas alistándose con hielo") y alerta a motorizados ("Contiene alcohol, exigir cédula +18").
+    - *Supermercados & Tiendas:* Avisos de selección ("Recolectando víveres en percha") y alerta a motorizados ("Pedido de [X] fundas/bultos").
+    - *Farmacias & Salud:* Avisos de validación ("Verificando receta médica") y alerta a motorizados ("Medicamentos sellados confidenciales").
+    - *Tiendas Express:* Avisos de despacho ("Alistado rápido de mostrador").
   - [ ] Integración cliente y repartidor en Expo SDK 57: registro de tokens en login y handlers en primer plano/segundo plano.
-- [ ] **⏱️ Sprint 7.2: Sincronización Prep-Time de Cocina & Just-in-Time Dispatch**:
-  - [ ] Migración PostgreSQL: columnas `tiempo_preparacion_min`, `hora_inicio_cocina`, `hora_estimada_listo` en `pedidos`.
-  - [ ] Selector interactivo de tiempo en Panel Cocina Kanban (`10 min`, `20 min`, `35 min`) y temporizador regresivo dinámico en la tarjeta.
-  - [ ] Algoritmo de despacho Just-in-Time: dispara la oferta al motorizado en el minuto óptimo (`hora_estimada_listo - ETA_viaje - 2 min`) para evitar esperas y saturación en el local.
+- [ ] **⏱️ Sprint 7.2: Sincronización Prep-Time de Cocina & Picking Multi-Vertical (Just-in-Time Dispatch)**:
+  - [ ] Migración PostgreSQL: columnas `tiempo_preparacion_min`, `hora_inicio_cocina`, `hora_estimada_listo`, `estado_alistado` en `pedidos`.
+  - [ ] **Panel Comercio Adaptativo (Kanban `:3003`)**:
+    - *Restaurantes:* Selector de cocción (`10 min`, `20 min`, `35 min`) y temporizador regresivo de cocina.
+    - *Licoreras:* Selector de bodega/enfriado (`3 min`, `7 min`, `12 min`).
+    - *Supermercados / Tiendas:* Selector de picking por cantidad de ítems (`5 min`, `12 min`, `20 min`), checklist de recolección y botón de solicitud de producto sustituto.
+    - *Farmacias:* Selector de dispensación (`5 min`, `10 min`) con visor de receta médica.
+  - [ ] **Algoritmo JIT Diferenciado**: Despacho casi inmediato para licoreras/express (<2 min) y retención calibrada para restaurantes según cocción (`hora_estimada_listo - ETA_viaje - margen`).
 - [ ] **💎 Sprint 7.3: Club de Fidelidad & Cashback Automático (Ledger Inmutable)**:
   - [ ] Regla contable: 5% de cashback sobre el subtotal consumido acreditado en `transacciones_ledger` tras entrega exitosa.
   - [ ] Asiento contable de tipo ingreso inmutable blindado por trigger PL/pgSQL.
