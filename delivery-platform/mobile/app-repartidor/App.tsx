@@ -42,8 +42,11 @@ import {
   Zap,
   X,
   Camera,
+  LogOut,
+  Lock,
 } from 'lucide-react-native';
 
+import { loginCourier, type CourierUser } from './src/services/courierAuthApi';
 import { NavigationLauncher } from './src/services/navigationLauncher';
 import { initialShift, setAvailability, transition, RESTAURANT, type Action, type Status } from './src/courierModel';
 import { dailyWallet, money, type Wallet } from './src/walletModel';
@@ -87,11 +90,25 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Gestión de 10 Repartidores y Selector de Pruebas
-  const [courierId, setCourierId] = useState(COURIER_ID);
+  // Autenticación Real de Repartidor (Login / Logout)
+  const [currentCourier, setCurrentCourier] = useState<CourierUser | null>({
+    id: '33333333-3333-3333-3333-333333333333',
+    name: '[Baba] Carlos Mendoza (Moto Honda GL150)',
+    email: 'repartidor@delivery.com',
+    phone: '+593981112233',
+    role: 'repartidor',
+    tipo_vehiculo: 'Moto Honda GL150',
+    placa_vehiculo: 'GR-891A',
+  });
+  const [courierId, setCourierId] = useState('33333333-3333-3333-3333-333333333333');
   const [driversList, setDriversList] = useState<DriverProfile[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
-  const [isDriverSelectorOpen, setIsDriverSelectorOpen] = useState(false);
+
+  // Estados de Formulario de Inicio de Sesión
+  const [loginEmail, setLoginEmail] = useState('repartidor@delivery.com');
+  const [loginPassword, setLoginPassword] = useState('repartidor123');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Modal de Oferta y Ruteo Pre-Aceptación (2 Tramos)
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<BackendOrder | null>(null);
@@ -126,19 +143,22 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   // Telemetry Transmitter (WebSocket)
   const transmitter = useRef<TelemetryTransmitter | null>(null);
 
-  // Cargar lista de los 10 repartidores para pruebas al iniciar
+  // Sincronizar perfiles de repartidores de la base de datos
   useEffect(() => {
     fetchDriversList(currentApi)
       .then((drivers) => {
         setDriversList(drivers);
         if (drivers.length > 0) {
-          const defaultDriver = drivers.find((d) => d.id === '33333333-3333-3333-3333-333333333333') || drivers[0];
-          setSelectedDriver(defaultDriver);
-          setCourierId(defaultDriver.id);
+          const match = drivers.find((d) => d.id === courierId || (currentCourier && d.email.toLowerCase() === currentCourier.email.toLowerCase()));
+          if (match) {
+            setSelectedDriver(match);
+          } else {
+            setSelectedDriver(drivers[0]);
+          }
         }
       })
       .catch((err) => console.warn('Error fetching drivers list:', err));
-  }, [currentApi]);
+  }, [currentApi, courierId, currentCourier]);
 
   // Initialize Telemetry
   useEffect(() => {
@@ -486,18 +506,245 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     );
   }
 
-  // Handle Selecting One of the 10 Drivers
-  function handleSelectDriver(driver: DriverProfile) {
-    setSelectedDriver(driver);
-    setCourierId(driver.id);
-    if (driver.lat && driver.lon) {
-      transmitter.current?.setLocation(Number(driver.lat), Number(driver.lon));
+  // Iniciar Sesión de Repartidor
+  async function handleLogin(customEmail?: string, customPass?: string) {
+    const emailToUse = (customEmail || loginEmail).trim().toLowerCase();
+    const passToUse = customPass || loginPassword;
+    if (!emailToUse) {
+      setLoginError('Por favor ingresa tu correo electrónico de repartidor.');
+      return;
     }
-    setIsDriverSelectorOpen(false);
+    if (!passToUse) {
+      setLoginError('Por favor ingresa tu contraseña.');
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await loginCourier(currentApi, emailToUse, passToUse);
+      if (res.success && res.user) {
+        setCurrentCourier(res.user);
+        setCourierId(res.user.id);
+        const match = driversList.find((d) => d.id === res.user?.id || d.email.toLowerCase() === res.user?.email.toLowerCase());
+        if (match) {
+          setSelectedDriver(match);
+        }
+        setLoginError('');
+      } else {
+        setLoginError(res.message || 'Error al iniciar sesión de repartidor.');
+      }
+    } catch (err: any) {
+      setLoginError(err.message || 'Error de conexión con el servidor.');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  // Cerrar Sesión de Repartidor
+  function handleLogout() {
+    if (activeOrder) {
+      Alert.alert(
+        'Pedido en Curso',
+        'No puedes cerrar sesión mientras tienes un pedido activo en entrega.',
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
+    Alert.alert(
+      'Cerrar Sesión',
+      '¿Deseas finalizar tu turno y cerrar sesión en la aplicación?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar Sesión',
+          style: 'destructive',
+          onPress: () => {
+            setIsOnline(false);
+            transmitter.current?.stopTransmission();
+            setCurrentCourier(null);
+            setActiveOrder(null);
+            setAvailableOrders([]);
+            setOrderHistory([]);
+          },
+        },
+      ]
+    );
   }
 
   // Calculations for daily wallet
   const daily = wallet ? dailyWallet(wallet, now) : null;
+
+  // Si no hay sesión iniciada de repartidor, mostrar Pantalla de Inicio de Sesión
+  if (!currentCourier) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
+          <ScrollView contentContainerStyle={styles.loginScrollContainer} keyboardShouldPersistTaps="handled">
+            {/* Header / Branding */}
+            <View style={styles.loginBrandHeader}>
+              <View style={styles.loginLogoCircle}>
+                <Truck color="#10b981" size={38} />
+              </View>
+              <Text style={styles.loginAppTitle}>Baba Delivery Express</Text>
+              <Text style={styles.loginAppSubtitle}>Portal de Repartidores & Motorizados</Text>
+              <View style={styles.loginCityTag}>
+                <Text style={styles.loginCityTagText}>📍 Baba · Babahoyo · Montalvo</Text>
+              </View>
+            </View>
+
+            {/* Error Banner */}
+            {loginError ? (
+              <View style={styles.loginErrorBanner}>
+                <AlertTriangle size={16} color="#ef4444" />
+                <Text style={styles.loginErrorBannerText}>{loginError}</Text>
+              </View>
+            ) : null}
+
+            {/* Login Form Card */}
+            <View style={styles.loginCard}>
+              <Text style={styles.loginFormTitle}>Iniciar Turno de Trabajo</Text>
+              <Text style={styles.loginFormSubtitle}>Ingresa tus credenciales registradas</Text>
+
+              <View style={styles.loginInputWrapper}>
+                <Text style={styles.loginInputLabel}>Correo del Repartidor</Text>
+                <View style={styles.loginInputRow}>
+                  <User size={18} color="#64748b" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.loginInputText}
+                    value={loginEmail}
+                    onChangeText={setLoginEmail}
+                    placeholder="repartidor@delivery.com"
+                    placeholderTextColor="#64748b"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.loginInputWrapper}>
+                <Text style={styles.loginInputLabel}>Contraseña</Text>
+                <View style={styles.loginInputRow}>
+                  <Lock size={18} color="#64748b" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.loginInputText}
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="#64748b"
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                style={[styles.btnLoginSubmit, loginLoading && { opacity: 0.7 }]}
+                onPress={() => handleLogin()}
+                disabled={loginLoading}
+              >
+                {loginLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <>
+                    <Zap size={18} color="#ffffff" style={{ marginRight: 8 }} />
+                    <Text style={styles.btnLoginSubmitText}>INICIAR SESIÓN Y CONECTAR</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Cuentas de Prueba Rápidas */}
+            <View style={styles.loginQuickSection}>
+              <Text style={styles.loginQuickSectionTitle}>Perfiles Disponibles para Pruebas:</Text>
+              <Text style={styles.loginQuickSectionSubtitle}>
+                Toca cualquiera para rellenar credenciales automáticamente
+              </Text>
+
+              <View style={styles.loginQuickGrid}>
+                {[
+                  {
+                    name: 'Carlos Mendoza',
+                    email: 'repartidor@delivery.com',
+                    city: 'Baba',
+                    vehiculo: 'Moto Honda GL150',
+                    badgeColor: '#10b981',
+                  },
+                  {
+                    name: 'Anthony Vera',
+                    email: 'repartidor2@delivery.com',
+                    city: 'Baba',
+                    vehiculo: 'Moto Yamaha FZ',
+                    badgeColor: '#10b981',
+                  },
+                  {
+                    name: 'Bryan Coello',
+                    email: 'repartidor5@delivery.com',
+                    city: 'Babahoyo',
+                    vehiculo: 'Moto Suzuki GN125',
+                    badgeColor: '#38bdf8',
+                  },
+                  {
+                    name: 'Darwin Quintana',
+                    email: 'repartidor8@delivery.com',
+                    city: 'Montalvo',
+                    vehiculo: 'Moto Shineray 150',
+                    badgeColor: '#a855f7',
+                  },
+                ].map((account) => (
+                  <Pressable
+                    key={account.email}
+                    style={styles.loginQuickCard}
+                    onPress={() => {
+                      setLoginEmail(account.email);
+                      setLoginPassword('repartidor123');
+                      setLoginError('');
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.loginQuickCardName}>{account.name}</Text>
+                      <View style={[styles.loginCityMiniBadge, { borderColor: account.badgeColor }]}>
+                        <Text style={[styles.loginCityMiniBadgeText, { color: account.badgeColor }]}>
+                          {account.city}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.loginQuickCardVehicle}>🛵 {account.vehiculo}</Text>
+                    <Text style={styles.loginQuickCardEmail}>{account.email}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Configuración de API Gateway */}
+            <View style={styles.loginConfigCard}>
+              <Text style={styles.loginConfigTitle}>Servidor API Gateway:</Text>
+              <TextInput
+                style={styles.apiInput}
+                value={currentApi}
+                onChangeText={setCurrentApi}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={styles.apiPresetsRow}>
+                <Pressable
+                  style={styles.btnSmall}
+                  onPress={() => setCurrentApi('https://delivery-baba-api.loca.lt/api/v1')}
+                >
+                  <Text style={styles.btnSmallText}>Túnel Remoto (loca.lt)</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.btnSmall}
+                  onPress={() => setCurrentApi('http://192.168.68.123:8080/api/v1')}
+                >
+                  <Text style={styles.btnSmallText}>IP Local (WiFi)</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -505,28 +752,37 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         {/* Cabecera Principal / Driver Status Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Pressable
-              style={styles.driverInfo}
-              onPress={() => setIsDriverSelectorOpen(true)}
-            >
+            {/* Perfil del Repartidor Autenticado */}
+            <View style={styles.driverInfo}>
               <View style={styles.avatarPill}>
                 <Truck color="#10b981" size={18} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.driverTitle} numberOfLines={1} ellipsizeMode="tail">
-                    {selectedDriver ? selectedDriver.nombre : 'Moto Baba 01 🛵'}
+                    {selectedDriver ? selectedDriver.nombre : (currentCourier?.name || 'Carlos Mendoza')}
                   </Text>
-                  <View style={styles.badgeSelector}>
-                    <Text style={styles.badgeSelectorText}>Cambiar (10)</Text>
+                  <View style={styles.badgeVehicle}>
+                    <Text style={styles.badgeVehicleText}>
+                      {selectedDriver?.placa_vehiculo || currentCourier?.placa_vehiculo || 'Moto'}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.driverLocation} numberOfLines={1} ellipsizeMode="tail">
                   {selectedDriver
                     ? `${selectedDriver.ciudad} · ${selectedDriver.tipo_vehiculo || 'Moto'} · ${selectedDriver.calificacion_promedio || '5.0'} ★`
-                    : 'Cantón Baba · Los Ríos, Ecuador'}
+                    : (currentCourier?.email || 'Cantón Baba · Los Ríos')}
                 </Text>
               </View>
+            </View>
+
+            {/* Botón Salir / Cerrar Sesión */}
+            <Pressable
+              style={styles.btnLogoutHeader}
+              onPress={handleLogout}
+              accessibilityLabel="Cerrar sesión"
+            >
+              <LogOut size={16} color="#ef4444" />
             </Pressable>
 
             {/* Switch Online/Offline con Radar Visual */}
@@ -1212,7 +1468,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Nombre:</Text>
-                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.nombre : 'Carlos Mendoza'}</Text>
+                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.nombre : (currentCourier?.name || 'Carlos Mendoza')}</Text>
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Vehículo:</Text>
@@ -1230,7 +1486,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Teléfono Móvil:</Text>
-                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.telefono : '+593981112233'}</Text>
+                  <Text style={styles.profileValue}>{selectedDriver ? selectedDriver.telefono : (currentCourier?.phone || '+593981112233')}</Text>
                 </View>
                 <View style={styles.profileRow}>
                   <Text style={styles.profileLabel}>Desempeño:</Text>
@@ -1238,6 +1494,20 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     ⭐ {selectedDriver ? `${selectedDriver.calificacion_promedio} (${selectedDriver.cant_entregas_completadas} viajes)` : '5.0'}
                   </Text>
                 </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Sesión y Turno de Trabajo</Text>
+                <Text style={styles.mutedText}>
+                  Conectado como: {currentCourier?.email || 'repartidor@delivery.com'}
+                </Text>
+                <Pressable
+                  style={styles.btnLogoutFull}
+                  onPress={handleLogout}
+                >
+                  <LogOut size={18} color="#ffffff" style={{ marginRight: 8 }} />
+                  <Text style={styles.btnLogoutFullText}>Cerrar Sesión de Repartidor</Text>
+                </Pressable>
               </View>
 
               <View style={styles.card}>
@@ -1275,87 +1545,6 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
             </View>
           )}
         </ScrollView>
-
-        {/* Modal de Selección de Repartidor de Pruebas (10 repartidores) */}
-        <Modal
-          visible={isDriverSelectorOpen}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setIsDriverSelectorOpen(false)}
-        >
-          <View style={styles.selectorModalOverlay}>
-            <View style={styles.selectorModalContent}>
-              <View style={styles.selectorHeader}>
-                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                  <Text style={styles.selectorTitle} numberOfLines={1}>Cambiar Perfil de Repartidor</Text>
-                  <Text style={styles.selectorSubtitle} numberOfLines={1} ellipsizeMode="tail">
-                    10 Repartidores activos en Baba, Babahoyo y Montalvo
-                  </Text>
-                </View>
-                <Pressable
-                  style={[styles.selectorCloseBtn, { flexShrink: 0 }]}
-                  onPress={() => setIsDriverSelectorOpen(false)}
-                >
-                  <X size={20} color="#94a3b8" />
-                </Pressable>
-              </View>
-
-              <ScrollView style={styles.selectorList}>
-                {driversList.map((driver) => {
-                  const isCurrent = driver.id === courierId;
-                  const isBaba = driver.ciudad.toLowerCase().includes('baba') && !driver.ciudad.toLowerCase().includes('babahoyo');
-                  const isBabahoyo = driver.ciudad.toLowerCase().includes('babahoyo');
-                  const cityColor = isBaba ? '#10b981' : isBabahoyo ? '#38bdf8' : '#a855f7';
-
-                  return (
-                    <Pressable
-                      key={driver.id}
-                      style={[
-                        styles.driverOptionCard,
-                        isCurrent && styles.driverOptionCardActive,
-                      ]}
-                      onPress={() => handleSelectDriver(driver)}
-                    >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                          <View
-                            style={[
-                              styles.driverIconPill,
-                              { backgroundColor: isCurrent ? '#059669' : '#1e293b', flexShrink: 0 },
-                            ]}
-                          >
-                            <Truck size={18} color={isCurrent ? '#ffffff' : '#94a3b8'} />
-                          </View>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={styles.driverOptionName} numberOfLines={1} ellipsizeMode="tail">{driver.nombre}</Text>
-                            <Text style={styles.driverOptionPhone}>{driver.telefono}</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.cityBadge, { borderColor: cityColor, flexShrink: 0, marginLeft: 6 }]}>
-                          <Text style={[styles.cityBadgeText, { color: cityColor }]}>
-                            {driver.ciudad}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.driverOptionMeta}>
-                        <Text style={styles.driverOptionMetaText}>
-                          🛵 {driver.tipo_vehiculo || 'Moto'} {driver.placa_vehiculo ? `(${driver.placa_vehiculo})` : ''}
-                        </Text>
-                        <Text style={styles.driverOptionMetaText}>
-                          ⭐ {driver.calificacion_promedio} ({driver.cant_entregas_completadas} entregas)
-                        </Text>
-                        <Text style={styles.driverOptionMetaText}>
-                          📍 {Number(driver.lat).toFixed(4)}, {Number(driver.lon).toFixed(4)}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
 
         {/* Modal de Oferta y Ruteo Pre-Aceptación (2 Tramos + SVG + Waze/Google Maps + Temporizador) */}
         <OrderOfferModal
@@ -2530,5 +2719,227 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 13,
     letterSpacing: 0.5,
+  },
+  // Estilos de Autenticación y Cierre de Sesión
+  badgeVehicle: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  badgeVehicleText: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  btnLogoutHeader: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  btnLogoutFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dc2626',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  btnLogoutFullText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  loginScrollContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  loginBrandHeader: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 24,
+  },
+  loginLogoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#064e3b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+    marginBottom: 12,
+  },
+  loginAppTitle: {
+    color: '#f8fafc',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  loginAppSubtitle: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  loginCityTag: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  loginCityTagText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loginErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  loginErrorBannerText: {
+    color: '#fca5a5',
+    fontSize: 12,
+    flex: 1,
+    fontWeight: '600',
+  },
+  loginCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 20,
+  },
+  loginFormTitle: {
+    color: '#f8fafc',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  loginFormSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginBottom: 16,
+  },
+  loginInputWrapper: {
+    marginBottom: 14,
+  },
+  loginInputLabel: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  loginInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  loginInputText: {
+    color: '#f8fafc',
+    fontSize: 14,
+    flex: 1,
+  },
+  btnLoginSubmit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  btnLoginSubmitText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 0.5,
+  },
+  loginQuickSection: {
+    marginBottom: 20,
+  },
+  loginQuickSectionTitle: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  loginQuickSectionSubtitle: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginBottom: 12,
+  },
+  loginQuickGrid: {
+    gap: 10,
+  },
+  loginQuickCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  loginQuickCardName: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loginCityMiniBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  loginCityMiniBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  loginQuickCardVehicle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  loginQuickCardEmail: {
+    color: '#38bdf8',
+    fontSize: 11,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  loginConfigCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 20,
+  },
+  loginConfigTitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
   },
 });

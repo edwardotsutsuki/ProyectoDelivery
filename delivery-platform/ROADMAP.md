@@ -205,12 +205,19 @@
   - [x] Recarga rápida de Billetera Digital en vivo (`+$5`, `+$10`, `+$20`) conectada al Ledger contable.
   - [x] Buscador de platos en vivo en la carta y selector de categorías.
   - [x] Prevención y modal de conflicto multitienda al agregar productos de un local distinto.
+  - [x] Migración arquitectónica de `SafeAreaView` a `react-native-safe-area-context` (`SafeAreaProvider` + `SafeAreaView`) resolviendo advertencias de obsolescencia en React Native 0.86.3 / React 19.
+  - [x] Conexión en vivo de catálogo, tarifas y cupones a PostgreSQL con timeout de 3.5s vía `AbortController` y fallback de resiliencia offline.
   - [x] 13/13 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 - [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
   - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`), compatible con Expo Go.
   - [x] Conexión al API Gateway y WebSocket en red local y remota vía túnel público (`https://delivery-baba-api.loca.lt/api/v1`).
   - [x] Transmisor continuo de telemetría WebSocket (`TelemetryTransmitter`) enviando `REPARTIDOR_LOCATION_UPDATE` cada 5 segundos al estar Online.
   - [x] Sincronización de turno, navegación GPS (Waze/Google Maps en Baba) y billetera de doble entrada.
+  - [x] **Eliminación del Selector Arbitrario de Pruebas y Migración a Autenticación Real**:
+    - Retirado el botón de prueba `Cambiar (10)` y el modal de selección arbitraria de conductores.
+    - Implementado servicio de autenticación `courierAuthApi.ts` conectado a `POST /api/v1/auth/login`.
+    - Pantalla de inicio de sesión de repartidor con formulario seguro (correo y contraseña), banners de error interactivos y perfiles precargados de un toque para pruebas rápidas en Baba, Babahoyo y Montalvo.
+    - Botón de cierre de sesión en cabecera superior y botón maestro en pestaña de Perfil, con validación de seguridad (impide desconexión o logout con pedidos activos en curso).
   - [x] **Interfaz de Usuario Moderna (Estilo Uber Eats / Rappi Soy Repartidor)**:
     - Cabecera con selector de turno Online/Offline con radar visual pulsante y estado de satélites GPS en Baba Centro.
     - Barra HUD de métricas del día (Ganancia Hoy, Entregas Concluidas, Deuda Efectivo retenido).

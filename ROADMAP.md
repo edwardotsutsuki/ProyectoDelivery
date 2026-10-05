@@ -399,6 +399,22 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 
 ---
 
+### 📱 Fase 5.14: Madurez Mobile, Autenticación Real de Repartidores y Catálogo en Vivo (Completada ✅)
+- [x] **Resolución de Advertencias y Modernización Expo SDK 57**:
+  - [x] Migración total de `SafeAreaView` a `react-native-safe-area-context` (`SafeAreaProvider` y `SafeAreaView`) tanto en `app-cliente` como en `app-repartidor`, eliminando el warning de deprecación de React Native 0.86.3 / React 19.
+  - [x] Conexión en vivo de `app-cliente` a la base de datos PostgreSQL mediante API Gateway y túnel público remoto, integrando `fetchComercios`, `fetchProductosComercio`, `fetchTarifas` y `validateCoupon` con `AbortController` (3.5s timeout) y resiliencia offline.
+- [x] **Eliminación del Selector de Pruebas y Flujo de Autenticación de Repartidores**:
+  - [x] Removido de forma definitiva el selector arbitrario de conductores ("Cambiar (10)") y su modal asociado en `app-repartidor`.
+  - [x] Integrado servicio `courierAuthApi.ts` conectado al endpoint real `POST /api/v1/auth/login`.
+  - [x] Implementada Pantalla de Inicio de Sesión de Repartidores con validación de credenciales (correo y contraseña), feedback de error y accesos rápidos de un toque para cuentas piloto registradas en Baba, Babahoyo y Montalvo (`repartidor@delivery.com` ... `repartidor10@delivery.com`).
+  - [x] Cierre de sesión seguro (`handleLogout`) disponible en cabecera superior y ficha de perfil, asegurando detención de telemetría GPS, paso a estado offline y limpieza de sesión con confirmación interactiva.
+- [x] **Validación y Suite de Pruebas**:
+  - [x] `app-cliente`: 13/13 pruebas aprobadas.
+  - [x] `app-repartidor`: 14/14 pruebas aprobadas.
+  - [x] Bundles móviles Android e iOS 100% validados sin errores de compilación ni tipado.
+
+---
+
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
 
 ```
