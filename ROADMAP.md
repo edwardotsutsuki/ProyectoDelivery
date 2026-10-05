@@ -415,6 +415,33 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
 
 ---
 
+### 🔄 Fase 7: Hardening, Despacho JIT, Push Notifications, Cashback & Lanzamiento Piloto [SPRINT ACTIVO]
+- [x] **Compilación de Mapa OSRM Ecuador (Completada ✅)**:
+  - [x] Archivo `ecuador-latest.osm.pbf` procesado y compilado con algoritmo MLD en `infrastructure/osrm`.
+  - [x] Contenedor `delivery-osrm-backend` activo en puerto `5001` atendiendo cotizaciones de ruta precisas (25.07 km en 25.3 min entre Baba y Babahoyo).
+- [x] **Seguridad y Rate Limiting en API Gateway (Completada ✅)**:
+  - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) para login/auth y `api_general_limit` (40 r/s con burst 60).
+  - [x] Encabezados de proxy inverso, timeouts y WebSockets `/ws/` asegurados.
+- [ ] **🔔 Sprint 7.1: Notificaciones Push Nativas (Expo Notifications / FCM)**:
+  - [ ] Endpoints en Backend Core: `POST /api/v1/notifications/push-token` y `DELETE /push-token` sobre tabla `push_tokens` de PostgreSQL.
+  - [ ] Servicio emisor `pushNotification.service.ts` conectado a la API de Expo Push con manejo de respuestas y reintentos.
+  - [ ] Disparadores automáticos en ciclo de vida del pedido: comanda creada (alerta a cocina), en preparación (alerta a cliente), comanda lista (alerta a motorizados), en camino (alerta a cliente), entrega final (alerta y ganancia de cashback).
+  - [ ] Integración cliente y repartidor en Expo SDK 57: registro de tokens en login y handlers en primer plano/segundo plano.
+- [ ] **⏱️ Sprint 7.2: Sincronización Prep-Time de Cocina & Just-in-Time Dispatch**:
+  - [ ] Migración PostgreSQL: columnas `tiempo_preparacion_min`, `hora_inicio_cocina`, `hora_estimada_listo` en `pedidos`.
+  - [ ] Selector interactivo de tiempo en Panel Cocina Kanban (`10 min`, `20 min`, `35 min`) y temporizador regresivo dinámico en la tarjeta.
+  - [ ] Algoritmo de despacho Just-in-Time: dispara la oferta al motorizado en el minuto óptimo (`hora_estimada_listo - ETA_viaje - 2 min`) para evitar esperas y saturación en el local.
+- [ ] **💎 Sprint 7.3: Club de Fidelidad & Cashback Automático (Ledger Inmutable)**:
+  - [ ] Regla contable: 5% de cashback sobre el subtotal consumido acreditado en `transacciones_ledger` tras entrega exitosa.
+  - [ ] Asiento contable de tipo ingreso inmutable blindado por trigger PL/pgSQL.
+  - [ ] Switch interactivo en checkout móvil y web para aplicar saldo de billetera/cashback en compras futuras.
+- [ ] **⭐ Sprint 7.4: Calificaciones 5★, Respaldo Automatizado y Lanzamiento**:
+  - [ ] Modal de calificación (1 a 5 estrellas) para restaurante y repartidor tras finalizar el pedido (`calificaciones_pedidos`).
+  - [ ] Script de respaldo periódico `pg_dump` para salvaguardar el ledger y la base de datos de producción.
+  - [ ] Checklist final de operaciones físicas en el cantón Baba y corredores de Los Ríos.
+
+---
+
 ## 🤝 Protocolo de Trabajo Multi-Agente (Antigravity + ChatGPT Codex)
 
 ```
