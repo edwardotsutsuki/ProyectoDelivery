@@ -431,6 +431,7 @@ Referencias: [Login/sesión](./frontend/panel-comercio/AUTH.md),
     - *Supermercados & Tiendas:* Avisos de selección ("Recolectando víveres en percha") y alerta a motorizados ("Pedido de [X] fundas/bultos").
     - *Farmacias & Salud:* Avisos de validación ("Verificando receta médica") y alerta a motorizados ("Medicamentos sellados confidenciales").
     - *Tiendas Express:* Avisos de despacho ("Alistado rápido de mostrador").
+  - [ ] **Disparo Inmediato al Cambiar Estado en Local**: La notificación salta en tiempo real en cuanto el encargado del local cambia el estado de la comanda en su pantalla (`PATCH /orders/:id/estado`): al pasar a `en_preparacion` salta al cliente con el tiempo y mensaje contextual; al pasar a `listo` salta al cliente (pedido empacado) y a los motorizados (comanda lista para retiro).
   - [ ] Integración cliente y repartidor en Expo SDK 57: registro de tokens en login y handlers en primer plano/segundo plano.
 - [ ] **⏱️ Sprint 7.2: Sincronización Prep-Time de Cocina & Picking Multi-Vertical (Just-in-Time Dispatch)**:
   - [ ] Migración PostgreSQL: columnas `tiempo_preparacion_min`, `hora_inicio_cocina`, `hora_estimada_listo`, `estado_alistado` en `pedidos`.
