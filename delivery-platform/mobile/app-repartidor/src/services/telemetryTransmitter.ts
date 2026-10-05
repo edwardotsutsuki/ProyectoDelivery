@@ -1,4 +1,4 @@
-// Transmisor de Telemetría WebSocket en Tiempo Real para Repartidor (Baba y Babahoyo)
+import { KalmanGpsFilter, type FilteredLocation } from './kalmanFilter.ts';
 
 export interface LocationPayload {
   repartidorId: string;
@@ -7,6 +7,7 @@ export interface LocationPayload {
   lon: number;
   speed?: number;
   heading?: number;
+  accuracy?: number;
 }
 
 export class TelemetryTransmitter {
@@ -17,16 +18,29 @@ export class TelemetryTransmitter {
   private wsUrl: string;
   private currentLat = -1.7925;
   private currentLon = -79.6790;
+  private currentSpeed = 6.94;
+  private currentHeading = 90;
+  private currentAccuracy = 5.0;
   private activeOrderId?: string;
+  private kalmanFilter = new KalmanGpsFilter(4.0, 3.0);
 
   constructor(wsUrl: string, repartidorId = 'usr-repartidor-01') {
     this.wsUrl = wsUrl;
     this.repartidorId = repartidorId;
   }
 
-  public setLocation(lat: number, lon: number) {
-    this.currentLat = lat;
-    this.currentLon = lon;
+  public setLocation(lat: number, lon: number, accuracy = 5.0, timestampMs = Date.now()): FilteredLocation {
+    const filtered = this.kalmanFilter.filter(lat, lon, accuracy, timestampMs);
+    this.currentLat = filtered.lat;
+    this.currentLon = filtered.lon;
+    this.currentSpeed = filtered.speedMps;
+    this.currentHeading = filtered.bearing;
+    this.currentAccuracy = filtered.accuracy;
+    return filtered;
+  }
+
+  public getSmoothedLocation(): FilteredLocation {
+    return this.kalmanFilter.getState();
   }
 
   public setActiveOrder(pedidoId?: string) {
@@ -86,8 +100,9 @@ export class TelemetryTransmitter {
       pedidoId: this.activeOrderId,
       lat: this.currentLat,
       lon: this.currentLon,
-      speed: 6.94, // 25 km/h promedio en moto en Baba
-      heading: 90,
+      speed: this.currentSpeed,
+      heading: this.currentHeading,
+      accuracy: this.currentAccuracy,
     };
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {

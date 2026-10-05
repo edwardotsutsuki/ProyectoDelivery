@@ -15,7 +15,8 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Download,
-  Upload
+  Upload,
+  Store,
 } from 'lucide-react';
 import { useAuth } from '../AuthProvider';
 import { config } from '../config';
@@ -68,9 +69,57 @@ const DEFAULT_CATEGORIES = [
   'Licores y Vinos'
 ];
 
-export default function MenuManagement() {
+export interface MenuManagementProps {
+  isRetail?: boolean;
+  comercioTipo?: string;
+}
+
+export default function MenuManagement({ isRetail, comercioTipo }: MenuManagementProps = {}) {
   const { session } = useAuth();
   const comercioId = session?.user?.comercioId || '55555555-5555-5555-5555-555555555555';
+
+  const [storeIsRetail, setStoreIsRetail] = useState(isRetail ?? false);
+  const [storeTipo, setStoreTipo] = useState(comercioTipo ?? '');
+
+  useEffect(() => {
+    async function loadComercioMeta() {
+      try {
+        const res = await fetch(`${config.apiBaseUrl}/catalog/comercio/${comercioId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            const retail = json.data.tipo_layout === 'grid_ecommerce' ||
+                           ['supermercado', 'farmacia', 'licorera', 'express'].includes(json.data.tipo_comercio_id);
+            setStoreIsRetail(retail);
+            setStoreTipo(json.data.tipo_comercio_nombre || json.data.categoria || '');
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading store meta in MenuManagement:', err);
+      }
+    }
+    if (comercioId) loadComercioMeta();
+  }, [comercioId]);
+
+  const itemLabel = storeIsRetail ? 'Producto' : 'Plato';
+  const itemLabelPlural = storeIsRetail ? 'Productos' : 'Platos';
+
+  const dynamicCategories = React.useMemo(() => {
+    const t = (storeTipo || '').toLowerCase();
+    if (t.includes('licor') || t.includes('bebida')) {
+      return ['Cervezas', 'Licores y Whisky', 'Vinos y Espumantes', 'Bebidas y Gaseosas', 'Hielo y Snacks', 'Cigarrillos y Vapes', 'Otros'];
+    }
+    if (t.includes('farmacia') || t.includes('salud')) {
+      return ['Medicamentos con Receta', 'Venta Libre & Analgésicos', 'Cuidado Personal e Higiene', 'Primeros Auxilios', 'Vitaminas y Bienestar', 'Bebidas y Snacks'];
+    }
+    if (t.includes('marisco') || t.includes('pescado')) {
+      return ['Pescados Frescos', 'Mariscos y Camarón', 'Ceviches y Especiales', 'Acompañamientos y Encurtidos', 'Bebidas y Fríos'];
+    }
+    if (storeIsRetail) {
+      return ['Víveres y Abarrotes', 'Lácteos y Huevos', 'Bebidas y Jugos', 'Carnes y Embutidos', 'Limpieza y Hogar', 'Snacks y Golosinas'];
+    }
+    return DEFAULT_CATEGORIES;
+  }, [storeTipo, storeIsRetail]);
 
   const [productos, setProductos] = useState<ProductItem[]>([]);
   const [categorias, setCategorias] = useState<CategoriaComercio[]>([]);
@@ -330,7 +379,7 @@ export default function MenuManagement() {
   };
 
   const handleDeleteProduct = async (productId: string, nombre: string) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar el plato "${nombre}"?`)) {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar ${storeIsRetail ? 'el producto' : 'el plato'} "${nombre}"?`)) {
       return;
     }
 
@@ -341,13 +390,13 @@ export default function MenuManagement() {
       const data = await res.json();
       if (data.success) {
         setProductos((prev) => prev.filter((p) => p.id !== productId));
-        setSuccessMsg(`Plato "${nombre}" eliminado del catálogo.`);
+        setSuccessMsg(`${itemLabel} "${nombre}" eliminado del catálogo.`);
         setTimeout(() => setSuccessMsg(''), 4000);
       } else {
         setErrorMsg(data.message || 'No se pudo eliminar el producto.');
       }
     } catch (err) {
-      setErrorMsg('Error de red al eliminar plato.');
+      setErrorMsg(`Error de red al eliminar ${itemLabel.toLowerCase()}.`);
     }
   };
 
@@ -435,13 +484,15 @@ export default function MenuManagement() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-400">
-            <UtensilsCrossed size={16} /> Portal Aliados · Gestión de Menú
+            {storeIsRetail ? <Store size={16} /> : <UtensilsCrossed size={16} />} Portal Aliados · {storeIsRetail ? 'Catálogo e Inventario' : 'Gestión de Menú'}
           </div>
           <h2 className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">
-            Carta de Platos y Disponibilidad en Vivo
+            {storeIsRetail ? 'Catálogo de Productos & Inventario' : 'Carta de Platos y Disponibilidad en Vivo'}
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            Crea, edita y pausa platos al instante. Los cambios se sincronizan en Redis y la app de clientes en Baba & Babahoyo.
+            {storeIsRetail
+              ? 'Crea, edita y ajusta stock de tus productos al instante. Los cambios se sincronizan en Redis y la app de clientes en Baba & Babahoyo.'
+              : 'Crea, edita y pausa platos al instante. Los cambios se sincronizan en Redis y la app de clientes en Baba & Babahoyo.'}
           </p>
         </div>
 
@@ -472,7 +523,7 @@ export default function MenuManagement() {
             onClick={handleOpenCreate}
             className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-900/30 hover:from-rose-500 hover:to-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500"
           >
-            <Plus size={18} /> Agregar Nuevo Producto
+            <Plus size={18} /> Agregar Nuevo {itemLabel}
           </button>
         </div>
       </div>
@@ -500,7 +551,7 @@ export default function MenuManagement() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar plato por nombre o descripción..."
+            placeholder={`Buscar ${itemLabel.toLowerCase()} por nombre o descripción...`}
             className="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
           />
         </div>
@@ -668,7 +719,7 @@ export default function MenuManagement() {
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => handleToggleDisponibilidad(prod.id, prod.is_disponible)}
-                    title={prod.is_disponible ? 'Pausar plato (Agotado por hoy)' : 'Reactivar plato en carta'}
+                    title={prod.is_disponible ? `Pausar ${itemLabel.toLowerCase()} (Agotado por hoy)` : `Reactivar ${itemLabel.toLowerCase()} en catálogo`}
                     className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors ${
                       prod.is_disponible
                         ? 'bg-emerald-950/50 text-emerald-300 hover:bg-rose-900/50 hover:text-rose-200 border border-emerald-500/30'
@@ -681,7 +732,7 @@ export default function MenuManagement() {
 
                   <button
                     onClick={() => handleEditClick(prod)}
-                    title="Editar detalles del plato"
+                    title={`Editar detalles del ${itemLabel.toLowerCase()}`}
                     className="flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2 text-sky-300 hover:bg-slate-700"
                   >
                     <Edit3 size={15} />
@@ -689,7 +740,7 @@ export default function MenuManagement() {
 
                   <button
                     onClick={() => handleDeleteProduct(prod.id, prod.nombre)}
-                    title="Eliminar plato de la carta"
+                    title={`Eliminar ${itemLabel.toLowerCase()} del catálogo`}
                     className="flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-2 text-rose-400 hover:bg-rose-950/40 hover:border-rose-800"
                   >
                     <Trash2 size={15} />
@@ -709,14 +760,14 @@ export default function MenuManagement() {
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-6 py-4 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/20 text-rose-400">
-                  <UtensilsCrossed size={20} />
+                  {storeIsRetail ? <Store size={20} /> : <UtensilsCrossed size={20} />}
                 </div>
                 <div>
                   <h3 className="text-lg font-extrabold text-white">
-                    {editingProduct ? 'Editar Plato o Producto' : 'Crear Nuevo Plato / Producto'}
+                    {editingProduct ? `Editar ${itemLabel}` : `Crear Nuevo ${itemLabel}`}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Configura los datos del producto, precios, fotos y variaciones de porciones
+                    Configura los datos del producto, precios, fotos y variaciones de inventario
                   </p>
                 </div>
               </div>
@@ -748,21 +799,21 @@ export default function MenuManagement() {
 
                     <div>
                       <label className="block text-xs font-bold text-slate-300">
-                        Nombre del Plato / Artículo *
+                        Nombre del {itemLabel} *
                       </label>
                       <input
                         type="text"
                         required
                         value={formNombre}
                         onChange={(e) => setFormNombre(e.target.value)}
-                        placeholder="Ej: Seco de Pato Criollo / Hamburguesa Especial"
+                        placeholder={storeIsRetail ? "Ej: Ron Abuelo 750ml / Paracetamol 500mg" : "Ej: Seco de Pato Criollo / Hamburguesa Especial"}
                         className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none transition-colors"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-300">
-                        Categoría en la Carta / Menú *
+                        Categoría en el {storeIsRetail ? 'Catálogo' : 'Menú'} *
                       </label>
                       <select
                         value={formCategoriaId}
@@ -856,7 +907,7 @@ export default function MenuManagement() {
                         className="h-4 w-4 rounded accent-rose-600"
                       />
                       <label htmlFor="prodDisponible" className="text-xs font-medium text-slate-200 cursor-pointer">
-                        Producto activo y visible para los clientes en la carta
+                        {storeIsRetail ? 'Producto activo y visible para los clientes en la tienda' : 'Plato activo y visible para los clientes en el menú'}
                       </label>
                     </div>
 
@@ -1030,7 +1081,7 @@ export default function MenuManagement() {
                   {/* FOTOGRAFÍA DEL PRODUCTO CON SUBIDA Y PREVISUALIZACIÓN */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
                     <label className="block text-xs font-bold text-slate-300">
-                      Fotografía del Producto / Plato
+                      Fotografía del {itemLabel}
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1122,7 +1173,7 @@ export default function MenuManagement() {
                 ) : editingProduct ? (
                   'Guardar Cambios'
                 ) : (
-                  'Agregar a la Carta'
+                  `Agregar al ${storeIsRetail ? 'Catálogo' : 'Menú'}`
                 )}
               </button>
             </div>

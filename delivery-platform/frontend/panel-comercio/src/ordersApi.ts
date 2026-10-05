@@ -21,7 +21,9 @@ function amount(value: unknown): number {
 const statuses: Record<string, OrderStatus | 'CLOSED'> = {
   PENDING: 'PENDING', ACCEPTED: 'PENDING', PREPARING: 'PREPARING', READY_FOR_PICKUP: 'READY_FOR_PICKUP',
   creado: 'PENDING', confirmado: 'PENDING', en_preparacion: 'PREPARING', listo: 'READY_FOR_PICKUP',
-  ON_THE_WAY: 'CLOSED', DELIVERED: 'CLOSED', CANCELLED: 'CLOSED', en_camino: 'CLOSED', entregado: 'CLOSED', cancelado: 'CLOSED',
+  ON_THE_WAY: 'ON_THE_WAY', en_camino: 'ON_THE_WAY',
+  DELIVERED: 'DELIVERED', entregado: 'DELIVERED',
+  CANCELLED: 'CLOSED', cancelado: 'CLOSED',
 };
 export function parseOrders(value: unknown, merchantId: string): Order[] {
   const envelope = Array.isArray(value) ? { data: value } : object(value);
@@ -61,6 +63,12 @@ export function parseOrders(value: unknown, merchantId: string): Order[] {
       tipoLayout: row.tipo_layout === 'grid_ecommerce' ? 'grid_ecommerce' : 'restaurante',
       politicaSustitucion: typeof row.politica_sustitucion === 'string' ? row.politica_sustitucion : undefined,
       recetaAdjunta: typeof row.receta_adjunta === 'string' ? row.receta_adjunta : undefined,
+      repartidorNombre: typeof row.repartidor_nombre === 'string' ? row.repartidor_nombre : undefined,
+      repartidorTelefono: typeof row.repartidor_telefono === 'string' ? row.repartidor_telefono : undefined,
+      repartidorVehiculo: typeof row.repartidor_vehiculo === 'string'
+        ? `${row.repartidor_vehiculo}${row.repartidor_placa ? ` (${row.repartidor_placa})` : ''}`
+        : undefined,
+      repartidorId: typeof row.repartidor_id === 'string' ? row.repartidor_id : undefined,
     });
   }
   return orders;

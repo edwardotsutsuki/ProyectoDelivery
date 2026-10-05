@@ -14,6 +14,7 @@ import {
   TextInput,
   Modal,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -66,7 +67,7 @@ import {
 } from './src/services/ordersApi';
 import { OrderOfferModal } from './src/components/OrderOfferModal';
 
-const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1';
+const DEFAULT_API = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
 const COURIER_ID = 'usr-repartidor-01';
 
 type TabType = 'orders' | 'wallet' | 'history' | 'profile';
@@ -74,7 +75,7 @@ type TabType = 'orders' | 'wallet' | 'history' | 'profile';
 export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string }) {
   const [currentApi, setCurrentApi] = useState(apiBaseUrl);
   const [activeTab, setActiveTab] = useState<TabType>('orders');
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [gpsReady, setGpsReady] = useState(false);
 
   // Local shift model (preserved for backward compatibility and tests)
@@ -232,6 +233,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       // 1. Consultar pedido activo del repartidor
       const active = await fetchActiveOrder(currentApi, courierId);
       setActiveOrder(active);
+      if (active) {
+        if (active.estado === 'en_camino') {
+          setOrderStep('DELIVERY');
+        } else {
+          setOrderStep('PICKUP');
+        }
+      }
 
       // Si no hay activo, consultar disponibles pasando coordenadas del repartidor seleccionado
       if (!active) {
@@ -728,9 +736,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
               <View style={styles.apiPresetsRow}>
                 <Pressable
                   style={styles.btnSmall}
-                  onPress={() => setCurrentApi('https://delivery-baba-api.loca.lt/api/v1')}
+                  onPress={() => setCurrentApi('https://cocktail-martial-dear-back.trycloudflare.com/api/v1')}
                 >
-                  <Text style={styles.btnSmallText}>Túnel Remoto (loca.lt)</Text>
+                  <Text style={styles.btnSmallText}>Túnel Cloudflare</Text>
                 </Pressable>
                 <Pressable
                   style={styles.btnSmall}
@@ -893,7 +901,17 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         )}
 
         {/* Contenido Principal con Scroll */}
-        <ScrollView contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={loadingOrders}
+              onRefresh={refreshOrders}
+              colors={['#10b981']}
+              tintColor="#10b981"
+            />
+          }
+        >
           {/* ============================================================ */}
           {/* 1. PESTAÑA: DESPACHO Y COMANDAS */}
           {/* ============================================================ */}
@@ -1523,9 +1541,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                 <View style={styles.apiPresetsRow}>
                   <Pressable
                     style={styles.btnSmall}
-                    onPress={() => setCurrentApi('https://delivery-baba-api.loca.lt/api/v1')}
+                    onPress={() => setCurrentApi('https://cocktail-martial-dear-back.trycloudflare.com/api/v1')}
                   >
-                    <Text style={styles.btnSmallText}>Túnel Remoto (loca.lt)</Text>
+                    <Text style={styles.btnSmallText}>Túnel Cloudflare</Text>
                   </Pressable>
                   <Pressable
                     style={styles.btnSmall}

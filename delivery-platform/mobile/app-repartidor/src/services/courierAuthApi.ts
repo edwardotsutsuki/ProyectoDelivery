@@ -18,6 +18,8 @@ export interface CourierAuthResponse {
   token?: string;
 }
 
+import { safeFetch } from './ordersApi';
+
 const COMMON_AUTH_HEADERS = {
   'Content-Type': 'application/json',
   'Accept': 'application/json',
@@ -28,10 +30,10 @@ export async function loginCourier(
   apiBaseUrl: string,
   email: string,
   password: string,
-  fetchFn = fetch
+  fetchFn = safeFetch
 ): Promise<CourierAuthResponse> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
+  const timer = setTimeout(() => controller.abort(), 6000);
 
   try {
     const cleanUrl = `${apiBaseUrl.replace(/\/$/, '')}/auth/login`;

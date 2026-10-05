@@ -129,6 +129,8 @@ const ADDRESS_PRESETS = [
   { label: 'Parque Central (Baba)', direccion: 'Parque Central de Baba, Av. Guayaquil y Sucre', canton: 'Baba', lat: -1.7917, lon: -79.6783 },
   { label: 'Recinto La Nobleza (Baba)', direccion: 'Recinto La Nobleza, Vía Baba - Guare', canton: 'Baba', lat: -1.7650, lon: -79.6920 },
   { label: 'Babahoyo Centro (Comercial)', direccion: 'Av. 9 de Octubre y Pedro Carbo, Babahoyo', canton: 'Babahoyo', lat: -1.8022, lon: -79.5344 },
+  { label: 'Montalvo Centro (Parque Central)', direccion: 'Av. 25 de Abril y 10 de Agosto, Montalvo', canton: 'Montalvo', lat: -1.7912, lon: -79.2875 },
+  { label: 'Malecón Río Cristal (Montalvo)', direccion: 'Malecón del Río Cristal y 25 de Abril, Montalvo', canton: 'Montalvo', lat: -1.7930, lon: -79.2850 },
 ];
 
 const DEFAULT_VERTICALES: TipoComercio[] = [
@@ -142,7 +144,7 @@ const DEFAULT_VERTICALES: TipoComercio[] = [
 
 export default function App() {
   const [vista, setVista] = useState<'home' | 'menu' | 'checkout' | 'tracking'>('home');
-  const [ciudadFiltro, setCiudadFiltro] = useState<'Todas' | 'Baba' | 'Babahoyo'>('Baba');
+  const [ciudadFiltro, setCiudadFiltro] = useState<'Todas' | 'Baba' | 'Babahoyo' | 'Montalvo'>('Todas');
   const [verticales, setVerticales] = useState<TipoComercio[]>(DEFAULT_VERTICALES);
   const [verticalFiltro, setVerticalFiltro] = useState<string>('todos');
   const [menuCategoriaFiltro, setMenuCategoriaFiltro] = useState<string>('todas');
@@ -475,6 +477,46 @@ export default function App() {
   const [pedidoConfirmado, setPedidoConfirmado] = useState<any>(null);
   const [trackingEta, setTrackingEta] = useState<any>(null);
 
+  // Polling en vivo para sincronizar el estado del pedido, asignación del repartidor y despacho
+  useEffect(() => {
+    if (vista !== 'tracking' || !pedidoConfirmado?.id) return;
+
+    let isMounted = true;
+    const pollOrder = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/orders/${pedidoConfirmado.id}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data && isMounted) {
+            const data = json.data;
+            setPedidoConfirmado((prev: any) => ({
+              ...prev,
+              ...data,
+            }));
+
+            if (data.repartidor_nombre) {
+              setTrackingEta((prev: any) => ({
+                ...prev,
+                repartidor: `${data.repartidor_nombre}${data.repartidor_vehiculo ? ` (${data.repartidor_vehiculo}${data.repartidor_placa ? ' - ' + data.repartidor_placa : ''})` : ''}`,
+                repartidorTelefono: data.repartidor_telefono,
+                estado: data.estado,
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error al consultar estado en vivo del pedido:', err);
+      }
+    };
+
+    pollOrder();
+    const interval = setInterval(pollOrder, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [vista, pedidoConfirmado?.id]);
+
   // 1. Cargar comercios y verticales desde API
   const fetchComercios = async () => {
     try {
@@ -500,10 +542,20 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const mapped = data.data.map((c: any) => ({
-            ...c,
-            canton: c.direccion.toLowerCase().includes('babahoyo') ? 'Babahoyo' : 'Baba',
-          }));
+          const mapped = data.data.map((c: any) => {
+            const dir = (c.direccion || '').toLowerCase();
+            const nom = (c.nombre_comercial || '').toLowerCase();
+            let canton = 'Baba';
+            if (dir.includes('montalvo') || nom.includes('montalvo') || nom.includes('montalvino')) {
+              canton = 'Montalvo';
+            } else if (dir.includes('babahoyo') || nom.includes('babahoyo')) {
+              canton = 'Babahoyo';
+            }
+            return {
+              ...c,
+              canton,
+            };
+          });
           setComercios(mapped);
           if (!comercioActivo && mapped.length > 0) {
             setComercioActivo(mapped[0]);
@@ -543,6 +595,23 @@ export default function App() {
           costo_base_envio: 1.50,
           calificacion: 4.8,
           canton: 'Babahoyo',
+          tipo_comercio_id: 'restaurante',
+          tipo_comercio_nombre: 'Restaurante',
+          tipo_comercio_icono: '🍔',
+          tipo_layout: 'restaurante',
+        },
+        {
+          id: '88888888-0001-4000-8000-000000000001',
+          nombre_comercial: 'Asadero & Picantería El Rincón Montalvino',
+          descripcion: 'Pollo asado al carbón, menestras criollas y secos en Montalvo.',
+          direccion: 'Av. 25 de Abril y 10 de Agosto, Montalvo',
+          is_abierto: true,
+          telefono: '+593987112233',
+          categoria: 'Asados & Típica',
+          tiempo_entrega_promedio: 25,
+          costo_base_envio: 1.25,
+          calificacion: 4.9,
+          canton: 'Montalvo',
           tipo_comercio_id: 'restaurante',
           tipo_comercio_nombre: 'Restaurante',
           tipo_comercio_icono: '🍔',
@@ -731,7 +800,9 @@ export default function App() {
     costoEnvioCalculado = Number(storeActivoParaPedido.tarifa_fija_local);
   } else if (zonaSeleccionada) {
     costoEnvioCalculado = Number(zonaSeleccionada.tarifa_envio);
-  } else if (storeActivoParaPedido?.canton === 'Babahoyo') {
+  } else if (storeActivoParaPedido?.costo_base_envio) {
+    costoEnvioCalculado = Number(storeActivoParaPedido.costo_base_envio);
+  } else if (storeActivoParaPedido?.canton === 'Babahoyo' || storeActivoParaPedido?.canton === 'Montalvo') {
     costoEnvioCalculado = 1.50;
   }
   const costoEnvio = costoEnvioCalculado;
@@ -832,7 +903,11 @@ export default function App() {
     setSavingAddress(true);
 
     try {
-      const coords = newCanton === 'Babahoyo' ? { lat: -1.8022, lon: -79.5344 } : { lat: -1.7917, lon: -79.6783 };
+      const coords = newCanton === 'Montalvo' 
+        ? { lat: -1.7912, lon: -79.2875 }
+        : newCanton === 'Babahoyo' 
+        ? { lat: -1.8022, lon: -79.5344 } 
+        : { lat: -1.7917, lon: -79.6783 };
       const res = await fetch(`${API_BASE}/users/${customerUser.id}/direcciones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1036,7 +1111,7 @@ export default function App() {
               Delivery<span style={{ color: '#e11d48' }}>Ya</span>
             </span>
             <span style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
-              Los Ríos · Baba & Babahoyo
+              Los Ríos · Baba · Babahoyo · Montalvo
             </span>
           </div>
         </div>
@@ -1247,18 +1322,18 @@ export default function App() {
                 borderRadius: '6px',
                 letterSpacing: '0.5px'
               }}>
-                PILOTO OFICIAL BABA · LOS RÍOS
+                COBERTURA OFICIAL LOS RÍOS · BABA · BABAHOYO · MONTALVO
               </span>
               <h1 style={{ fontSize: '38px', fontWeight: '900', color: '#0f172a', margin: '14px 0 10px 0', lineHeight: 1.15 }}>
-                Pide comida típica, secos y asados a domicilio en <span style={{ color: '#e11d48' }}>Baba</span>
+                Pide comida, víveres y licores en <span style={{ color: '#e11d48' }}>{ciudadFiltro === 'Todas' ? 'Los Ríos' : `Cantón ${ciudadFiltro}`}</span>
               </h1>
               <p style={{ color: '#475569', fontSize: '15px', lineHeight: 1.5, margin: '0 0 20px 0' }}>
                 Tu pedido llega directo a tu casa con entrega en moto, pago en efectivo o transferencia y seguimiento por GPS en tiempo real.
               </p>
 
               {/* Filtro por Cantón */}
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {(['Todas', 'Baba', 'Babahoyo'] as const).map(c => (
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {(['Todas', 'Baba', 'Babahoyo', 'Montalvo'] as const).map(c => (
                   <button
                     key={c}
                     onClick={() => setCiudadFiltro(c)}
@@ -1272,9 +1347,10 @@ export default function App() {
                       fontWeight: '700',
                       fontSize: '13px',
                       cursor: 'pointer',
+                      transition: 'all 0.2s',
                     }}
                   >
-                    📍 {c === 'Todas' ? 'Ver Todos' : `Cantón ${c}`}
+                    📍 {c === 'Todas' ? 'Ver Todos los Cantones' : `Cantón ${c}`}
                   </button>
                 ))}
               </div>
@@ -2905,120 +2981,306 @@ export default function App() {
       )}
 
       {/* 5. Vista Tracking / Radar de Pedido en Vivo */}
-      {vista === 'tracking' && pedidoConfirmado && (
-        <main style={{ maxWidth: '750px', margin: '0 auto', padding: '40px 24px', width: '100%', boxSizing: 'border-box' }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '24px',
-            border: '2px solid #10b981',
-            padding: '36px',
-            boxShadow: '0 10px 30px rgba(16, 185, 129, 0.1)',
-            textAlign: 'center'
-          }}>
+      {vista === 'tracking' && pedidoConfirmado && (() => {
+        const currentEstado = (pedidoConfirmado.estado || '').toLowerCase();
+        const isDelivered = currentEstado === 'entregado' || currentEstado === 'delivered';
+        const isOnTheWay = currentEstado === 'en_camino' || currentEstado === 'on_the_way';
+        const isReady = currentEstado === 'listo' || currentEstado === 'listo_para_entrega' || currentEstado === 'ready_for_pickup';
+        const isPreparing = currentEstado === 'en_preparacion' || currentEstado === 'preparing' || isReady;
+        
+        const stepIndex = isDelivered ? 4 : isOnTheWay ? 3 : isPreparing ? 2 : 1;
+        const isRetailStore = comercioActivo?.tipo_layout === 'grid_ecommerce' || 
+          ['supermercado', 'farmacia', 'licorera', 'express'].includes(comercioActivo?.tipo_comercio_id || '') || 
+          comercioActivo?.requiere_cocina === false ||
+          pedidoConfirmado?.comercio_requiere_cocina === false;
+
+        const badgeInfo = isDelivered
+          ? { text: '● PEDIDO ENTREGADO CON ÉXITO', bg: '#ecfdf5', color: '#059669', border: '#10b981' }
+          : isOnTheWay
+          ? { text: '● MOTORIZADO EN CAMINO CON TU PEDIDO', bg: '#eef2ff', color: '#4f46e5', border: '#6366f1' }
+          : isReady
+          ? { text: isRetailStore ? '● CANASTA EMPACADA · ESPERANDO MOTORIZADO' : '● ORDEN LISTA · ESPERANDO RETIRO DE MOTORIZADO', bg: '#ecfdf5', color: '#059669', border: '#10b981' }
+          : isPreparing
+          ? { text: isRetailStore ? '● PEDIDO EN PREPARACIÓN / EMPAQUE EN TIENDA' : '● PEDIDO EN PREPARACIÓN EN COCINA EN VIVO', bg: '#ecfdf5', color: '#059669', border: '#10b981' }
+          : { text: '● PEDIDO CONFIRMADO Y REGISTRADO', bg: '#ecfdf5', color: '#059669', border: '#10b981' };
+
+        const headerTitle = isDelivered
+          ? `¡Pedido #${pedidoConfirmado.id.slice(0, 8)} Entregado!`
+          : isOnTheWay
+          ? '¡Tu pedido va en camino!'
+          : isReady
+          ? (isRetailStore ? '¡Canasta lista para retiro!' : '¡Tu orden está lista para retiro!')
+          : isPreparing
+          ? (isRetailStore ? '¡Alistando y empacando tus productos!' : '¡Preparando tu pedido!')
+          : `¡Pedido #${pedidoConfirmado.id.slice(0, 8)} Confirmado!`;
+
+        const headerSubtitle = isDelivered
+          ? `Gracias por pedir en ${pedidoConfirmado.comercio_nombre || comercioActivo?.nombre_comercial || 'nuestra plataforma'}. ¡Esperamos que lo disfrutes!`
+          : isOnTheWay
+          ? `${pedidoConfirmado.repartidor_nombre || 'El repartidor'} ya recogió tu pedido en el local y va en ruta hacia tu dirección.`
+          : isReady
+          ? `El pedido ya está listo y empacado esperando la llegada del motorizado a ${pedidoConfirmado.comercio_nombre || comercioActivo?.nombre_comercial || 'la tienda'}.`
+          : `Tu pedido ha sido recibido y está siendo procesado en ${pedidoConfirmado.comercio_nombre || comercioActivo?.nombre_comercial || 'el local'} en Baba.`;
+
+        const driverName = pedidoConfirmado.repartidor_nombre 
+          ? `${pedidoConfirmado.repartidor_nombre}${pedidoConfirmado.repartidor_vehiculo ? ` (${pedidoConfirmado.repartidor_vehiculo}${pedidoConfirmado.repartidor_placa ? ' - ' + pedidoConfirmado.repartidor_placa : ''})` : ''}`
+          : trackingEta?.repartidor || (stepIndex >= 3 ? 'Repartidor Baba en ruta' : 'Asignando repartidor cercano...');
+
+        return (
+          <main style={{ maxWidth: '750px', margin: '0 auto', padding: '40px 24px', width: '100%', boxSizing: 'border-box' }}>
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: '#ecfdf5',
-              color: '#059669',
-              padding: '6px 16px',
-              borderRadius: '999px',
-              fontWeight: '800',
-              fontSize: '13px',
-              marginBottom: '16px'
+              background: '#fff',
+              borderRadius: '24px',
+              border: `2px solid ${badgeInfo.border}`,
+              padding: '36px',
+              boxShadow: `0 10px 30px ${isOnTheWay ? 'rgba(99, 102, 241, 0.15)' : 'rgba(16, 185, 129, 0.1)'}`,
+              textAlign: 'center'
             }}>
-              ● PEDIDO TRANSMITIDO A COCINA EN VIVO
-            </div>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: badgeInfo.bg,
+                color: badgeInfo.color,
+                padding: '6px 16px',
+                borderRadius: '999px',
+                fontWeight: '800',
+                fontSize: '13px',
+                marginBottom: '16px'
+              }}>
+                {badgeInfo.text}
+              </div>
 
-            <h1 style={{ fontSize: '30px', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
-              ¡Comanda #{pedidoConfirmado.id.slice(0, 8)} Confirmada!
-            </h1>
-            <p style={{ color: '#64748b', fontSize: '15px', margin: '0 0 28px 0' }}>
-              Tu pedido ha ingresado a la comanda de {comercioActivo?.nombre_comercial} en Baba.
-            </p>
+              <h1 style={{ fontSize: '30px', fontWeight: '900', color: '#0f172a', margin: '0 0 8px 0' }}>
+                {headerTitle}
+              </h1>
+              <p style={{ color: '#64748b', fontSize: '15px', margin: '0 0 28px 0' }}>
+                {headerSubtitle}
+              </p>
 
-            {/* Stepper de Progreso */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '32px' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontWeight: 'bold' }}>✓</div>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a', display: 'block', marginTop: '6px' }}>Recibido</span>
-              </div>
-              <div style={{ width: '60px', height: '4px', background: '#10b981' }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontWeight: 'bold' }}>🍳</div>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a', display: 'block', marginTop: '6px' }}>Preparación</span>
-              </div>
-              <div style={{ width: '60px', height: '4px', background: '#cbd5e1' }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>🛵</div>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', display: 'block', marginTop: '6px' }}>En Camino</span>
-              </div>
-              <div style={{ width: '60px', height: '4px', background: '#cbd5e1' }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>🏠</div>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', display: 'block', marginTop: '6px' }}>Entregado</span>
-              </div>
-            </div>
+              {/* Stepper de Progreso Dinámico */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '32px' }}>
+                {/* Paso 1: Recibido */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontWeight: 'bold' }}>✓</div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a', display: 'block', marginTop: '6px' }}>Recibido</span>
+                </div>
+                <div style={{ width: '60px', height: '4px', background: stepIndex >= 2 ? '#10b981' : '#cbd5e1', transition: 'background 0.3s' }} />
 
-            {/* Cuadro de Telemetría OSRM */}
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'left', marginBottom: '28px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Repartidor asignado:</span>
-                <strong style={{ color: '#0f172a' }}>{trackingEta?.repartidor || 'Carlos Repartidor - Moto Baba 01'}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Tiempo estimado (ETA):</span>
-                <strong style={{ color: '#059669', fontSize: '15px' }}>~{trackingEta?.etaMinutos || 15} minutos</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                <span style={{ color: '#64748b' }}>Dirección de destino:</span>
-                <strong style={{ color: '#0f172a' }}>{direccionEntrega}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
-                <span style={{ fontWeight: '700', color: '#0f172a' }}>Total a pagar:</span>
-                <strong style={{ color: '#e11d48', fontSize: '18px' }}>${pedidoConfirmado.total} USD</strong>
-              </div>
-            </div>
+                {/* Paso 2: Preparación / Empaque */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    width: '40px', 
+                    height: '40px', 
+                    borderRadius: '50%', 
+                    background: stepIndex >= 2 ? '#10b981' : '#f1f5f9', 
+                    color: stepIndex >= 2 ? '#fff' : '#94a3b8', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto', 
+                    fontWeight: 'bold',
+                    transition: 'all 0.3s'
+                  }}>
+                    {isRetailStore ? '📦' : '🍳'}
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: stepIndex >= 2 ? '#0f172a' : '#94a3b8', display: 'block', marginTop: '6px' }}>
+                    {isRetailStore ? 'Empaque' : 'Preparación'}
+                  </span>
+                </div>
+                <div style={{ width: '60px', height: '4px', background: stepIndex >= 3 ? '#10b981' : '#cbd5e1', transition: 'background 0.3s' }} />
 
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => setVista('home')}
-                style={{
-                  background: '#0f172a',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '10px',
+                {/* Paso 3: En Camino */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    width: '40px', 
+                    height: '40px', 
+                    borderRadius: '50%', 
+                    background: stepIndex >= 3 ? (isOnTheWay ? '#4f46e5' : '#10b981') : '#f1f5f9', 
+                    color: stepIndex >= 3 ? '#fff' : '#94a3b8', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto',
+                    transition: 'all 0.3s'
+                  }}>
+                    🛵
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: stepIndex >= 3 ? (isOnTheWay ? '#4f46e5' : '#0f172a') : '#94a3b8', display: 'block', marginTop: '6px' }}>
+                    En Camino
+                  </span>
+                </div>
+                <div style={{ width: '60px', height: '4px', background: stepIndex >= 4 ? '#10b981' : '#cbd5e1', transition: 'background 0.3s' }} />
+
+                {/* Paso 4: Entregado */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    width: '40px', 
+                    height: '40px', 
+                    borderRadius: '50%', 
+                    background: stepIndex >= 4 ? '#10b981' : '#f1f5f9', 
+                    color: stepIndex >= 4 ? '#fff' : '#94a3b8', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto',
+                    transition: 'all 0.3s'
+                  }}>
+                    🏠
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: stepIndex >= 4 ? '#0f172a' : '#94a3b8', display: 'block', marginTop: '6px' }}>
+                    Entregado
+                  </span>
+                </div>
+              </div>
+
+              {/* Tarjeta de Seguridad: PIN de Entrega para el Repartidor */}
+              {!isDelivered ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, #fffbeb, #fef3c7)',
+                  border: '2px dashed #f59e0b',
+                  borderRadius: '20px',
+                  padding: '20px 24px',
+                  marginBottom: '26px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '16px',
+                  boxShadow: '0 4px 16px rgba(245, 158, 11, 0.15)',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ flex: '1 1 260px' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fef08a', color: '#854d0e', padding: '4px 10px', borderRadius: '8px', fontWeight: '800', fontSize: '12px', marginBottom: '6px' }}>
+                      🔐 PIN DE SEGURIDAD REQUERIDO
+                    </div>
+                    <h3 style={{ margin: '4px 0', fontSize: '16px', fontWeight: '900', color: '#78350f' }}>
+                      Código de Entrega al Motorizado
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#92400e', lineHeight: '1.4' }}>
+                      Dicta o muestra este código al repartidor al recibir tu pedido para validar y finalizar la entrega.
+                    </p>
+                  </div>
+
+                  <div style={{
+                    background: '#78350f',
+                    color: '#fef08a',
+                    fontSize: '32px',
+                    fontWeight: '900',
+                    letterSpacing: '8px',
+                    padding: '10px 24px',
+                    borderRadius: '16px',
+                    boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.4), 0 4px 10px rgba(120, 53, 15, 0.25)',
+                    fontFamily: 'monospace',
+                    textAlign: 'center'
+                  }}>
+                    {pedidoConfirmado.pin_entrega || '----'}
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '14px',
+                  padding: '12px 18px',
+                  marginBottom: '22px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#166534',
                   fontWeight: '700',
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                Volver al Inicio
-              </button>
+                  fontSize: '13px'
+                }}>
+                  <span>✓ Entrega completada y validada con PIN de seguridad {pedidoConfirmado.pin_entrega ? `(${pedidoConfirmado.pin_entrega})` : ''}</span>
+                </div>
+              )}
 
-              <button
-                onClick={() => {
-                  setPedidoConfirmado(null);
-                  setVista('home');
-                }}
-                style={{
-                  background: '#ffe4e6',
-                  color: '#e11d48',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  fontWeight: '700',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                }}
-              >
-                Hacer otro pedido en Los Ríos
-              </button>
+              {/* Cuadro de Telemetría OSRM y Datos del Repartidor */}
+              <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'left', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Repartidor:</span>
+                  <strong style={{ color: isOnTheWay ? '#4f46e5' : '#0f172a' }}>{driverName}</strong>
+                </div>
+
+                {pedidoConfirmado.repartidor_telefono && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                    <span style={{ color: '#64748b' }}>Teléfono repartidor:</span>
+                    <a 
+                      href={`tel:${pedidoConfirmado.repartidor_telefono}`}
+                      style={{ color: '#059669', fontWeight: '700', textDecoration: 'none' }}
+                    >
+                      📞 {pedidoConfirmado.repartidor_telefono}
+                    </a>
+                  </div>
+                )}
+
+                {pedidoConfirmado.pin_entrega && !isDelivered && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                    <span style={{ color: '#b45309', fontWeight: '700' }}>PIN de verificación:</span>
+                    <strong style={{ color: '#b45309', fontFamily: 'monospace', fontSize: '16px', letterSpacing: '2px' }}>
+                      {pedidoConfirmado.pin_entrega}
+                    </strong>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Tiempo estimado (ETA):</span>
+                  <strong style={{ color: isDelivered ? '#0f172a' : '#059669', fontSize: '15px' }}>
+                    {isDelivered ? 'Entregado' : isOnTheWay ? '~8 - 12 minutos (En ruta)' : `~${trackingEta?.etaMinutos || 15} minutos`}
+                  </strong>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Dirección de destino:</span>
+                  <strong style={{ color: '#0f172a' }}>{pedidoConfirmado.direccion_entrega || direccionEntrega}</strong>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
+                  <span style={{ fontWeight: '700', color: '#0f172a' }}>Total a pagar:</span>
+                  <strong style={{ color: '#e11d48', fontSize: '18px' }}>${pedidoConfirmado.total} USD</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => setVista('home')}
+                  style={{
+                    background: '#0f172a',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '12px 24px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Volver al Inicio
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPedidoConfirmado(null);
+                    setVista('home');
+                  }}
+                  style={{
+                    background: '#ffe4e6',
+                    color: '#e11d48',
+                    border: 'none',
+                    padding: '12px 24px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hacer otro pedido en Los Ríos
+                </button>
+              </div>
             </div>
-          </div>
-        </main>
-      )}
+          </main>
+        );
+      })()}
 
       {/* Drawer Lateral del Carrito */}
       {drawerCarritoAbierto && (
@@ -3717,6 +3979,7 @@ export default function App() {
                         >
                           <option value="Baba">Baba (Sede Principal)</option>
                           <option value="Babahoyo">Babahoyo (Expansión)</option>
+                          <option value="Montalvo">Montalvo (Turismo & Comercio)</option>
                         </select>
                       </div>
                     </div>
@@ -3957,9 +4220,26 @@ export default function App() {
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                            <span style={{ fontSize: '13px', color: '#64748b' }}>
-                              Pago: <strong>{ord.metodo_pago.toUpperCase()}</strong> · Total: <strong style={{ color: '#e11d48' }}>${Number(ord.total).toFixed(2)}</strong>
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', color: '#64748b' }}>
+                                Pago: <strong>{ord.metodo_pago.toUpperCase()}</strong> · Total: <strong style={{ color: '#e11d48' }}>${Number(ord.total).toFixed(2)}</strong>
+                              </span>
+                              {ord.pin_entrega && ord.estado !== 'entregado' && (
+                                <span style={{
+                                  background: '#fef3c7',
+                                  color: '#92400e',
+                                  border: '1px dashed #f59e0b',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  fontWeight: '800',
+                                  fontSize: '11px',
+                                  letterSpacing: '1px',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  🔐 PIN: {ord.pin_entrega}
+                                </span>
+                              )}
+                            </div>
 
                             <button
                               type="button"
@@ -4263,6 +4543,7 @@ export default function App() {
                         >
                           <option value="baba">📍 Baba (Sede)</option>
                           <option value="babahoyo">📍 Babahoyo</option>
+                          <option value="montalvo">📍 Montalvo</option>
                         </select>
                       </div>
                     </div>

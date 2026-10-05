@@ -207,7 +207,10 @@
   - [x] Prevención y modal de conflicto multitienda al agregar productos de un local distinto.
   - [x] Migración arquitectónica de `SafeAreaView` a `react-native-safe-area-context` (`SafeAreaProvider` + `SafeAreaView`) resolviendo advertencias de obsolescencia en React Native 0.86.3 / React 19.
   - [x] Conexión en vivo de catálogo, tarifas y cupones a PostgreSQL con timeout de 3.5s vía `AbortController` y fallback de resiliencia offline.
-  - [x] 13/13 pruebas unitarias aprobadas y bundle Android compilado sin errores.
+  - [x] **Visualizador de Mapa Vectorial Interactivo en Tiempo Real (LiveRouteMap)**: Proyección SVG de alto rendimiento de la ruta OSRM con polilínea iluminada, marcadores de tienda 🏬, destino 🏠 y motorizado 🛵 con halo de pulso de radar, métricas de ETA/distancia, controles de zoom (+/-) y botones de navegación externa 1-toque hacia Google Maps y Waze.
+  - [x] **Geocodificación y Autocompletado de Calles de Los Ríos (searchGeocodingAddresses)**: Búsqueda y chips de selección rápida de puntos verificados (parques, avenidas, mercados, subcentros de salud) para Baba, Babahoyo y Montalvo en el checkout.
+  - [x] **Solución Integral al Bucle de Recarga / Boot Loop**: Migración de DEFAULT_API a túnel Cloudflare (<45 ms), eliminación de ciclos de re-renderizado en el hook de Push Token ([currentUser?.id]) y protección safeFetch con AbortController.
+  - [x] 15/15 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 - [x] **App Móvil Repartidor (`mobile/app-repartidor`)**:
   - [x] Actualización completa a Expo SDK 57 (`expo@~57.0.26`, `react-native@0.86.3`), compatible con Expo Go.
   - [x] Conexión al API Gateway y WebSocket en red local y remota vía túnel público (`https://delivery-baba-api.loca.lt/api/v1`).
@@ -229,14 +232,21 @@
     - Liquidación Automática en el Ledger: Al entregar, `PATCH /orders/:id/entregar` asienta el cobro en efectivo o ganancia digital en `transacciones_ledger` e informa al cliente y restaurante vía Redis Pub/Sub.
     - Alerta de Límite de Efectivo en Caja ($25+) para avisar al motorizado de liquidar en la central de Baba.
     - Selector dinámico de servidor (Túnel remoto vs IP local WiFi).
-  - [x] 14/14 pruebas unitarias aprobadas y bundle Android compilado sin errores.
+  - [x] **Filtro de Kalman para Suavizado de Coordenadas GPS (KalmanGpsFilter)**: Algoritmo matemático 2D que filtra el ruido satelital, amortigua el jitter y los saltos bruscos entre edificaciones, calculando rumbo (bearing) y velocidad continua para motorizados en Baba, Babahoyo y Montalvo.
+  - [x] 18/18 pruebas unitarias aprobadas y bundle Android compilado sin errores.
 
 ---
 
 ### 🔄 Fase 7: Hardening, Despacho JIT, Push Notifications, Cashback & Lanzamiento Piloto [SPRINT ACTIVO]
-- [x] **Compilación de Mapa OSRM Ecuador (Completada ✅)**:
-  - [x] Archivo `ecuador-latest.osm.pbf` procesado y compilado con algoritmo MLD en `infrastructure/osrm`.
-  - [x] Contenedor `delivery-osrm-backend` activo en puerto `5001` atendiendo cotizaciones de ruta precisas (25.07 km en 25.3 min entre Baba y Babahoyo).
+- [x] **Compilación de Mapa OSRM Ecuador & Subregión Los Ríos (Completada ✅)**:
+  - [x] Archivo ecuador-latest.osm.pbf procesado y compilado con algoritmo MLD en infrastructure/osrm.
+  - [x] Contenedor delivery-osrm-backend activo en puerto 5001 atendiendo cotizaciones de ruta precisas (Baba, Babahoyo, Montalvo y Corredor E484).
+- [x] **Geocodificación y Autocompletado Espacial de Los Ríos (Completada ✅)**:
+  - [x] Endpoints /api/v1/tracking/geocoding/search y /geocoding/reverse implementados en backend-core.
+  - [x] Catálogo verificado de puntos clave y avenidas de Montalvo, Baba y Babahoyo con coordenadas exactas e integración en checkout.
+- [x] **Incorporación Plena de Montalvo en PostGIS & Catálogo (Completada ✅)**:
+  - [x] Polígonos de cobertura montalvo_centro y montalvo_periferia en zonas_cobertura con tarifas base de $1.25 y $2.00.
+  - [x] Comercios y productos locales integrados en base de datos (Restaurante, Supermercado, Farmacia, Licorera).
 - [x] **Seguridad y Rate Limiting en API Gateway (Completada ✅)**:
   - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) para login/auth y `api_general_limit` (40 r/s con burst 60).
   - [x] Encabezados de proxy inverso, timeouts y WebSockets `/ws/` asegurados.

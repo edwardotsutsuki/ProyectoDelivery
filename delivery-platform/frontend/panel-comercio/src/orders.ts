@@ -1,4 +1,4 @@
-export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY_FOR_PICKUP';
+export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY_FOR_PICKUP' | 'ON_THE_WAY' | 'DELIVERED';
 export const BABA_RESTAURANT = 'Picantería El Buen Sabor - Baba Centro';
 export interface OrderItem {
   name: string;
@@ -17,12 +17,16 @@ export interface Order {
   pagoNeto?: number;
   comision?: number;
   subtotal?: number;
+  repartidorNombre?: string;
+  repartidorTelefono?: string;
+  repartidorVehiculo?: string;
+  repartidorId?: string;
 }
 export function selectOrders(orders: Order[], query: string, overdueOnly: boolean, now: number): Order[] {
   const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const search = normalize(query.trim());
-  return orders.filter(order => (!search || normalize(`${order.id} ${order.customer}`).includes(search))
-    && (!overdueOnly || (order.status !== 'READY_FOR_PICKUP' && now - order.createdAt >= 20 * 60000)))
+  return orders.filter(order => (!search || normalize(`${order.id} ${order.customer} ${order.repartidorNombre || ''}`).includes(search))
+    && (!overdueOnly || (!['READY_FOR_PICKUP', 'ON_THE_WAY', 'DELIVERED'].includes(order.status) && now - order.createdAt >= 20 * 60000)))
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 }
 export function orderTotal(order: Order): number {
@@ -36,7 +40,13 @@ export function elapsedTime(createdAt: number, now: number): string {
 export function advanceOrder(orders: Order[], id: string, expected: OrderStatus): Order[] {
   return orders.map(order => {
     if (order.id !== id || order.status !== expected) return order;
-    const next: Record<OrderStatus, OrderStatus> = { PENDING: 'PREPARING', PREPARING: 'READY_FOR_PICKUP', READY_FOR_PICKUP: 'READY_FOR_PICKUP' };
+    const next: Record<OrderStatus, OrderStatus> = {
+      PENDING: 'PREPARING',
+      PREPARING: 'READY_FOR_PICKUP',
+      READY_FOR_PICKUP: 'READY_FOR_PICKUP',
+      ON_THE_WAY: 'ON_THE_WAY',
+      DELIVERED: 'DELIVERED'
+    };
     return { ...order, status: next[order.status] };
   });
 }

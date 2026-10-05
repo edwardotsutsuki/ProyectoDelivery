@@ -470,6 +470,10 @@ orderRouter.get('/comercio/:comercioId', async (req: Request, res: Response) => 
         p.direccion_entrega, p.notas, p.fecha_creacion,
         u.nombre as cliente_nombre, u.telefono as cliente_telefono,
         r.nombre as repartidor_nombre,
+        r.telefono as repartidor_telefono,
+        r.tipo_vehiculo as repartidor_vehiculo,
+        r.placa_vehiculo as repartidor_placa,
+        p.repartidor_id,
         (
           SELECT json_agg(json_build_object(
             'producto', COALESCE(pr.nombre, 'Plato especial'),
@@ -587,9 +591,28 @@ orderRouter.get('/:pedidoId', async (req: Request, res: Response) => {
     }
 
     const query = `
-      SELECT p.*, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+      SELECT p.*, 
+             u.nombre as cliente_nombre, u.telefono as cliente_telefono,
+             r.nombre as repartidor_nombre, r.telefono as repartidor_telefono,
+             r.tipo_vehiculo as repartidor_vehiculo, r.placa_vehiculo as repartidor_placa,
+             c.nombre_comercial as comercio_nombre,
+             COALESCE(tc.tipo_layout, 'restaurante') as comercio_tipo_layout,
+             COALESCE(tc.requiere_cocina, true) as comercio_requiere_cocina,
+             (
+               SELECT json_agg(json_build_object(
+                 'producto', COALESCE(pr.nombre, 'Item de pedido'),
+                 'cantidad', pi.cantidad,
+                 'precio_unitario', pi.precio_unitario
+               ))
+               FROM pedidos_items pi
+               LEFT JOIN productos pr ON pr.id = pi.producto_id
+               WHERE pi.pedido_id = p.id
+             ) as items
       FROM pedidos p
       JOIN usuarios u ON u.id = p.cliente_id
+      LEFT JOIN usuarios r ON r.id = p.repartidor_id
+      LEFT JOIN comercios c ON c.id = p.comercio_id
+      LEFT JOIN tipos_comercio tc ON tc.id = c.tipo_comercio_id
       WHERE p.id::text = $1 LIMIT 1;
     `;
     const result = await pgPool.query(query, [pedidoId]);

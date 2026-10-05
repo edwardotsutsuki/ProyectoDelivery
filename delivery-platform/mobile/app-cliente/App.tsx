@@ -43,10 +43,13 @@ import {
 } from './src/services/checkoutApi';
 import {
   fetchOrderEta,
+  searchGeocodingAddresses,
   type OrderTrackingEta,
+  type GeocodingResultItem,
 } from './src/services/trackingClientApi';
+import { LiveRouteMap } from './src/components/LiveRouteMap';
 
-const DEFAULT_API = 'https://delivery-baba-api.loca.lt/api/v1';
+const DEFAULT_API = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
 
 type Screen = 'stores' | 'catalog' | 'cart' | 'checkout' | 'tracking';
 type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual' | 'tarjeta_payphone';
@@ -131,6 +134,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [tarifas, setTarifas] = useState<ZonaTarifa[]>([]);
   const [selectedTarifa, setSelectedTarifa] = useState<ZonaTarifa | null>(null);
   const [address, setAddress] = useState('Av. 25 de Abril y 10 de Agosto, Montalvo Centro');
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lon: number }>({ lat: -1.7905, lon: -79.2880 });
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResultItem[]>([]);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [payment, setPayment] = useState<Payment>('efectivo');
   const [notes, setNotes] = useState('');
 
@@ -234,6 +240,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   useEffect(() => {
     loadStores();
     loadRates();
+    searchGeocodingAddresses(apiBaseUrl, '', selectedCity).then(results => {
+      if (results && results.length > 0) setAddressSuggestions(results);
+    }).catch(() => {});
   }, [selectedCity, selectedVertical]);
 
   const loadStores = async () => {
@@ -571,7 +580,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         }),
       }).catch(() => {});
     }
-  }, [currentUser, apiBaseUrl]);
+  }, [currentUser?.id, apiBaseUrl]);
 
   // Enviar Calificación de Pedido
   const handleSubmitRating = async () => {
@@ -1127,11 +1136,38 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                     <Text style={styles.inputLabel}>Dirección de entrega:</Text>
                     <TextInput
                       value={address}
-                      onChangeText={setAddress}
+                      onChangeText={txt => {
+                        setAddress(txt);
+                        if (!showAddressSuggestions) setShowAddressSuggestions(true);
+                      }}
+                      onFocus={() => setShowAddressSuggestions(true)}
                       multiline
                       style={styles.textInput}
-                      placeholder="Calle, número, barrio y referencia en Baba/Babahoyo"
+                      placeholder="Calle, número, barrio y referencia en Baba/Babahoyo/Montalvo"
                     />
+
+                    {/* Sugerencias de Calles y Referencias de Los Ríos */}
+                    {addressSuggestions.length > 0 && (
+                      <View style={{ marginTop: 6, marginBottom: 8 }}>
+                        <Text style={styles.inputSubLabel}>📌 Puntos verificados y calles de {selectedCity.toUpperCase()}:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+                          {addressSuggestions.map(sug => (
+                            <Pressable
+                              key={sug.id}
+                              onPress={() => {
+                                setAddress(`${sug.direccion} (${sug.referencia})`);
+                                setSelectedCoords({ lat: sug.lat, lon: sug.lon });
+                                setShowAddressSuggestions(false);
+                              }}
+                              style={styles.autocompleteChip}
+                            >
+                              <Text style={styles.autocompleteChipTitle}>📍 {sug.direccion}</Text>
+                              <Text style={styles.autocompleteChipSub}>{sug.barrio} · {sug.referencia.slice(0, 30)}</Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
 
                     <Text style={styles.inputLabel}>Notas para el local / repartidor:</Text>
                     <TextInput
@@ -1355,6 +1391,37 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                       <Text style={styles.stepperLabel}>Entrega</Text>
                     </View>
                   </View>
+
+                  {/* Mapa Vectorial Interactivo de Telemetría OSRM en Vivo */}
+                  <LiveRouteMap
+                    origin={{
+                      lat: trackingData?.origen?.lat ?? -1.7905,
+                      lon: trackingData?.origen?.lon ?? -79.2880,
+                      name: trackingData?.origen?.nombre ?? 'Comercio Local',
+                    }}
+                    destination={{
+                      lat: trackingData?.destino?.lat ?? -1.7918,
+                      lon: trackingData?.destino?.lon ?? -79.2895,
+                      name: address,
+                    }}
+                    courier={trackingData?.repartidor ? {
+                      lat: trackingData.repartidor.lat,
+                      lon: trackingData.repartidor.lon,
+                      speed: trackingData.repartidor.speed,
+                      heading: trackingData.repartidor.heading,
+                      name: 'Carlos Moto 01',
+                    } : {
+                      lat: (trackingData?.origen?.lat ?? -1.7905) + 0.0006,
+                      lon: (trackingData?.origen?.lon ?? -79.2880) - 0.0005,
+                      speed: 6.94,
+                      heading: 90,
+                      name: 'Carlos Moto 01',
+                    }}
+                    routeCoordinates={trackingData?.routeCoordinates}
+                    distanceMeters={trackingData?.distanciaMetros ?? 350}
+                    etaMinutes={trackingData?.etaMinutos ?? 3}
+                    height={220}
+                  />
 
                   <View style={styles.radarDetailsBox}>
                     <Text style={styles.radarDetailRow}>
@@ -2044,6 +2111,9 @@ const styles = StyleSheet.create({
   addressChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   addressChipText: { fontSize: 12, fontWeight: '700', color: '#334155' },
   addressChipTextActive: { color: '#fff' },
+  autocompleteChip: { backgroundColor: '#f0fdf4', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#bbf7d0', marginRight: 8, minWidth: 150 },
+  autocompleteChipTitle: { fontSize: 12, fontWeight: '800', color: '#166534' },
+  autocompleteChipSub: { fontSize: 10, color: '#15803d', marginTop: 2 },
 
   searchBarContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 12, marginBottom: 12 },
   searchInput: { flex: 1, height: 40, fontSize: 13, color: '#0f172a' },

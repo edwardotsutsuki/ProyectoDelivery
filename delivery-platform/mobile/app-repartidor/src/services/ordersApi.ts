@@ -74,6 +74,31 @@ const COMMON_HEADERS = {
   'Bypass-Tunnel-Reminder': 'true',
 };
 
+const FALLBACK_TUNNEL_URL = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
+
+export async function safeFetch(primaryUrl: string, init?: RequestInit, timeoutMs = 3500): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(primaryUrl, { ...init, signal: controller.signal });
+    clearTimeout(timer);
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(`Tunnel status ${res.status}`);
+    }
+    return res;
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (primaryUrl.includes('loca.lt')) {
+      const fallbackUrl = primaryUrl.replace('https://delivery-baba-api.loca.lt/api/v1', FALLBACK_TUNNEL_URL);
+      return await fetch(fallbackUrl, init);
+    } else if (primaryUrl.includes('trycloudflare.com')) {
+      const fallbackUrl = primaryUrl.replace(FALLBACK_TUNNEL_URL, 'https://delivery-baba-api.loca.lt/api/v1');
+      return await fetch(fallbackUrl, init);
+    }
+    throw err;
+  }
+}
+
 export async function fetchAvailableOrders(
   apiBaseUrl: string,
   includePending = true,
@@ -90,7 +115,7 @@ export async function fetchAvailableOrders(
     url += `&repartidorId=${encodeURIComponent(repartidorId)}`;
   }
 
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'GET',
     headers: COMMON_HEADERS,
     signal,
@@ -113,7 +138,7 @@ export async function fetchActiveOrder(
   signal?: AbortSignal
 ): Promise<BackendOrder | null> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/repartidor/${encodeURIComponent(repartidorId)}/activo`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'GET',
     headers: COMMON_HEADERS,
     signal,
@@ -133,7 +158,7 @@ export async function fetchOrderHistory(
   signal?: AbortSignal
 ): Promise<BackendOrder[]> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/repartidor/${encodeURIComponent(repartidorId)}/historial`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'GET',
     headers: COMMON_HEADERS,
     signal,
@@ -153,7 +178,7 @@ export async function acceptOrder(
   repartidorId = 'usr-repartidor-01'
 ): Promise<BackendOrder> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/tomar`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'PATCH',
     headers: COMMON_HEADERS,
     body: JSON.stringify({ repartidorId }),
@@ -173,7 +198,7 @@ export async function deliverOrder(
   pedidoId: string
 ): Promise<BackendOrder> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/entregar`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'PATCH',
     headers: COMMON_HEADERS,
   });
@@ -193,7 +218,7 @@ export async function releaseOrder(
   motivo = 'Avería mecánica o emergencia'
 ): Promise<boolean> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/liberar`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'PATCH',
     headers: COMMON_HEADERS,
     body: JSON.stringify({ motivo }),
@@ -212,7 +237,7 @@ export async function rejectOffer(
   pedidoId: string
 ): Promise<boolean> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(pedidoId)}/rechazar-oferta`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'PATCH',
     headers: COMMON_HEADERS,
   });
@@ -227,7 +252,7 @@ export async function rejectOffer(
 
 export async function fetchDriversList(apiBaseUrl: string): Promise<DriverProfile[]> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/orders/repartidores/lista`;
-  const response = await fetch(url, {
+  const response = await safeFetch(url, {
     method: 'GET',
     headers: COMMON_HEADERS,
   });

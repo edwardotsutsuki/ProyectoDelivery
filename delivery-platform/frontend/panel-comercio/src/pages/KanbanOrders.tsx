@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bell, CheckCircle2, ChefHat, Clock3, MapPin, Package, Plus, ShoppingBag, Volume2, VolumeX, CheckSquare, Square } from 'lucide-react';
+import { ArrowRight, Bell, CheckCircle2, ChefHat, Clock3, MapPin, Package, Plus, ShoppingBag, Volume2, VolumeX, CheckSquare, Square, Bike, Phone, UserCheck } from 'lucide-react';
 import { BABA_RESTAURANT, elapsedTime, orderTotal, selectOrders, type Order, type OrderStatus } from '../orders';
 import { useOrdersBoard } from '../useOrdersBoard';
 import { useAuth } from '../AuthProvider';
@@ -9,19 +9,21 @@ import { config } from '../config';
 const currency = new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' });
 
 const kitchenColumns = [
-  { status: 'PENDING' as OrderStatus, title: 'Nuevos / Pendientes', subtitle: 'Cada gran plato empieza aquí', icon: Bell, color: 'text-amber-300', border: 'border-amber-400', badge: 'bg-amber-400/15 text-amber-200', action: 'Empezar preparación', button: 'bg-amber-300 hover:bg-amber-200 text-slate-950' },
+  { status: 'PENDING' as OrderStatus, title: 'Nuevos / Pendientes', subtitle: 'Órdenes entrantes por preparar', icon: Bell, color: 'text-amber-300', border: 'border-amber-400', badge: 'bg-amber-400/15 text-amber-200', action: 'Empezar preparación', button: 'bg-amber-300 hover:bg-amber-200 text-slate-950' },
   { status: 'PREPARING' as OrderStatus, title: 'En Cocina / Preparación', subtitle: 'El equipo está manos a la obra', icon: ChefHat, color: 'text-sky-300', border: 'border-sky-400', badge: 'bg-sky-400/15 text-sky-200', action: 'Marcar como listo', button: 'bg-sky-300 hover:bg-sky-200 text-slate-950' },
-  { status: 'READY_FOR_PICKUP' as OrderStatus, title: 'Listos para Entrega', subtitle: 'Todo listo para salir', icon: CheckCircle2, color: 'text-emerald-300', border: 'border-emerald-400', badge: 'bg-emerald-400/15 text-emerald-200', action: '', button: '' },
+  { status: 'READY_FOR_PICKUP' as OrderStatus, title: 'Listos para Retiro', subtitle: 'Esperando llegada del motorizado', icon: CheckCircle2, color: 'text-emerald-300', border: 'border-emerald-400', badge: 'bg-emerald-400/15 text-emerald-200', action: '', button: '' },
+  { status: 'ON_THE_WAY' as OrderStatus, title: 'En Camino / Con Repartidor', subtitle: 'En ruta hacia el cliente', icon: Bike, color: 'text-indigo-300', border: 'border-indigo-400', badge: 'bg-indigo-400/15 text-indigo-200', action: '', button: '' },
 ];
 
 const pickingColumns = [
   { status: 'PENDING' as OrderStatus, title: 'Nuevas Canastas', subtitle: 'Órdenes por recolectar en percha', icon: ShoppingBag, color: 'text-amber-300', border: 'border-amber-400', badge: 'bg-amber-400/15 text-amber-200', action: 'Iniciar Picking / Canasta', button: 'bg-amber-300 hover:bg-amber-200 text-slate-950' },
   { status: 'PREPARING' as OrderStatus, title: 'En Recolección / Picking', subtitle: 'Armado y verificación de ítems', icon: Package, color: 'text-sky-300', border: 'border-sky-400', badge: 'bg-sky-400/15 text-sky-200', action: 'Completar y Empacar', button: 'bg-sky-300 hover:bg-sky-200 text-slate-950' },
   { status: 'READY_FOR_PICKUP' as OrderStatus, title: 'Canastas Listas para Retiro', subtitle: 'Empacado y listo para motorizado', icon: CheckCircle2, color: 'text-emerald-300', border: 'border-emerald-400', badge: 'bg-emerald-400/15 text-emerald-200', action: '', button: '' },
+  { status: 'ON_THE_WAY' as OrderStatus, title: 'Despachado / En Ruta', subtitle: 'Canasta en camino con el repartidor', icon: Bike, color: 'text-indigo-300', border: 'border-indigo-400', badge: 'bg-indigo-400/15 text-indigo-200', action: '', button: '' },
 ];
 
-export interface KanbanOrdersProps { source?: 'mock' | 'api'; merchantId?: string; api?: OrdersApi }
-export default function KanbanOrders({ source = 'api', merchantId, api }: KanbanOrdersProps) {
+export interface KanbanOrdersProps { source?: 'mock' | 'api'; merchantId?: string; api?: OrdersApi; isRetail?: boolean }
+export default function KanbanOrders({ source = 'api', merchantId, api, isRetail }: KanbanOrdersProps) {
   const { session } = useAuth();
   const targetMerchantId = merchantId ?? session?.user?.comercioId ?? '55555555-5555-5555-5555-555555555555';
   const board = useOrdersBoard(source, targetMerchantId, api);
@@ -219,7 +221,7 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
           <p className="w-full text-xs text-slate-400">{visibleOrders.length} de {orders.length} órdenes visibles · Orden cronológico prioritario.</p>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {columns.map(column => {
             const items = visibleOrders.filter(order => order.status === column.status);
             const total = orders.filter(order => order.status === column.status).length;
@@ -434,6 +436,32 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
                             {board.pending.has(order.id) ? 'Guardando…' : column.action}
                             <ArrowRight size={16} aria-hidden="true" />
                           </button>
+                        ) : order.status === 'ON_THE_WAY' ? (
+                          <div className="rounded-lg bg-indigo-950/70 border border-indigo-500/40 p-3 space-y-2 text-xs">
+                            <div className="flex items-center justify-between text-indigo-300 font-bold">
+                              <span className="flex items-center gap-1.5">
+                                <Bike size={15} /> Pedido en Camino
+                              </span>
+                              <span className="text-[10px] bg-indigo-500/30 px-2 py-0.5 rounded-full text-indigo-200 uppercase font-extrabold tracking-wider">
+                                Recogido
+                              </span>
+                            </div>
+                            <div className="text-white font-bold flex items-center gap-1.5">
+                              <span className="text-base">🛵</span>
+                              <span>{order.repartidorNombre || 'Motorizado asignado'}</span>
+                            </div>
+                            {order.repartidorVehiculo && (
+                              <div className="text-slate-300 text-[11px] pl-5">
+                                Vehículo: {order.repartidorVehiculo}
+                              </div>
+                            )}
+                            {order.repartidorTelefono && (
+                              <div className="text-slate-300 text-[11px] pl-5 flex items-center gap-1">
+                                <Phone size={11} className="text-emerald-400" />
+                                <span>{order.repartidorTelefono}</span>
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-400/10 px-3 py-3 text-sm font-semibold text-emerald-200">
                             <CheckCircle2 size={16} aria-hidden="true" />Esperando al repartidor
@@ -462,8 +490,8 @@ export default function KanbanOrders({ source = 'api', merchantId, api }: Kanban
 
             <div className="mt-4 space-y-2.5">
               {[
-                'Ingrediente o producto agotado',
-                'Cocina saturada / Exceso de pedidos',
+                'Producto o ingrediente agotado / Sin stock',
+                modoOperacion === 'picking' ? 'Capacidad de empaque saturada / Alta demanda' : 'Cocina saturada / Exceso de pedidos',
                 'Comercio próximo a cerrar / Fuera de horario',
                 'Dirección fuera de cobertura',
                 'Otro motivo',

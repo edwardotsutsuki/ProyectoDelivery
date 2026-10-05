@@ -178,7 +178,8 @@ trackingRouter.get('/pedido/:pedidoId/eta', async (req: Request, res: Response) 
       pedidoId,
       estado: order.estado,
       repartidorId: order.repartidor_id,
-      origen: { lat: driverLat, lon: driverLon },
+      origen: { lat: order.restaurant_lat, lon: order.restaurant_lon, nombre: order.restaurant_nombre },
+      repartidor: { lat: driverLat, lon: driverLon },
       destino: { lat: order.dest_lat, lon: order.dest_lon },
       distanciaMetros: distanceMeters,
       etaMinutos: etaMinutes,
@@ -385,4 +386,269 @@ trackingRouter.post('/calcular-tarifa', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
+
+// 7. Catálogo de Geocodificación y Autocompletado Local de Los Ríos (Montalvo, Baba, Babahoyo)
+interface GeoLocationEntry {
+  id: string;
+  direccion: string;
+  barrio: string;
+  canton: 'baba' | 'babahoyo' | 'montalvo';
+  lat: number;
+  lon: number;
+  referencia: string;
+  tipo: 'parque' | 'calle' | 'salud' | 'comercial' | 'institucional' | 'residencial';
+}
+
+const LOS_RIOS_GEOCODING_CATALOG: GeoLocationEntry[] = [
+  // MONTALVO
+  {
+    id: 'geo-mtv-01',
+    direccion: 'Av. 25 de Abril y 10 de Agosto',
+    barrio: 'Centro',
+    canton: 'montalvo',
+    lat: -1.7905,
+    lon: -79.2880,
+    referencia: 'Frente al Parque Central y GAD Municipal de Montalvo',
+    tipo: 'parque',
+  },
+  {
+    id: 'geo-mtv-02',
+    direccion: 'Malecón del Río Cristal y 25 de Abril',
+    barrio: 'Río Cristal',
+    canton: 'montalvo',
+    lat: -1.7918,
+    lon: -79.2895,
+    referencia: 'Balneario de agua dulce y zona turística gastronómica',
+    tipo: 'comercial',
+  },
+  {
+    id: 'geo-mtv-03',
+    direccion: 'Calle 10 de Agosto y Babahoyo',
+    barrio: 'Salud',
+    canton: 'montalvo',
+    lat: -1.7912,
+    lon: -79.2875,
+    referencia: 'Frente al Subcentro de Salud de Montalvo',
+    tipo: 'salud',
+  },
+  {
+    id: 'geo-mtv-04',
+    direccion: 'Calle Babahoyo y Av. 25 de Abril',
+    barrio: 'Comercial',
+    canton: 'montalvo',
+    lat: -1.7898,
+    lon: -79.2865,
+    referencia: 'Mercado Municipal y Supermercado San Vicente',
+    tipo: 'comercial',
+  },
+  {
+    id: 'geo-mtv-05',
+    direccion: 'Cdla. Bellavista, Calle Los Laureles',
+    barrio: 'Bellavista',
+    canton: 'montalvo',
+    lat: -1.7940,
+    lon: -79.2850,
+    referencia: 'Junto a la cancha sintética de Montalvo',
+    tipo: 'residencial',
+  },
+  {
+    id: 'geo-mtv-06',
+    direccion: 'Vía Montalvo - Caluma Km 1',
+    barrio: 'Periferia',
+    canton: 'montalvo',
+    lat: -1.7850,
+    lon: -79.2820,
+    referencia: 'Control Policial y paradero interprovincial',
+    tipo: 'institucional',
+  },
+  {
+    id: 'geo-mtv-07',
+    direccion: 'Cdla. Las Mercedes, Calle Principal',
+    barrio: 'Las Mercedes',
+    canton: 'montalvo',
+    lat: -1.7930,
+    lon: -79.2910,
+    referencia: 'Entrada por la Capilla San José',
+    tipo: 'residencial',
+  },
+
+  // BABA
+  {
+    id: 'geo-baba-01',
+    direccion: 'Av. Guayaquil y Sucre',
+    barrio: 'Centro',
+    canton: 'baba',
+    lat: -1.7917,
+    lon: -79.6783,
+    referencia: 'Parque Central 23 de Junio y Municipio de Baba',
+    tipo: 'parque',
+  },
+  {
+    id: 'geo-baba-02',
+    direccion: 'Calle Bolívar y Sucre',
+    barrio: 'San Antonio',
+    canton: 'baba',
+    lat: -1.7940,
+    lon: -79.6810,
+    referencia: 'Frente a Picantería El Buen Sabor',
+    tipo: 'residencial',
+  },
+  {
+    id: 'geo-baba-03',
+    direccion: 'Av. Guayaquil y Calle 10 de Agosto',
+    barrio: 'Centro Sur',
+    canton: 'baba',
+    lat: -1.7895,
+    lon: -79.6765,
+    referencia: 'Junto al Hospital Básico de Baba',
+    tipo: 'salud',
+  },
+  {
+    id: 'geo-baba-04',
+    direccion: 'Cdla. 23 de Junio, Mz. 14 Villa 5',
+    barrio: 'La Nobleza',
+    canton: 'baba',
+    lat: -1.7960,
+    lon: -79.6830,
+    referencia: 'Sector residencial La Nobleza de Baba',
+    tipo: 'residencial',
+  },
+  {
+    id: 'geo-baba-05',
+    direccion: 'Malecón del Río Baba y Rocafuerte',
+    barrio: 'Riberas del Río',
+    canton: 'baba',
+    lat: -1.7910,
+    lon: -79.6800,
+    referencia: 'Paseo fluvial y muelle artesanal',
+    tipo: 'comercial',
+  },
+  {
+    id: 'geo-baba-06',
+    direccion: 'Vía Baba - Guare Km 2',
+    barrio: 'Sector Guare',
+    canton: 'baba',
+    lat: -1.7850,
+    lon: -79.6720,
+    referencia: 'Sector agropecuario y recintos de Baba',
+    tipo: 'residencial',
+  },
+
+  // BABAHOYO
+  {
+    id: 'geo-bby-01',
+    direccion: 'Malecón 9 de Octubre y Flores',
+    barrio: 'Malecón',
+    canton: 'babahoyo',
+    lat: -1.8020,
+    lon: -79.5340,
+    referencia: 'Paseo del Malecón junto al Río Babahoyo',
+    tipo: 'comercial',
+  },
+  {
+    id: 'geo-bby-02',
+    direccion: 'Calle 10 de Agosto y Pedro Carbo',
+    barrio: 'Centro',
+    canton: 'babahoyo',
+    lat: -1.8015,
+    lon: -79.5350,
+    referencia: 'Frente al Parque Central 24 de Mayo y Catedral',
+    tipo: 'parque',
+  },
+  {
+    id: 'geo-bby-03',
+    direccion: 'Av. Universitaria y E25',
+    barrio: 'Terminal',
+    canton: 'babahoyo',
+    lat: -1.8150,
+    lon: -79.5280,
+    referencia: 'Terminal Terrestre de Babahoyo',
+    tipo: 'institucional',
+  },
+  {
+    id: 'geo-bby-04',
+    direccion: 'Av. 5 de Junio y General Barona',
+    barrio: 'Hospitalario',
+    canton: 'babahoyo',
+    lat: -1.8055,
+    lon: -79.5320,
+    referencia: 'Hospital General Martín Icaza',
+    tipo: 'salud',
+  },
+  {
+    id: 'geo-bby-05',
+    direccion: 'Cdla. El Chorrillo, Av. Universitaria',
+    barrio: 'El Chorrillo',
+    canton: 'babahoyo',
+    lat: -1.8180,
+    lon: -79.5250,
+    referencia: 'Campus Universidad Técnica de Babahoyo (UTB)',
+    tipo: 'institucional',
+  },
+  {
+    id: 'geo-bby-06',
+    direccion: 'Cdla. Puerta Negra, Calle Los Álamos',
+    barrio: 'Puerta Negra',
+    canton: 'babahoyo',
+    lat: -1.8080,
+    lon: -79.5420,
+    referencia: 'Sector residencial Puerta Negra',
+    tipo: 'residencial',
+  },
+];
+
+// Búsqueda y Autocompletado de Calles / Referencias
+trackingRouter.get('/geocoding/search', (req: Request, res: Response) => {
+  const query = (req.query.q as string || '').toLowerCase().trim();
+  const canton = (req.query.canton as string || '').toLowerCase().trim();
+
+  let results = LOS_RIOS_GEOCODING_CATALOG;
+
+  if (canton && ['baba', 'babahoyo', 'montalvo'].includes(canton)) {
+    results = results.filter(item => item.canton === canton);
+  }
+
+  if (query) {
+    results = results.filter(item =>
+      item.direccion.toLowerCase().includes(query) ||
+      item.barrio.toLowerCase().includes(query) ||
+      item.referencia.toLowerCase().includes(query) ||
+      item.canton.toLowerCase().includes(query)
+    );
+  }
+
+  res.json({
+    success: true,
+    total: results.length,
+    data: results,
+  });
+});
+
+// Geocodificación Inversa (De Coordenadas a Dirección más Cercana)
+trackingRouter.get('/geocoding/reverse', (req: Request, res: Response) => {
+  const lat = parseFloat(req.query.lat as string);
+  const lon = parseFloat(req.query.lon as string);
+
+  if (isNaN(lat) || isNaN(lon)) {
+    return res.status(400).json({ success: false, message: 'Coordenadas lat y lon son requeridas y numéricas' });
+  }
+
+  let closest: GeoLocationEntry | null = null;
+  let minDistance = Infinity;
+
+  for (const entry of LOS_RIOS_GEOCODING_CATALOG) {
+    const dist = haversineDistanceMeters(lat, lon, entry.lat, entry.lon);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closest = entry;
+    }
+  }
+
+  res.json({
+    success: true,
+    distanciaMetros: Math.round(minDistance),
+    data: closest,
+  });
+});
+
 

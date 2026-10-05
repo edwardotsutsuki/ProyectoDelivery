@@ -4,10 +4,12 @@ export interface OrderTrackingEta {
   pedidoId: string;
   estado: string;
   repartidorId?: string;
-  origen: { lat: number; lon: number };
+  origen: { lat: number; lon: number; nombre?: string };
+  repartidor?: { lat: number; lon: number; heading?: number; speed?: number };
   destino: { lat: number; lon: number };
   distanciaMetros: number;
   etaMinutos: number;
+  routeCoordinates?: Array<[number, number]>;
 }
 
 export interface DriverLivePos {
@@ -29,10 +31,35 @@ export interface CalculatedDeliveryFee {
   tarifaFinal: number;
 }
 
+const FALLBACK_TUNNEL_URL = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
+
+export async function safeFetch(primaryUrl: string, init?: RequestInit, timeoutMs = 3500): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(primaryUrl, { ...init, signal: controller.signal });
+    clearTimeout(timer);
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(`Tunnel status ${res.status}`);
+    }
+    return res;
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (primaryUrl.includes('loca.lt')) {
+      const fallbackUrl = primaryUrl.replace('https://delivery-baba-api.loca.lt/api/v1', FALLBACK_TUNNEL_URL);
+      return await fetch(fallbackUrl, init);
+    } else if (primaryUrl.includes('trycloudflare.com')) {
+      const fallbackUrl = primaryUrl.replace(FALLBACK_TUNNEL_URL, 'https://delivery-baba-api.loca.lt/api/v1');
+      return await fetch(fallbackUrl, init);
+    }
+    throw err;
+  }
+}
+
 export async function fetchOrderEta(
   apiBaseUrl: string,
   pedidoId: string,
-  fetchFn = fetch
+  fetchFn = safeFetch
 ): Promise<OrderTrackingEta> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/pedido/${pedidoId}/eta`;
   const res = await fetchFn(url, {
@@ -50,6 +77,7 @@ export async function fetchOrderEta(
     estado: data.estado,
     repartidorId: data.repartidorId,
     origen: data.origen,
+    repartidor: data.repartidor,
     destino: data.destino,
     distanciaMetros: data.distanciaMetros,
     etaMinutos: data.etaMinutos,
@@ -59,7 +87,7 @@ export async function fetchOrderEta(
 export async function fetchDriverPosition(
   apiBaseUrl: string,
   repartidorId: string,
-  fetchFn = fetch
+  fetchFn = safeFetch
 ): Promise<DriverLivePos> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/driver-pos/${repartidorId}`;
   const res = await fetchFn(url, {
@@ -81,7 +109,7 @@ export async function calculateLiveFee(
   originLon: number,
   destLat: number,
   destLon: number,
-  fetchFn = fetch
+  fetchFn = safeFetch
 ): Promise<CalculatedDeliveryFee> {
   const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/calcular-tarifa`;
   const res = await fetchFn(url, {
@@ -110,3 +138,56 @@ export async function calculateLiveFee(
     tarifaFinal: data.desgloseTarifa?.tarifaFinal ?? 1.50,
   };
 }
+
+export interface GeocodingResultItem {
+  id: string;
+  direccion: string;
+  barrio: string;
+  canton: 'baba' | 'babahoyo' | 'montalvo';
+  lat: number;
+  lon: number;
+  referencia: string;
+  tipo: 'parque' | 'calle' | 'salud' | 'comercial' | 'institucional' | 'residencial';
+}
+
+export async function searchGeocodingAddresses(
+  apiBaseUrl: string,
+  query = '',
+  canton = '',
+  fetchFn = safeFetch
+): Promise<GeocodingResultItem[]> {
+  try {
+    const qPart = query ? `q=${encodeURIComponent(query)}` : '';
+    const cPart = canton ? `canton=${encodeURIComponent(canton)}` : '';
+    const qs = [qPart, cPart].filter(Boolean).join('&');
+    const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/geocoding/search${qs ? '?' + qs : ''}`;
+    const res = await fetchFn(url, {
+      headers: { 'Bypass-Tunnel-Reminder': 'true' },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.success && Array.isArray(data.data) ? data.data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function reverseGeocodeAddress(
+  apiBaseUrl: string,
+  lat: number,
+  lon: number,
+  fetchFn = safeFetch
+): Promise<GeocodingResultItem | null> {
+  try {
+    const url = `${apiBaseUrl.replace(/\/$/, '')}/tracking/geocoding/reverse?lat=${lat}&lon=${lon}`;
+    const res = await fetchFn(url, {
+      headers: { 'Bypass-Tunnel-Reminder': 'true' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success && data.data ? data.data : null;
+  } catch {
+    return null;
+  }
+}
+

@@ -366,8 +366,8 @@ function ProtectedPortal() {
 
       {/* Contenido Principal según Tab Activo */}
       <main className="flex-1">
-        {activeTab === 'kanban' && <KanbanOrders source="api" />}
-        {activeTab === 'menu' && <MenuManagement />}
+        {activeTab === 'kanban' && <KanbanOrders source="api" isRetail={isRetail} />}
+        {activeTab === 'menu' && <MenuManagement isRetail={isRetail} comercioTipo={comercioTipo} />}
         {activeTab === 'staff' && (
           <StaffManagement 
             comercioId={comercioId} 
