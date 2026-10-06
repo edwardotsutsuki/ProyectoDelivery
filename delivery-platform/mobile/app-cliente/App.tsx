@@ -49,7 +49,7 @@ import {
 } from './src/services/trackingClientApi';
 import { LiveRouteMap } from './src/components/LiveRouteMap';
 
-const DEFAULT_API = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
+const DEFAULT_API = 'https://medications-rosa-segment-among.trycloudflare.com/api/v1';
 
 type Screen = 'stores' | 'catalog' | 'cart' | 'checkout' | 'tracking';
 type Payment = 'efectivo' | 'transferencia' | 'saldo_virtual' | 'tarjeta_payphone';

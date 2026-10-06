@@ -31,9 +31,34 @@ import {
 import { BackendOrder } from '../services/ordersApi';
 import { NavigationLauncher } from '../services/navigationLauncher';
 
+/**
+ * Distancia Haversine vial con curvatura terrestre y factor de red vial urbano/rural en Los Ríos (1.28x)
+ */
+export function calculateRoadDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371; // Radio de la Tierra en km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const straight = R * c;
+  return Math.round(straight * 1.28 * 10) / 10;
+}
+
+export function calculateEtaMinutes(distKm: number): number {
+  if (distKm <= 0.2) return 1;
+  return Math.max(1, Math.round((distKm / 25) * 60));
+}
+
 interface OrderOfferModalProps {
   visible: boolean;
   order: BackendOrder | null;
+  driverLat?: number;
+  driverLon?: number;
+  apiBaseUrl?: string;
   onAccept: (order: BackendOrder) => void;
   onReject: (order: BackendOrder) => void;
   onClose: () => void;
@@ -42,15 +67,87 @@ interface OrderOfferModalProps {
 export function OrderOfferModal({
   visible,
   order,
+  driverLat,
+  driverLon,
+  apiBaseUrl,
   onAccept,
   onReject,
   onClose,
 }: OrderOfferModalProps) {
   const [secondsLeft, setSecondsLeft] = useState(30);
+  const [distRecogidaKm, setDistRecogidaKm] = useState<number>(0.8);
+  const [distEntregaKm, setDistEntregaKm] = useState<number>(1.8);
+  const [etaRecogidaMin, setEtaRecogidaMin] = useState<number>(3);
+  const [etaEntregaMin, setEtaEntregaMin] = useState<number>(7);
+  const [isOsrmVerified, setIsOsrmVerified] = useState<boolean>(false);
 
   useEffect(() => {
     if (!visible || !order) return;
     setSecondsLeft(30);
+    setIsOsrmVerified(false);
+
+    // 1. Cálculo geodésico vial inmediato de alta precisión
+    const cLat = Number(order.comercio_lat);
+    const cLon = Number(order.comercio_lon);
+    const eLat = Number(order.lat_entrega);
+    const eLon = Number(order.lon_entrega);
+    const dLat = driverLat !== undefined && !isNaN(Number(driverLat)) ? Number(driverLat) : -1.7925;
+    const dLon = driverLon !== undefined && !isNaN(Number(driverLon)) ? Number(driverLon) : -79.6790;
+
+    let initD1 = 0.8;
+    if (dLat && dLon && cLat && cLon) {
+      initD1 = calculateRoadDistanceKm(dLat, dLon, cLat, cLon);
+    } else if (order.distancia_al_comercio_km !== undefined && order.distancia_al_comercio_km !== null) {
+      initD1 = Number(order.distancia_al_comercio_km);
+    }
+
+    let initD2 = 1.8;
+    if (cLat && cLon && eLat && eLon) {
+      initD2 = calculateRoadDistanceKm(cLat, cLon, eLat, eLon);
+    } else if (order.distancia_entrega_km !== undefined && order.distancia_entrega_km !== null) {
+      initD2 = Number(order.distancia_entrega_km);
+    }
+
+    setDistRecogidaKm(initD1);
+    setEtaRecogidaMin(calculateEtaMinutes(initD1));
+    setDistEntregaKm(initD2);
+    setEtaEntregaMin(calculateEtaMinutes(initD2));
+
+    // 2. Consulta asíncrona al motor OSRM para precisión milimétrica de calles
+    if (apiBaseUrl) {
+      const cleanApi = apiBaseUrl.replace(/\/$/, '');
+      const p1 = (dLat && dLon && cLat && cLon)
+        ? fetch(`${cleanApi}/tracking/route?originLat=${dLat}&originLon=${dLon}&destLat=${cLat}&destLon=${cLon}`)
+            .then((r) => r.json())
+            .catch(() => null)
+        : Promise.resolve(null);
+
+      const p2 = (cLat && cLon && eLat && eLon)
+        ? fetch(`${cleanApi}/tracking/route?originLat=${cLat}&originLon=${cLon}&destLat=${eLat}&destLon=${eLon}`)
+            .then((r) => r.json())
+            .catch(() => null)
+        : Promise.resolve(null);
+
+      Promise.all([p1, p2]).then(([r1, r2]) => {
+        let verified = false;
+        if (r1 && r1.success && r1.distanceMeters !== undefined) {
+          const k1 = Math.round((r1.distanceMeters / 1000) * 10) / 10;
+          setDistRecogidaKm(k1);
+          setEtaRecogidaMin(r1.etaMinutes || calculateEtaMinutes(k1));
+          verified = true;
+        }
+        if (r2 && r2.success && r2.distanceMeters !== undefined) {
+          const k2 = Math.round((r2.distanceMeters / 1000) * 10) / 10;
+          setDistEntregaKm(k2);
+          setEtaEntregaMin(r2.etaMinutes || calculateEtaMinutes(k2));
+          verified = true;
+        }
+        if (verified) {
+          setIsOsrmVerified(true);
+        }
+      });
+    }
+
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
@@ -63,15 +160,15 @@ export function OrderOfferModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [visible, order]);
+  }, [visible, order, driverLat, driverLon, apiBaseUrl]);
 
   if (!order) return null;
 
-  const distanciaRecogida = Number(order.distancia_al_comercio_km || 0.8).toFixed(1);
-  const distanciaEntrega = Number(order.distancia_entrega_km || 1.8).toFixed(1);
-  const distanciaTotal = (parseFloat(distanciaRecogida) + parseFloat(distanciaEntrega)).toFixed(1);
-  const etaRecogida = order.eta_recogida_min || 3;
-  const etaEntrega = order.eta_entrega_min || 7;
+  const distanciaRecogida = distRecogidaKm.toFixed(1);
+  const distanciaEntrega = distEntregaKm.toFixed(1);
+  const distanciaTotal = (distRecogidaKm + distEntregaKm).toFixed(1);
+  const etaRecogida = etaRecogidaMin;
+  const etaEntrega = etaEntregaMin;
   const etaTotal = etaRecogida + etaEntrega;
   const ganancia = Number(order.ganancia_repartidor || 1.5).toFixed(2);
   const total = Number(order.total || 0).toFixed(2);

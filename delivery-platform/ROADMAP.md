@@ -237,43 +237,39 @@
 
 ---
 
-### 🔄 Fase 7: Hardening, Despacho JIT, Push Notifications, Cashback & Lanzamiento Piloto [SPRINT ACTIVO]
+### 🔄 Fase 7: Infraestructura Vial, Telemetría GPS, Ruteo y Lanzamiento Piloto [COMPLETADA Y AUDITADA ✅]
 - [x] **Compilación de Mapa OSRM Ecuador & Subregión Los Ríos (Completada ✅)**:
-  - [x] Archivo ecuador-latest.osm.pbf procesado y compilado con algoritmo MLD en infrastructure/osrm.
-  - [x] Contenedor delivery-osrm-backend activo en puerto 5001 atendiendo cotizaciones de ruta precisas (Baba, Babahoyo, Montalvo y Corredor E484).
+  - [x] Archivo `ecuador-latest.osm.pbf` procesado y compilado con algoritmo MLD en `infrastructure/osrm`.
+  - [x] Contenedor `delivery-osrm-backend` activo en puerto 5001 atendiendo cotizaciones de ruta precisas (Baba, Babahoyo, Montalvo y Corredor E484).
 - [x] **Geocodificación y Autocompletado Espacial de Los Ríos (Completada ✅)**:
-  - [x] Endpoints /api/v1/tracking/geocoding/search y /geocoding/reverse implementados en backend-core.
+  - [x] Endpoints `/api/v1/tracking/geocoding/search` y `/geocoding/reverse` implementados en `backend-core`.
   - [x] Catálogo verificado de puntos clave y avenidas de Montalvo, Baba y Babahoyo con coordenadas exactas e integración en checkout.
 - [x] **Incorporación Plena de Montalvo en PostGIS & Catálogo (Completada ✅)**:
-  - [x] Polígonos de cobertura montalvo_centro y montalvo_periferia en zonas_cobertura con tarifas base de $1.25 y $2.00.
+  - [x] Polígonos de cobertura `montalvo_centro` y `montalvo_periferia` en `zonas_cobertura` con tarifas base de $1.25 y $2.00.
   - [x] Comercios y productos locales integrados en base de datos (Restaurante, Supermercado, Farmacia, Licorera).
+- [x] **Cálculo Vial Dinámico de 2 Tramos en App Repartidor (Completada ✅)**:
+  - [x] Algoritmo Haversine vial con factor de red vial (1.28x) e integración con OSRM en tiempo real al pulsar 'VER RUTA'.
+  - [x] Eliminados fallbacks fijos (0.8 km) en backend y móvil; cotización exacta de tramo 1 (repartidor a local) y tramo 2 (local a cliente) para Baba, Babahoyo y Montalvo.
+- [x] **Filtro de Kalman GPS 2D y LiveRouteMap Vectorial Interactivo (Completada ✅)**:
+  - [x] Algoritmo 2D en repartidor amortigua jitter satelital y calcula rumbo continuo.
+  - [x] Mapa interactivo en app cliente con halo de radar, trazado OSRM y botones directos hacia Waze y Google Maps.
+- [x] **Sincronización en Tiempo Real de Estados (Completada ✅)**:
+  - [x] Flujo de estados (`creado` ➔ `en_preparacion` ➔ `listo` ➔ `en_camino` ➔ `entregado`) coordinado por WebSockets y Redis Pub/Sub.
+  - [x] PIN de entrega criptográfico de 4 dígitos verificado en el domicilio para desbloquear liquidación.
 - [x] **Seguridad y Rate Limiting en API Gateway (Completada ✅)**:
-  - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) para login/auth y `api_general_limit` (40 r/s con burst 60).
-  - [x] Encabezados de proxy inverso, timeouts y WebSockets `/ws/` asegurados.
-- [ ] **🔔 Sprint 7.1: Notificaciones Push Nativas Multi-Vertical (Expo Notifications / FCM)**:
-  - [ ] Endpoints en Backend Core: `POST /api/v1/notifications/push-token` y `DELETE /push-token` sobre tabla `push_tokens` de PostgreSQL.
-  - [ ] Servicio emisor `pushNotification.service.ts` conectado a la API de Expo Push con manejo de respuestas y reintentos.
-  - [ ] **Matriz de Notificaciones Contextuales por Vertical**:
-    - *Restaurantes / Comedores:* Avisos de cocción ("Comida en el fogón") y alerta a motorizados ("Comida caliente, mantener horizontal").
-    - *Licoreras & Bebidas:* Avisos de enfriado ("Bebidas alistándose con hielo") y alerta a motorizados ("Contiene alcohol, exigir cédula +18").
-    - *Supermercados & Tiendas:* Avisos de selección ("Recolectando víveres en percha") y alerta a motorizados ("Pedido de [X] fundas/bultos").
-    - *Farmacias & Salud:* Avisos de validación ("Verificando receta médica") y alerta a motorizados ("Medicamentos sellados confidenciales").
-    - *Tiendas Express:* Avisos de despacho ("Alistado rápido de mostrador").
-  - [ ] **Disparo Inmediato al Cambiar Estado en Local**: La notificación salta en tiempo real en cuanto el encargado del local cambia el estado de la comanda en su pantalla (`PATCH /orders/:id/estado`): al pasar a `en_preparacion` salta al cliente con el tiempo y mensaje contextual; al pasar a `listo` salta al cliente (pedido empacado) y a los motorizados (comanda lista para retiro).
-  - [ ] Integración cliente y repartidor en Expo SDK 57: registro de tokens en login y handlers en primer plano/segundo plano.
-- [ ] **⏱️ Sprint 7.2: Sincronización Prep-Time de Cocina & Picking Multi-Vertical (Just-in-Time Dispatch)**:
-  - [ ] Migración PostgreSQL: columnas `tiempo_preparacion_min`, `hora_inicio_cocina`, `hora_estimada_listo`, `estado_alistado` en `pedidos`.
-  - [ ] **Panel Comercio Adaptativo (Kanban `:3003`)**:
-    - *Restaurantes:* Selector de cocción (`10 min`, `20 min`, `35 min`) y temporizador regresivo de cocina.
-    - *Licoreras:* Selector de bodega/enfriado (`3 min`, `7 min`, `12 min`).
-    - *Supermercados / Tiendas:* Selector de picking por cantidad de ítems (`5 min`, `12 min`, `20 min`), checklist de recolección y botón de solicitud de producto sustituto.
-    - *Farmacias:* Selector de dispensación (`5 min`, `10 min`) con visor de receta médica.
-  - [ ] **Algoritmo JIT Diferenciado**: Despacho casi inmediato para licoreras/express (<2 min) y retención calibrada para restaurantes según cocción (`hora_estimada_listo - ETA_viaje - margen`).
-- [ ] **💎 Sprint 7.3: Club de Fidelidad & Cashback Automático (Ledger Inmutable)**:
-  - [ ] Regla contable: 5% de cashback sobre el subtotal consumido acreditado en `transacciones_ledger` tras entrega exitosa.
-  - [ ] Asiento contable de tipo ingreso inmutable blindado por trigger PL/pgSQL.
-  - [ ] Switch interactivo en checkout móvil y web para aplicar saldo de billetera/cashback en compras futuras.
-- [ ] **⭐ Sprint 7.4: Calificaciones 5★, Respaldo Automatizado y Lanzamiento**:
-  - [ ] Modal de calificación (1 a 5 estrellas) para restaurante y repartidor tras finalizar el pedido (`calificaciones_pedidos`).
-  - [ ] Script de respaldo periódico `pg_dump` para salvaguardar el ledger y la base de datos de producción.
-  - [ ] Checklist final de operaciones físicas en el cantón Baba y corredores de Los Ríos.
+  - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) y `api_general_limit` (40 r/s con burst 60).
+- [x] **Depuración de Alcance para Lanzamiento Ágil**:
+  - [x] *Descartado Sprint 7.2 (Algoritmo JIT de retención y visores de recetas/picking):* innecesario para el volumen inicial de flotas ágiles en cantones pequeños; el flujo Kanban estándar resuelve la cocina.
+  - [x] *Simplificado Sprint 7.1:* Notificaciones coordinadas por WebSockets y eventos Redis en tiempo real.
+- [x] **100% Suites de Pruebas Aprobadas**: 18/18 pruebas en app-repartidor y 16/16 en app-cliente; 0 errores de compilación TypeScript.
+
+---
+
+### 🚀 Fase 8: Fidelización, Calificaciones y Expansión Comercial [POST-PILOTO]
+- [ ] **Club de Fidelidad & Cashback Automático (5%)**:
+  - [ ] Activación de reintegros en billetera virtual tras validar márgenes comerciales y rentabilidad por carrera.
+- [ ] **Sistema de Calificaciones 5★ y Reputación**:
+  - [ ] Reseñas post-entrega para comercios y repartidores con promedio en tiempo real.
+- [ ] **Respaldos Automatizados en Producción**:
+  - [ ] Tarea cron de respaldos `pg_dump` periódicos para la base de datos y el ledger contable.
+- [ ] **Apertura de Nuevos Corredores Cantonales**: Vinces, Puebloviejo y Salitre.

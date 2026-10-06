@@ -65,9 +65,9 @@ import {
   type BackendOrder,
   type DriverProfile,
 } from './src/services/ordersApi';
-import { OrderOfferModal } from './src/components/OrderOfferModal';
+import { OrderOfferModal, calculateRoadDistanceKm } from './src/components/OrderOfferModal';
 
-const DEFAULT_API = 'https://cocktail-martial-dear-back.trycloudflare.com/api/v1';
+const DEFAULT_API = 'https://medications-rosa-segment-among.trycloudflare.com/api/v1';
 const COURIER_ID = 'usr-repartidor-01';
 
 type TabType = 'orders' | 'wallet' | 'history' | 'profile';
@@ -243,11 +243,13 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
       // Si no hay activo, consultar disponibles pasando coordenadas del repartidor seleccionado
       if (!active) {
+        const activeDriverLat = selectedDriver ? Number(selectedDriver.lat) : -1.7925;
+        const activeDriverLon = selectedDriver ? Number(selectedDriver.lon) : -79.6790;
         const disponibles = await fetchAvailableOrders(
           currentApi,
           includePending,
-          selectedDriver ? Number(selectedDriver.lat) : undefined,
-          selectedDriver ? Number(selectedDriver.lon) : undefined,
+          activeDriverLat,
+          activeDriverLon,
           courierId
         );
         setAvailableOrders(disponibles);
@@ -1221,15 +1223,26 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         vertical === 'farmacia' ? 'Farmacia 💊' :
                         vertical === 'licoreria' ? 'Licorería 🍷' : 'Restaurante 🍽️';
 
-                      const distRecogida = order.distancia_al_comercio_km !== undefined
-                        ? `${Number(order.distancia_al_comercio_km).toFixed(1)} km`
-                        : null;
-                      const distEntrega = order.distancia_entrega_km !== undefined
-                        ? `${Number(order.distancia_entrega_km).toFixed(1)} km`
-                        : null;
-                      const distTotal = order.distancia_total_km !== undefined
-                        ? `${Number(order.distancia_total_km).toFixed(1)} km`
-                        : null;
+                      const activeDriverLat = selectedDriver ? Number(selectedDriver.lat) : -1.7925;
+                      const activeDriverLon = selectedDriver ? Number(selectedDriver.lon) : -79.6790;
+                      const cLat = Number(order.comercio_lat);
+                      const cLon = Number(order.comercio_lon);
+                      const eLat = Number(order.lat_entrega);
+                      const eLon = Number(order.lon_entrega);
+
+                      const distRecogidaKm = (cLat && cLon)
+                        ? calculateRoadDistanceKm(activeDriverLat, activeDriverLon, cLat, cLon)
+                        : (order.distancia_al_comercio_km !== undefined && order.distancia_al_comercio_km !== null ? Number(order.distancia_al_comercio_km) : 1.2);
+
+                      const distEntregaKm = (cLat && cLon && eLat && eLon)
+                        ? calculateRoadDistanceKm(cLat, cLon, eLat, eLon)
+                        : (order.distancia_entrega_km !== undefined && order.distancia_entrega_km !== null ? Number(order.distancia_entrega_km) : 1.5);
+
+                      const distTotalKm = Math.round((distRecogidaKm + distEntregaKm) * 10) / 10;
+
+                      const distRecogida = `${distRecogidaKm.toFixed(1)} km`;
+                      const distEntrega = `${distEntregaKm.toFixed(1)} km`;
+                      const distTotal = `${distTotalKm.toFixed(1)} km`;
 
                       return (
                         <View key={order.id} style={[styles.orderCard, isExclusive && styles.orderCardExclusive]}>
@@ -1568,6 +1581,9 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         <OrderOfferModal
           visible={isOfferModalVisible}
           order={selectedOrderForModal}
+          driverLat={selectedDriver ? Number(selectedDriver.lat) : -1.7925}
+          driverLon={selectedDriver ? Number(selectedDriver.lon) : -79.6790}
+          apiBaseUrl={currentApi}
           onAccept={(order) => {
             setIsOfferModalVisible(false);
             handleAcceptOrder(order);
