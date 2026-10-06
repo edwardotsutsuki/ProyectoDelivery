@@ -1232,16 +1232,18 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
 
                       const distRecogidaKm = (cLat && cLon)
                         ? calculateRoadDistanceKm(activeDriverLat, activeDriverLon, cLat, cLon)
-                        : (order.distancia_al_comercio_km !== undefined && order.distancia_al_comercio_km !== null ? Number(order.distancia_al_comercio_km) : 1.2);
+                        : (order.distancia_al_comercio_km !== undefined && order.distancia_al_comercio_km !== null ? Math.max(0.2, Number(order.distancia_al_comercio_km) || 0.6) : 0.6);
 
                       const distEntregaKm = (cLat && cLon && eLat && eLon)
                         ? calculateRoadDistanceKm(cLat, cLon, eLat, eLon)
-                        : (order.distancia_entrega_km !== undefined && order.distancia_entrega_km !== null ? Number(order.distancia_entrega_km) : 1.5);
+                        : (order.distancia_entrega_km !== undefined && order.distancia_entrega_km !== null ? Math.max(0.3, Number(order.distancia_entrega_km) || 0.8) : 0.8);
 
-                      const distTotalKm = Math.round((distRecogidaKm + distEntregaKm) * 10) / 10;
+                      const safeRecogida = Math.max(0.2, distRecogidaKm);
+                      const safeEntrega = Math.max(0.3, distEntregaKm);
+                      const distTotalKm = Math.round((safeRecogida + safeEntrega) * 10) / 10;
 
-                      const distRecogida = `${distRecogidaKm.toFixed(1)} km`;
-                      const distEntrega = `${distEntregaKm.toFixed(1)} km`;
+                      const distRecogida = `${safeRecogida.toFixed(1)} km`;
+                      const distEntrega = `${safeEntrega.toFixed(1)} km`;
                       const distTotal = `${distTotalKm.toFixed(1)} km`;
 
                       return (

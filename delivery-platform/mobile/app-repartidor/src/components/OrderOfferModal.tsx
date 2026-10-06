@@ -35,7 +35,9 @@ import { NavigationLauncher } from '../services/navigationLauncher';
  * Distancia Haversine vial con curvatura terrestre y factor de red vial urbano/rural en Los Ríos (1.28x)
  */
 export function calculateRoadDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  if (!lat1 || !lon1 || !lat2 || !lon2 || isNaN(Number(lat1)) || isNaN(Number(lon1)) || isNaN(Number(lat2)) || isNaN(Number(lon2))) {
+    return 0.5;
+  }
   const R = 6371; // Radio de la Tierra en km
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -45,11 +47,13 @@ export function calculateRoadDistanceKm(lat1: number, lon1: number, lat2: number
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const straight = R * c;
-  return Math.round(straight * 1.28 * 10) / 10;
+  const roadKm = Math.round(straight * 1.28 * 10) / 10;
+  // Nunca marcar 0.0 km: mínimo operativo de 0.2 km incluso si el repartidor está en el mismo punto de cocina
+  return Math.max(0.2, roadKm);
 }
 
 export function calculateEtaMinutes(distKm: number): number {
-  if (distKm <= 0.2) return 1;
+  if (distKm <= 0.3) return 1;
   return Math.max(1, Math.round((distKm / 25) * 60));
 }
 
@@ -94,18 +98,18 @@ export function OrderOfferModal({
     const dLat = driverLat !== undefined && !isNaN(Number(driverLat)) ? Number(driverLat) : -1.7925;
     const dLon = driverLon !== undefined && !isNaN(Number(driverLon)) ? Number(driverLon) : -79.6790;
 
-    let initD1 = 0.8;
+    let initD1 = 0.5;
     if (dLat && dLon && cLat && cLon) {
       initD1 = calculateRoadDistanceKm(dLat, dLon, cLat, cLon);
     } else if (order.distancia_al_comercio_km !== undefined && order.distancia_al_comercio_km !== null) {
-      initD1 = Number(order.distancia_al_comercio_km);
+      initD1 = Math.max(0.2, Number(order.distancia_al_comercio_km) || 0.5);
     }
 
-    let initD2 = 1.8;
+    let initD2 = 0.8;
     if (cLat && cLon && eLat && eLon) {
       initD2 = calculateRoadDistanceKm(cLat, cLon, eLat, eLon);
     } else if (order.distancia_entrega_km !== undefined && order.distancia_entrega_km !== null) {
-      initD2 = Number(order.distancia_entrega_km);
+      initD2 = Math.max(0.3, Number(order.distancia_entrega_km) || 0.8);
     }
 
     setDistRecogidaKm(initD1);
@@ -131,15 +135,17 @@ export function OrderOfferModal({
       Promise.all([p1, p2]).then(([r1, r2]) => {
         let verified = false;
         if (r1 && r1.success && r1.distanceMeters !== undefined) {
-          const k1 = Math.round((r1.distanceMeters / 1000) * 10) / 10;
+          const rawKm1 = r1.distanceMeters / 1000;
+          const k1 = Math.max(0.2, Math.round(rawKm1 * 10) / 10);
           setDistRecogidaKm(k1);
-          setEtaRecogidaMin(r1.etaMinutes || calculateEtaMinutes(k1));
+          setEtaRecogidaMin(Math.max(1, r1.etaMinutes || calculateEtaMinutes(k1)));
           verified = true;
         }
         if (r2 && r2.success && r2.distanceMeters !== undefined) {
-          const k2 = Math.round((r2.distanceMeters / 1000) * 10) / 10;
+          const rawKm2 = r2.distanceMeters / 1000;
+          const k2 = Math.max(0.3, Math.round(rawKm2 * 10) / 10);
           setDistEntregaKm(k2);
-          setEtaEntregaMin(r2.etaMinutes || calculateEtaMinutes(k2));
+          setEtaEntregaMin(Math.max(2, r2.etaMinutes || calculateEtaMinutes(k2)));
           verified = true;
         }
         if (verified) {
@@ -164,9 +170,11 @@ export function OrderOfferModal({
 
   if (!order) return null;
 
-  const distanciaRecogida = distRecogidaKm.toFixed(1);
-  const distanciaEntrega = distEntregaKm.toFixed(1);
-  const distanciaTotal = (distRecogidaKm + distEntregaKm).toFixed(1);
+  const safeRecogida = Math.max(0.2, distRecogidaKm);
+  const safeEntrega = Math.max(0.3, distEntregaKm);
+  const distanciaRecogida = safeRecogida.toFixed(1);
+  const distanciaEntrega = safeEntrega.toFixed(1);
+  const distanciaTotal = (safeRecogida + safeEntrega).toFixed(1);
   const etaRecogida = etaRecogidaMin;
   const etaEntrega = etaEntregaMin;
   const etaTotal = etaRecogida + etaEntrega;

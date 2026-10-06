@@ -879,16 +879,16 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
           ELSE false
         END as es_oferta_prioritaria,
         ${hasCoords 
-          ? `ROUND((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) / 1000.0 * 1.25)::numeric, 2) as distancia_al_comercio_km,` 
-          : `NULL as distancia_al_comercio_km,`}
-        ROUND((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25)::numeric, 2) as distancia_entrega_km,
+          ? `GREATEST(0.20, ROUND((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) / 1000.0 * 1.25)::numeric, 2)) as distancia_al_comercio_km,` 
+          : `0.60 as distancia_al_comercio_km,`}
+        GREATEST(0.30, ROUND((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25)::numeric, 2)) as distancia_entrega_km,
         ${hasCoords 
-          ? `ROUND(((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) + ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega)) / 1000.0 * 1.25)::numeric, 2) as distancia_total_km,` 
-          : `ROUND((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25)::numeric, 2) as distancia_total_km,`}
+          ? `GREATEST(0.50, ROUND(((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) + ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega)) / 1000.0 * 1.25)::numeric, 2)) as distancia_total_km,` 
+          : `GREATEST(0.80, ROUND((0.60 + (ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25))::numeric, 2)) as distancia_total_km,`}
         ${hasCoords 
           ? `GREATEST(1, ROUND(((ST_DistanceSphere(ST_SetSRID(ST_MakePoint($1, $2), 4326), c.ubicacion) / 1000.0 * 1.25) / 25.0 * 60)::numeric, 0)) as eta_recogida_min,` 
           : `3 as eta_recogida_min,`}
-        GREATEST(1, ROUND(((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25) / 25.0 * 60)::numeric, 0)) as eta_entrega_min,
+        GREATEST(2, ROUND(((ST_DistanceSphere(c.ubicacion, p.ubicacion_entrega) / 1000.0 * 1.25) / 25.0 * 60)::numeric, 0)) as eta_entrega_min,
         (
           SELECT json_agg(json_build_object(
             'producto', COALESCE(pr.nombre, 'Ítem'),
