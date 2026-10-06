@@ -357,12 +357,14 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
       if (!active) {
         const activeDriverLat = liveGps ? liveGps.lat : (selectedDriver ? Number(selectedDriver.lat) : -1.7925);
         const activeDriverLon = liveGps ? liveGps.lon : (selectedDriver ? Number(selectedDriver.lon) : -79.6790);
+        const driverCiudad = selectedDriver?.ciudad;
         const disponibles = await fetchAvailableOrders(
           currentApi,
           includePending,
           activeDriverLat,
           activeDriverLon,
-          courierId
+          courierId,
+          driverCiudad
         );
         setAvailableOrders(disponibles);
 

@@ -837,6 +837,23 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
     const driverId = rawDriverId ? resolveDriverId(rawDriverId) : null;
     const rawLat = req.query.lat as string;
     const rawLon = req.query.lon as string;
+    let ciudadFiltro = ((req.query.ciudad || req.query.canton) as string)?.trim();
+
+    // Si no viene ciudad explícita en query pero viene repartidorId, inferir cantón asignado del perfil
+    if (!ciudadFiltro && driverId) {
+      try {
+        const driverRes = await pgPool.query(
+          'SELECT nombre FROM usuarios WHERE id::text = $1',
+          [driverId]
+        );
+        if (driverRes.rows.length > 0) {
+          const dName = (driverRes.rows[0].nombre || '').toLowerCase();
+          if (dName.includes('baba') && !dName.includes('babahoyo')) ciudadFiltro = 'Baba';
+          else if (dName.includes('babahoyo')) ciudadFiltro = 'Babahoyo';
+          else if (dName.includes('montalvo')) ciudadFiltro = 'Montalvo';
+        }
+      } catch {}
+    }
 
     const hasCoords = rawLat !== undefined && rawLon !== undefined && !isNaN(parseFloat(rawLat)) && !isNaN(parseFloat(rawLon));
     const driverLat = hasCoords ? parseFloat(rawLat) : null;
@@ -847,8 +864,16 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
       : `p.estado::text IN ('listo', 'READY_FOR_PICKUP')`;
 
     const params: any[] = [];
+    let pIdx = 1;
+    let coordsIndices: { lonIdx: number; latIdx: number } | null = null;
     if (hasCoords) {
       params.push(driverLon, driverLat);
+      coordsIndices = { lonIdx: pIdx++, latIdx: pIdx++ };
+    }
+    let ciudadParamIdx: number | null = null;
+    if (ciudadFiltro) {
+      params.push(ciudadFiltro);
+      ciudadParamIdx = pIdx++;
     }
 
     const query = `
@@ -912,6 +937,16 @@ orderRouter.get('/disponibles/reparto', async (req: Request, res: Response) => {
           OR p.fecha_expiracion_oferta <= NOW()
           ${driverId ? `OR p.repartidor_asignado_inicial::text = '${driverId}'` : ''}
         )
+        ${ciudadParamIdx !== null ? `
+        AND (
+          EXISTS (
+            SELECT 1 FROM zonas_cobertura zc 
+            WHERE ST_Contains(zc.poligono, c.ubicacion) 
+              AND LOWER(zc.canton) = LOWER($${ciudadParamIdx})
+              AND zc.canton != 'Intercantonal'
+          )
+        )` : (hasCoords ? `
+        AND ST_DistanceSphere(c.ubicacion, ST_SetSRID(ST_MakePoint($1, $2), 4326)) <= 18000` : '')}
       ORDER BY ${hasCoords ? 'distancia_al_comercio_km ASC, ' : ''}p.fecha_creacion ASC;
     `;
     const result = await pgPool.query(query, params);

@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS zonas_cobertura (
     poligono GEOMETRY(Polygon, 4326) NOT NULL,
     tarifa_base NUMERIC(10,2) NOT NULL DEFAULT 1.50,
     costo_km_adicional NUMERIC(10,2) NOT NULL DEFAULT 0.40,
+    distancia_base_km NUMERIC(5,2) NOT NULL DEFAULT 2.00,
     tiempo_estimado_min INT DEFAULT 20,
     activa BOOLEAN DEFAULT TRUE,
     fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

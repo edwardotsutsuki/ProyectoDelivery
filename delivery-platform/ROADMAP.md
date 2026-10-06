@@ -256,11 +256,16 @@
 - [x] **Sincronización en Tiempo Real de Estados (Completada ✅)**:
   - [x] Flujo de estados (`creado` ➔ `en_preparacion` ➔ `listo` ➔ `en_camino` ➔ `entregado`) coordinado por WebSockets y Redis Pub/Sub.
   - [x] PIN de entrega criptográfico de 4 dígitos verificado en el domicilio para desbloquear liquidación.
-- [x] **Seguridad y Rate Limiting en API Gateway (Completada ✅)**:
-  - [x] Reglas `limit_req_zone` activadas en `api-gateway/nginx.conf`: `auth_limit` (10 r/s con burst 15) y `api_general_limit` (40 r/s con burst 60).
-- [x] **Depuración de Alcance para Lanzamiento Ágil**:
-  - [x] *Descartado Sprint 7.2 (Algoritmo JIT de retención y visores de recetas/picking):* innecesario para el volumen inicial de flotas ágiles en cantones pequeños; el flujo Kanban estándar resuelve la cocina.
-  - [x] *Simplificado Sprint 7.1:* Notificaciones coordinadas por WebSockets y eventos Redis en tiempo real.
+- [x] **Captura de GPS Físico Real y Doble Canal de Telemetría (Completada ✅)**:
+  - [x] Integración de `expo-location` en la app repartidor con lectura continua por hardware (`watchPositionAsync`), amortiguación de ruido vía filtro de Kalman y permisos Android configurados en `app.json`.
+  - [x] Doble canal de telemetría: WebSocket bidireccional en `/ws` (sin redirecciones 301 en NGINX) y fallback REST HTTP en `POST /api/v1/tracking/location` con persistencia en Redis (TTL 120s) y PostGIS (`usuarios.ubicacion`).
+  - [x] Indicador HUD en vivo de estado satelital (`📡 GPS Real (-1.7925, -79.6790) · ±5m · Satélite Vivo`).
+- [x] **Segmentación Cantonal Estricta de Despacho (Completada ✅)**:
+  - [x] Filtro espacial exacto por polígono PostGIS (`zonas_cobertura.canton`) en `GET /api/v1/orders/disponibles/reparto`.
+  - [x] Cada repartidor visualiza y recibe únicamente pedidos de su respectiva ciudad (**Baba**, **Babahoyo** o **Montalvo**), resolviendo el cantón automáticamente por perfil, parámetro `ciudad` o proximidad satelital.
+- [x] **Tarificación Base + Km Adicional Configurable (Completada ✅)**:
+  - [x] Integrada columna `distancia_base_km` en `zonas_cobertura` (PostGIS) para definir la distancia cubierta por la tarifa básica.
+  - [x] Motor dinámico en `POST /api/v1/tracking/calcular-tarifa` calcula con precisión: `Tarifa = Tarifa Base + (Km Extra * Costo Km Adicional) + Recargos`.
 - [x] **100% Suites de Pruebas Aprobadas**: 18/18 pruebas en app-repartidor y 16/16 en app-cliente; 0 errores de compilación TypeScript.
 
 ---

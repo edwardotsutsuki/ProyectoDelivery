@@ -310,7 +310,7 @@ trackingRouter.post('/calcular-tarifa', async (req: Request, res: Response) => {
 
     // 1. Verificar cobertura del destino en zonas activas
     const zoneQuery = `
-      SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, tiempo_estimado_min
+      SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, COALESCE(distancia_base_km, 2.00) as distancia_base_km, tiempo_estimado_min
       FROM zonas_cobertura
       WHERE activa = TRUE 
         AND ST_Contains(poligono, ST_SetSRID(ST_MakePoint($1, $2), 4326))
@@ -337,7 +337,7 @@ trackingRouter.post('/calcular-tarifa', async (req: Request, res: Response) => {
 
     if (isIntercantonal) {
       const intercantonalRes = await pgPool.query(`
-        SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, tiempo_estimado_min
+        SELECT id, nombre, codigo, canton, tarifa_base, costo_km_adicional, COALESCE(distancia_base_km, 3.00) as distancia_base_km, tiempo_estimado_min
         FROM zonas_cobertura
         WHERE codigo = 'corredor_e484' AND activa = TRUE
         LIMIT 1;
@@ -380,10 +380,10 @@ trackingRouter.post('/calcular-tarifa', async (req: Request, res: Response) => {
     const distanceKm = +(distanceMeters / 1000).toFixed(2);
     const etaMinutes = Math.max(1, Math.round(durationSeconds / 60));
 
-    // 3. Tarificación dinámica
+    // 3. Tarificación dinámica con distancia base configurable
     const tarifaBase = parseFloat(selectedZone.tarifa_base);
     const costoKmAdic = parseFloat(selectedZone.costo_km_adicional);
-    const distanciaBaseKm = 2.0; // Los primeros 2 km incluidos en tarifa base
+    const distanciaBaseKm = parseFloat(selectedZone.distancia_base_km || '2.00'); // Distancia en km cubierta por la tarifa básica
     const kmExtra = Math.max(0, +(distanceKm - distanciaBaseKm).toFixed(2));
     const subtotalDistancia = +(kmExtra * costoKmAdic).toFixed(2);
 

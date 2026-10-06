@@ -105,6 +105,7 @@ export async function fetchAvailableOrders(
   driverLat?: number,
   driverLon?: number,
   repartidorId?: string,
+  ciudad?: string,
   signal?: AbortSignal
 ): Promise<BackendOrder[]> {
   let url = `${apiBaseUrl.replace(/\/$/, '')}/orders/disponibles/reparto?includePending=${includePending}`;
@@ -113,6 +114,9 @@ export async function fetchAvailableOrders(
   }
   if (repartidorId) {
     url += `&repartidorId=${encodeURIComponent(repartidorId)}`;
+  }
+  if (ciudad) {
+    url += `&ciudad=${encodeURIComponent(ciudad)}`;
   }
 
   const response = await safeFetch(url, {
