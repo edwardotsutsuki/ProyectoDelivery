@@ -133,6 +133,44 @@ trackingRouter.get('/driver-pos/:repartidorId', async (req: Request, res: Respon
   }
 });
 
+// 2.1. Actualizar posición GPS del repartidor (HTTP Fallback de telemetría)
+trackingRouter.post('/location', async (req: Request, res: Response) => {
+  try {
+    const { repartidorId, lat, lon, heading, speed, accuracy, pedidoId } = req.body;
+    if (!repartidorId || lat === undefined || lon === undefined) {
+      return res.status(400).json({ success: false, message: 'repartidorId, lat y lon son requeridos' });
+    }
+
+    const payload = {
+      repartidorId,
+      pedidoId,
+      lat: Number(lat),
+      lon: Number(lon),
+      heading: Number(heading || 0),
+      speed: Number(speed || 0),
+      accuracy: Number(accuracy || 5.0),
+      timestamp: new Date().toISOString(),
+      status: 'online',
+    };
+
+    // 1. Guardar en Redis con TTL de 120s
+    await redisClient.setex(`driver:pos:${repartidorId}`, 120, JSON.stringify(payload));
+
+    // 2. Notificar por canal Pub/Sub para mapas en vivo
+    await redisClient.publish('tracking:positions', JSON.stringify(payload));
+
+    // 3. Persistir en PostgreSQL de forma asíncrona en usuarios.ubicacion
+    pgPool.query(
+      'UPDATE usuarios SET ubicacion = ST_SetSRID(ST_MakePoint($1, $2), 4326) WHERE id::text = $3',
+      [Number(lon), Number(lat), repartidorId]
+    ).catch(() => {});
+
+    res.json({ success: true, data: payload });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 // 3. Obtener ETA y estado de entrega de un pedido en curso
 trackingRouter.get('/pedido/:pedidoId/eta', async (req: Request, res: Response) => {
   try {

@@ -48,6 +48,16 @@ import {
 } from 'lucide-react-native';
 
 import { loginCourier, type CourierUser } from './src/services/courierAuthApi';
+import * as Location from 'expo-location';
+
+export interface LiveGpsState {
+  lat: number;
+  lon: number;
+  speed: number;
+  heading: number;
+  accuracy: number;
+  timestamp: number;
+}
 import { NavigationLauncher } from './src/services/navigationLauncher';
 import { initialShift, setAvailability, transition, RESTAURANT, type Action, type Status } from './src/courierModel';
 import { dailyWallet, money, type Wallet } from './src/walletModel';
@@ -77,6 +87,8 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   const [activeTab, setActiveTab] = useState<TabType>('orders');
   const [isOnline, setIsOnline] = useState(true);
   const [gpsReady, setGpsReady] = useState(false);
+  const [liveGps, setLiveGps] = useState<LiveGpsState | null>(null);
+  const [gpsPermissionDenied, setGpsPermissionDenied] = useState(false);
 
   // Local shift model (preserved for backward compatibility and tests)
   const shiftRef = useRef(initialShift());
@@ -165,6 +177,12 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
   useEffect(() => {
     const wsUrl = currentApi.replace(/^http/, 'ws').replace(/\/api\/v1$/, '/ws');
     transmitter.current = new TelemetryTransmitter(wsUrl, courierId);
+    const initialLat = liveGps ? liveGps.lat : (selectedDriver ? Number(selectedDriver.lat) : -1.7925);
+    const initialLon = liveGps ? liveGps.lon : (selectedDriver ? Number(selectedDriver.lon) : -79.6790);
+    transmitter.current.setLocation(initialLat, initialLon);
+    if (activeOrder) {
+      transmitter.current.setActiveOrder(activeOrder.id);
+    }
     if (isOnline) {
       transmitter.current.startOnlineTransmission();
     }
@@ -173,38 +191,132 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     };
   }, [currentApi, courierId, isOnline]);
 
-  // Turno Online/Offline effect
+  // Manejador centralizado de posición GPS física del repartidor
+  const handleGpsUpdate = useCallback(
+    (coords: Location.LocationObjectCoords, timestamp?: number) => {
+      const lat = coords.latitude;
+      const lon = coords.longitude;
+      const accuracy = coords.accuracy || 5;
+      const speed = coords.speed !== null && coords.speed !== undefined && coords.speed >= 0 ? coords.speed : 0;
+      const heading = coords.heading !== null && coords.heading !== undefined && coords.heading >= 0 ? coords.heading : 0;
+      const ts = timestamp || Date.now();
+
+      // 1. Filtrar con modelo de Kalman y alimentar socket en vivo
+      transmitter.current?.setLocation(lat, lon, accuracy, ts);
+
+      // 2. Actualizar estado local para UI en vivo y cálculo de distancias
+      setLiveGps({
+        lat,
+        lon,
+        speed,
+        heading,
+        accuracy,
+        timestamp: ts,
+      });
+      setGpsReady(true);
+
+      // 3. Telemetría de respaldo HTTP (garantiza persistencia en Redis y PostgreSQL)
+      fetch(`${currentApi}/tracking/location`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify({
+          repartidorId: courierId,
+          pedidoId: activeOrder?.id,
+          lat,
+          lon,
+          speed,
+          heading,
+          accuracy,
+        }),
+      }).catch(() => {
+        // Silencioso ante pérdida de señal temporal
+      });
+    },
+    [currentApi, courierId, activeOrder]
+  );
+
+  // Turno Online/Offline y Captura de GPS Real vía expo-location
   useEffect(() => {
-    setGpsReady(false);
+    let locationSubscription: Location.LocationSubscription | null = null;
+    let isMounted = true;
+
     if (!isOnline) {
+      setGpsReady(false);
+      setLiveGps(null);
       transmitter.current?.stopTransmission();
       return;
     }
+
     transmitter.current?.startOnlineTransmission();
-    const timer = setTimeout(() => setGpsReady(true), 1200);
-    return () => clearTimeout(timer);
-  }, [isOnline]);
 
-  // Clock tick
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
+    async function startGpsWatcher() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('Permiso de GPS denegado en dispositivo. Usando posición base.');
+          setGpsPermissionDenied(true);
+          if (isMounted) {
+            setGpsReady(true);
+          }
+          return;
+        }
 
-  // Update telemetry coordinates when active order changes
-  useEffect(() => {
-    if (activeOrder) {
-      transmitter.current?.setActiveOrder(activeOrder.id);
-      if (orderStep === 'PICKUP' && activeOrder.comercio_lat && activeOrder.comercio_lon) {
-        transmitter.current?.setLocation(Number(activeOrder.comercio_lat), Number(activeOrder.comercio_lon));
-      } else if (activeOrder.lat_entrega && activeOrder.lon_entrega) {
-        transmitter.current?.setLocation(Number(activeOrder.lat_entrega), Number(activeOrder.lon_entrega));
+        setGpsPermissionDenied(false);
+
+        // 1. Obtener última posición conocida de forma inmediata
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync({});
+          if (lastKnown && isMounted) {
+            handleGpsUpdate(lastKnown.coords, lastKnown.timestamp);
+          }
+        } catch (_) {}
+
+        // 2. Obtener posición GPS actual
+        try {
+          const current = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          if (current && isMounted) {
+            handleGpsUpdate(current.coords, current.timestamp);
+          }
+        } catch (_) {}
+
+        // 3. Suscripción continua a cambios de posición (cada 4 seg o 5 metros)
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 4000,
+            distanceInterval: 5,
+          },
+          (loc) => {
+            if (isMounted) {
+              handleGpsUpdate(loc.coords, loc.timestamp);
+            }
+          }
+        );
+      } catch (err: any) {
+        console.warn('Error al iniciar expo-location:', err.message);
+        if (isMounted) setGpsReady(true);
       }
-    } else {
-      transmitter.current?.setActiveOrder(undefined);
-      transmitter.current?.setLocation(-1.7925, -79.6790); // Baba Centro
     }
-  }, [activeOrder, orderStep]);
+
+    startGpsWatcher();
+
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [isOnline, courierId, handleGpsUpdate]);
+
+  // Sincronizar pedido activo con el transmisor de telemetría
+  useEffect(() => {
+    transmitter.current?.setActiveOrder(activeOrder?.id);
+  }, [activeOrder]);
 
   // Fetch Wallet Data
   const refreshWallet = useCallback(async () => {
@@ -241,10 +353,10 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         }
       }
 
-      // Si no hay activo, consultar disponibles pasando coordenadas del repartidor seleccionado
+      // Si no hay activo, consultar disponibles pasando coordenadas del repartidor (priorizando GPS real en vivo)
       if (!active) {
-        const activeDriverLat = selectedDriver ? Number(selectedDriver.lat) : -1.7925;
-        const activeDriverLon = selectedDriver ? Number(selectedDriver.lon) : -79.6790;
+        const activeDriverLat = liveGps ? liveGps.lat : (selectedDriver ? Number(selectedDriver.lat) : -1.7925);
+        const activeDriverLon = liveGps ? liveGps.lon : (selectedDriver ? Number(selectedDriver.lon) : -79.6790);
         const disponibles = await fetchAvailableOrders(
           currentApi,
           includePending,
@@ -269,7 +381,7 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
     } finally {
       setLoadingOrders(false);
     }
-  }, [currentApi, isOnline, includePending, courierId, selectedDriver, isOfferModalVisible, activeOrder]);
+  }, [currentApi, isOnline, includePending, courierId, selectedDriver, liveGps, isOfferModalVisible, activeOrder]);
 
   // Fetch History
   const refreshHistory = useCallback(async () => {
@@ -812,19 +924,23 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
           {/* Sub-barra de Telemetría GPS */}
           <View style={styles.telemetryBar}>
             <View style={styles.telemetryItem}>
-              <Activity size={13} color={isOnline ? '#10b981' : '#64748b'} />
+              <Activity size={13} color={isOnline ? (liveGps ? '#10b981' : '#f59e0b') : '#64748b'} />
               <Text style={styles.telemetryText} numberOfLines={1} ellipsizeMode="tail">
                 {!isOnline
                   ? 'GPS Inactivo (Fuera de turno)'
                   : gpsReady
-                  ? `📡 GPS ${selectedDriver?.ciudad || 'Los Ríos'} (${Number(selectedDriver?.lat || -1.7925).toFixed(4)}, ${Number(selectedDriver?.lon || -79.6790).toFixed(4)})`
+                  ? (liveGps
+                      ? `📡 GPS Real (${liveGps.lat.toFixed(4)}, ${liveGps.lon.toFixed(4)}) · ±${Math.round(liveGps.accuracy)}m`
+                      : gpsPermissionDenied
+                      ? `⚠️ Permiso denegado · Base ${selectedDriver?.ciudad || 'Los Ríos'} (${Number(selectedDriver?.lat || -1.7925).toFixed(4)}, ${Number(selectedDriver?.lon || -79.6790).toFixed(4)})`
+                      : `📡 GPS Base ${selectedDriver?.ciudad || 'Los Ríos'} (${Number(selectedDriver?.lat || -1.7925).toFixed(4)}, ${Number(selectedDriver?.lon || -79.6790).toFixed(4)})`)
                   : 'Buscando satélites…'}
               </Text>
             </View>
             {isOnline && (
               <View style={styles.pulseBadge}>
                 <View style={styles.pulseDot} />
-                <Text style={styles.pulseText}>Radar Activo</Text>
+                <Text style={styles.pulseText}>{liveGps ? 'Satélite Vivo' : 'Radar Base'}</Text>
               </View>
             )}
           </View>
@@ -1223,8 +1339,8 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
                         vertical === 'farmacia' ? 'Farmacia 💊' :
                         vertical === 'licoreria' ? 'Licorería 🍷' : 'Restaurante 🍽️';
 
-                      const activeDriverLat = selectedDriver ? Number(selectedDriver.lat) : -1.7925;
-                      const activeDriverLon = selectedDriver ? Number(selectedDriver.lon) : -79.6790;
+                      const activeDriverLat = liveGps ? liveGps.lat : (selectedDriver ? Number(selectedDriver.lat) : -1.7925);
+                      const activeDriverLon = liveGps ? liveGps.lon : (selectedDriver ? Number(selectedDriver.lon) : -79.6790);
                       const cLat = Number(order.comercio_lat);
                       const cLon = Number(order.comercio_lon);
                       const eLat = Number(order.lat_entrega);
@@ -1583,8 +1699,8 @@ export default function App({ apiBaseUrl = DEFAULT_API }: { apiBaseUrl?: string 
         <OrderOfferModal
           visible={isOfferModalVisible}
           order={selectedOrderForModal}
-          driverLat={selectedDriver ? Number(selectedDriver.lat) : -1.7925}
-          driverLon={selectedDriver ? Number(selectedDriver.lon) : -79.6790}
+          driverLat={liveGps ? liveGps.lat : (selectedDriver ? Number(selectedDriver.lat) : -1.7925)}
+          driverLon={liveGps ? liveGps.lon : (selectedDriver ? Number(selectedDriver.lon) : -79.6790)}
           apiBaseUrl={currentApi}
           onAccept={(order) => {
             setIsOfferModalVisible(false);
